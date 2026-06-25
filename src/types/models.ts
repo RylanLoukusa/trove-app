@@ -3,6 +3,8 @@ export type ItemStatus = "waiting" | "planned" | "done" | "skipped";
 export type ItemPriority = "low" | "medium" | "high";
 export type ListItemKind = "check" | "bullet";
 export type ItemConnectionRelation = "related" | "similar" | "compare" | "alternative" | "part_of" | "inspired_by";
+export type AccessRole = "owner" | "editor" | "viewer";
+export type ShareScope = "folder_only" | "folder_and_subfolders";
 
 export type Folder = {
   id: string;
@@ -11,6 +13,10 @@ export type Folder = {
   icon?: string;
   color?: string;
   purpose?: string;
+  ownerId?: string;
+  accessRole?: AccessRole;
+  sharedRootFolderId?: string;
+  sharedScope?: ShareScope;
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +75,9 @@ export type SavedItem = {
   tags: string[];
   status: ItemStatus;
   priority: ItemPriority;
+  ownerId?: string;
+  createdBy?: string;
+  accessRole?: AccessRole;
   createdAt: string;
   updatedAt: string;
   notes?: string;

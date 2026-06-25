@@ -1,4 +1,4 @@
-import { ItemType, SavedItem, WaitingListData } from "../types/models";
+import { Folder, ItemType, SavedItem, WaitingListData } from "../types/models";
 
 export const isMediaItemType = (type: ItemType): boolean => type === "media" || type === "image" || type === "video";
 
@@ -39,7 +39,13 @@ export const normalizeSavedItem = (item: SavedItem): SavedItem => {
   };
 };
 
+export const normalizeFolder = (folder: Folder): Folder => ({
+  ...folder,
+  parentFolderId: folder.parentFolderId || null,
+});
+
 export const normalizeWaitingListData = (data: WaitingListData): WaitingListData => ({
   ...data,
+  folders: data.folders.map(normalizeFolder),
   items: data.items.map(normalizeSavedItem),
 });

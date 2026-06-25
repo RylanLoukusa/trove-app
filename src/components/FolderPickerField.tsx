@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, spacing } from "../theme/theme";
 import type { Folder } from "../types/models";
-import { getChildFolders, getFolderById, getFolderPath, getFolderPathLabel } from "../utils/folderTree";
+import { getChildFolders, getFolderById, getFolderPath, getFolderPathLabel, getVisibleRootFolders } from "../utils/folderTree";
 import { FolderChoiceRow } from "./FolderChoiceRow";
 
 type Props = {
@@ -31,7 +31,8 @@ export const FolderPickerField = ({ folders, selectedFolderId, onSelectFolder }:
     const rows: Array<{ folder: Folder; depth: number }> = [];
 
     const visit = (parentFolderId: string | null, depth: number): void => {
-      getChildFolders(folders, parentFolderId).forEach((folder) => {
+      const children = parentFolderId === null ? getVisibleRootFolders(folders) : getChildFolders(folders, parentFolderId);
+      children.forEach((folder) => {
         rows.push({ folder, depth });
         if (expandedFolderIds.has(folder.id)) {
           visit(folder.id, depth + 1);

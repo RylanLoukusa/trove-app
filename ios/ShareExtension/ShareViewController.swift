@@ -76,6 +76,10 @@ final class ShareViewController: UIViewController {
   private let titleField = UITextField()
   private let folderLabel = UILabel()
   private let folderButton = UIButton(type: .system)
+  private let folderButtonIconContainer = UIView()
+  private let folderButtonIconLabel = UILabel()
+  private let folderButtonTitleLabel = UILabel()
+  private let folderButtonChevronImageView = UIImageView()
   private let folderPickerStack = UIStackView()
   private let folderSearchField = UITextField()
   private let folderRowsStack = UIStackView()
@@ -165,19 +169,58 @@ final class ShareViewController: UIViewController {
     folderLabel.textColor = TWLStyle.muted
 
     folderButton.contentHorizontalAlignment = .leading
-    folderButton.titleLabel?.font = .preferredFont(forTextStyle: .body)
-    folderButton.titleLabel?.adjustsFontForContentSizeCategory = true
     folderButton.backgroundColor = TWLStyle.surface
     folderButton.layer.borderColor = TWLStyle.border.cgColor
     folderButton.layer.borderWidth = 1
     folderButton.layer.cornerRadius = 16
-    var folderButtonConfiguration = UIButton.Configuration.plain()
-    folderButtonConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)
-    folderButtonConfiguration.titleAlignment = .leading
-    folderButtonConfiguration.baseForegroundColor = TWLStyle.ink
-    folderButton.configuration = folderButtonConfiguration
     folderButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 46).isActive = true
     folderButton.addTarget(self, action: #selector(toggleFolderPicker), for: .touchUpInside)
+
+    let folderButtonContent = UIStackView()
+    folderButtonContent.axis = .horizontal
+    folderButtonContent.alignment = .center
+    folderButtonContent.spacing = 10
+    folderButtonContent.translatesAutoresizingMaskIntoConstraints = false
+    folderButtonContent.isUserInteractionEnabled = false
+    folderButton.addSubview(folderButtonContent)
+
+    folderButtonIconContainer.translatesAutoresizingMaskIntoConstraints = false
+    folderButtonIconContainer.layer.borderWidth = 1
+    folderButtonIconContainer.layer.cornerRadius = 9
+    folderButtonIconContainer.widthAnchor.constraint(equalToConstant: 32).isActive = true
+    folderButtonIconContainer.heightAnchor.constraint(equalToConstant: 32).isActive = true
+
+    folderButtonIconLabel.translatesAutoresizingMaskIntoConstraints = false
+    folderButtonIconLabel.textAlignment = .center
+    folderButtonIconLabel.font = .preferredFont(forTextStyle: .caption1)
+    folderButtonIconLabel.adjustsFontForContentSizeCategory = true
+    folderButtonIconLabel.textColor = TWLStyle.ink
+    folderButtonIconContainer.addSubview(folderButtonIconLabel)
+
+    folderButtonTitleLabel.font = .preferredFont(forTextStyle: .body)
+    folderButtonTitleLabel.adjustsFontForContentSizeCategory = true
+    folderButtonTitleLabel.textColor = TWLStyle.ink
+    folderButtonTitleLabel.numberOfLines = 1
+    folderButtonTitleLabel.lineBreakMode = .byTruncatingMiddle
+
+    folderButtonChevronImageView.tintColor = TWLStyle.muted
+    folderButtonChevronImageView.contentMode = .scaleAspectFit
+    folderButtonChevronImageView.setContentHuggingPriority(.required, for: .horizontal)
+    folderButtonChevronImageView.widthAnchor.constraint(equalToConstant: 18).isActive = true
+    folderButtonChevronImageView.heightAnchor.constraint(equalToConstant: 18).isActive = true
+
+    folderButtonContent.addArrangedSubview(folderButtonIconContainer)
+    folderButtonContent.addArrangedSubview(folderButtonTitleLabel)
+    folderButtonContent.addArrangedSubview(folderButtonChevronImageView)
+
+    NSLayoutConstraint.activate([
+      folderButtonContent.topAnchor.constraint(equalTo: folderButton.topAnchor, constant: 8),
+      folderButtonContent.leadingAnchor.constraint(equalTo: folderButton.leadingAnchor, constant: 14),
+      folderButtonContent.trailingAnchor.constraint(equalTo: folderButton.trailingAnchor, constant: -14),
+      folderButtonContent.bottomAnchor.constraint(equalTo: folderButton.bottomAnchor, constant: -8),
+      folderButtonIconLabel.centerXAnchor.constraint(equalTo: folderButtonIconContainer.centerXAnchor),
+      folderButtonIconLabel.centerYAnchor.constraint(equalTo: folderButtonIconContainer.centerYAnchor),
+    ])
 
     folderPickerStack.axis = .vertical
     folderPickerStack.alignment = .fill
@@ -331,8 +374,15 @@ final class ShareViewController: UIViewController {
   }
 
   private func updateFolderSummary() {
+    let selectedFolder = Self.folder(for: selectedFolderId, in: sharedFolders)
     let title = Self.folderPathLabel(for: selectedFolderId, in: sharedFolders) ?? "Home"
-    folderButton.setTitle("  \(title)  \(isFolderPickerOpen ? "⌃" : "⌄")", for: .normal)
+    let tintColor = Self.folderTintColor(for: selectedFolder)
+
+    folderButtonIconContainer.backgroundColor = tintColor.withAlphaComponent(0.22)
+    folderButtonIconContainer.layer.borderColor = tintColor.withAlphaComponent(0.55).cgColor
+    folderButtonIconLabel.text = Self.folderIconText(for: selectedFolder)
+    folderButtonTitleLabel.text = title
+    folderButtonChevronImageView.image = UIImage(systemName: isFolderPickerOpen ? "chevron.up" : "chevron.down")
   }
 
   private func expandSelectedFolderPath() {
@@ -476,9 +526,6 @@ final class ShareViewController: UIViewController {
     rowControl.layer.borderWidth = isSelected ? 1.5 : 1
     rowControl.layer.cornerRadius = 14
     rowControl.clipsToBounds = true
-    rowControl.addAction(UIAction { [weak self] _ in
-      self?.selectFolder(folderId)
-    }, for: .touchUpInside)
 
     let rowStack = UIStackView()
     rowStack.axis = .horizontal
@@ -572,6 +619,22 @@ final class ShareViewController: UIViewController {
       rowControl.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
     ])
 
+    let selectHitButton = UIButton(type: .custom)
+    selectHitButton.translatesAutoresizingMaskIntoConstraints = false
+    selectHitButton.backgroundColor = .clear
+    selectHitButton.addAction(UIAction { [weak self] _ in
+      self?.selectFolder(folderId)
+    }, for: .touchUpInside)
+    rowControl.addSubview(selectHitButton)
+
+    let selectLeadingInset = row.hasChildren && !row.isSearchResult ? leadingInset + 38 : 0
+    NSLayoutConstraint.activate([
+      selectHitButton.topAnchor.constraint(equalTo: rowControl.topAnchor),
+      selectHitButton.leadingAnchor.constraint(equalTo: rowControl.leadingAnchor, constant: selectLeadingInset),
+      selectHitButton.trailingAnchor.constraint(equalTo: rowControl.trailingAnchor),
+      selectHitButton.bottomAnchor.constraint(equalTo: rowControl.bottomAnchor),
+    ])
+
     if row.hasChildren && !row.isSearchResult {
       let disclosureHitButton = UIButton(type: .custom)
       disclosureHitButton.translatesAutoresizingMaskIntoConstraints = false
@@ -595,10 +658,8 @@ final class ShareViewController: UIViewController {
   private func selectFolder(_ folderId: String) {
     selectedFolderId = folderId
     expandSelectedFolderPath()
-    isFolderPickerOpen = false
-    folderPickerStack.isHidden = true
-    folderSearchField.text = ""
-    folderSearchField.resignFirstResponder()
+    isFolderPickerOpen = true
+    folderPickerStack.isHidden = false
     renderFolderPicker()
     saveButton.isEnabled = true
   }
@@ -972,6 +1033,14 @@ final class ShareViewController: UIViewController {
     return path.isEmpty ? nil : path.map { $0.name }.joined(separator: " / ")
   }
 
+  private static func folder(for folderId: String?, in folders: [SharedFolder]) -> SharedFolder? {
+    guard let folderId, !folderId.isEmpty else {
+      return nil
+    }
+
+    return folders.first { $0.id == folderId }
+  }
+
   private static func parentPathLabel(for folderId: String, in folders: [SharedFolder]) -> String? {
     let path = folderPath(for: folderId, in: folders)
     guard path.count > 1 else {
@@ -1006,7 +1075,7 @@ final class ShareViewController: UIViewController {
 
   private static func folderIconText(for folder: SharedFolder?) -> String {
     guard let folder else {
-      return "H"
+      return "📁"
     }
 
     guard let icon = folder.icon, !icon.isEmpty else {

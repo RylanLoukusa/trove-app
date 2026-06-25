@@ -34,7 +34,7 @@ const isSingleEmoji = (value: string): boolean => {
 const normalizeFolderIcon = (value: string): string => (isSingleEmoji(value) ? value.trim() : "📁");
 
 export const AddEditFolderScreen = ({ navigation, route }: Props) => {
-  const { folders, createFolder, updateFolder } = useWaitingList();
+  const { folders, createFolder, updateFolder, canManageFolder } = useWaitingList();
   const editing = getFolderById(folders, route.params?.folderId);
 
   const [name, setName] = useState(editing?.name ?? "");
@@ -51,9 +51,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const parentChoices = useMemo(
     () =>
       editing
-        ? folders.filter((folder) => folder.id !== editing.id && canMoveFolder(folders, editing.id, folder.id))
-        : folders.filter((folder) => canAddChildFolder(folders, folder.id)),
-    [editing, folders],
+        ? folders.filter((folder) => folder.id !== editing.id && canMoveFolder(folders, editing.id, folder.id) && canManageFolder(folder.id))
+        : folders.filter((folder) => canAddChildFolder(folders, folder.id) && canManageFolder(folder.id)),
+    [canManageFolder, editing, folders],
   );
   const parentChoiceIds = useMemo(() => new Set(parentChoices.map((folder) => folder.id)), [parentChoices]);
   const parentRows = useMemo(
@@ -122,6 +122,10 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
     const normalizedIcon = normalizeFolderIcon(icon);
 
     if (editing) {
+      if (!canManageFolder(editing.id)) {
+        Alert.alert("Cannot edit folder", "Only the folder owner can edit this folder.");
+        return;
+      }
       if (!canMoveFolder(folders, editing.id, parentFolderId)) {
         Alert.alert(
           "Cannot move folder",
@@ -133,13 +137,18 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
       navigation.goBack();
       return;
     }
+    if (parentFolderId && !canManageFolder(parentFolderId)) {
+      Alert.alert("Cannot create folder", "Only the folder owner can create subfolders here.");
+      return;
+    }
     if (!canAddChildFolder(folders, parentFolderId)) {
       Alert.alert("Max depth reached", "Folders can be nested up to 5 levels deep.");
       return;
     }
     const folder = createFolder({ name, purpose, icon: normalizedIcon, color, parentFolderId });
+    if (!folder) return;
     navigation.replace("Folder", { folderId: folder.id });
-  }, [color, createFolder, editing, folders, icon, name, navigation, parentFolderId, purpose, updateFolder]);
+  }, [canManageFolder, color, createFolder, editing, folders, icon, name, navigation, parentFolderId, purpose, updateFolder]);
 
   return (
     <View style={styles.screen}>

@@ -10,7 +10,7 @@ import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { useAuth } from "../../auth/AuthContext";
 import { Folder, SavedItem } from "../../types/models";
-import { getChildFolders, getDescendantFolderIds, getFolderPathLabel } from "../../utils/folderTree";
+import { getDescendantFolderIds, getFolderPathLabel, getVisibleRootFolders } from "../../utils/folderTree";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -101,7 +101,7 @@ export const HomeScreen = ({ navigation }: Props) => {
     Alert.alert("Menu", "Choose an action", buttons);
   }, [onPressSettings, onPressLogin, onSignOut, session?.user]);
 
-  const topFolders = getChildFolders(folders, null);
+  const topFolders = getVisibleRootFolders(folders);
   const recentItems = [...items]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);

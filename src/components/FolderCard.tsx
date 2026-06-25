@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Folder } from "../types/models";
 import { colors, spacing } from "../theme/theme";
+import { accessRoleLabel, isSharedAccess } from "../utils/access";
 
 type Props = {
   folder: Folder;
@@ -18,7 +19,10 @@ export const FolderCard = ({ folder, count, onPress }: Props) => (
       <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
     </View>
     <View style={styles.content}>
-      <Text style={styles.name}>{folder.name}</Text>
+      <View style={styles.nameRow}>
+        <Text style={styles.name} numberOfLines={1}>{folder.name}</Text>
+        {isSharedAccess(folder) && <Text style={styles.sharedPill}>{accessRoleLabel(folder.accessRole)}</Text>}
+      </View>
       <Text style={styles.meta}>{count ?? 0} saved here</Text>
     </View>
     <Text style={styles.chevron}>›</Text>
@@ -46,7 +50,24 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 22 },
   content: { flex: 1, marginLeft: spacing.md },
-  name: { color: colors.ink, fontSize: 17, fontWeight: "800" },
+  nameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  name: { color: colors.ink, flexShrink: 1, fontSize: 17, fontWeight: "800" },
+  sharedPill: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    color: colors.accentDark,
+    fontSize: 11,
+    fontWeight: "900",
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
   meta: { color: colors.muted, fontSize: 13, marginTop: 2 },
   chevron: { color: colors.muted, fontSize: 28 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },

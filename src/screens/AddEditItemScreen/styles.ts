@@ -26,11 +26,25 @@ export const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginTop: spacing.md,
   },
+  requiredMarker: {
+    color: colors.danger,
+  },
   input: {
     backgroundColor: colors.surface,
+    borderColor: "transparent",
+    borderWidth: 1,
     borderRadius: 16,
     color: colors.ink,
     padding: spacing.md,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: spacing.xs,
   },
   textArea: {
     minHeight: 120,

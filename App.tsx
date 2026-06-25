@@ -5,8 +5,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
+import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { useWaitingList, WaitingListProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
+import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
 import { AddEditFolderScreen } from "./src/screens/AddEditFolderScreen";
 import { AddEditItemScreen } from "./src/screens/AddEditItemScreen";
 import { FolderScreen } from "./src/screens/FolderScreen";
@@ -17,6 +19,7 @@ import { PickSomethingScreen } from "./src/screens/PickSomethingScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
 import { clearSharedImport, getLatestSharedImportId, inferSourcePlatform, markSharedImportConsumed, readSharedImport, titleFromSharedImport } from "./src/share/sharedImport";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -26,7 +29,9 @@ const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ["thewaitinglist://"],
   config: {
     screens: {
+      AcceptFolderInvite: "share-invite/:token",
       AddEditItem: "shared-import/:sharedImportId",
+      ShareFolder: "folder/:folderId/share",
       Folder: "folder/:folderId",
       Home: "home",
       ItemDetail: "item/:itemId",
@@ -42,6 +47,7 @@ function AppNavigator() {
   const { session, isAuthReady, isPasswordRecovery } = useAuth();
   const { createItem, folders, isReady: isWaitingListReady } = useWaitingList();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
+  const lastHandledInviteToken = React.useRef<string | null>(null);
 
   const openPendingSharedImport = React.useCallback(async () => {
     if (!session || isPasswordRecovery || !isWaitingListReady || !navigationRef.isReady()) return;
@@ -110,17 +116,33 @@ function AppNavigator() {
     void openPendingSharedImport();
   }, [openPendingSharedImport]);
 
+  const openPendingFolderInvite = React.useCallback(async () => {
+    if (!session || isPasswordRecovery || !navigationRef.isReady()) return;
+
+    const token = await readPendingFolderInviteToken();
+    if (!token || lastHandledInviteToken.current === token) return;
+
+    lastHandledInviteToken.current = token;
+    await clearPendingFolderInviteToken();
+    navigationRef.navigate("AcceptFolderInvite", { token });
+  }, [isPasswordRecovery, session]);
+
+  React.useEffect(() => {
+    void openPendingFolderInvite();
+  }, [openPendingFolderInvite]);
+
   React.useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         void openPendingSharedImport();
+        void openPendingFolderInvite();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [openPendingSharedImport]);
+  }, [openPendingFolderInvite, openPendingSharedImport]);
 
   if (!isAuthReady) {
     return (
@@ -136,6 +158,7 @@ function AppNavigator() {
       linking={linking}
       onReady={() => {
         void openPendingSharedImport();
+        void openPendingFolderInvite();
       }}
     >
       <StatusBar style="dark" />
@@ -145,6 +168,7 @@ function AppNavigator() {
         ) : session ? (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
             <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
@@ -152,9 +176,13 @@ function AppNavigator() {
             <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="PickSomething" component={PickSomethingScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

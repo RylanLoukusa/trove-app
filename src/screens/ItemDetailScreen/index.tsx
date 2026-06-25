@@ -7,6 +7,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
+import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
 import { getItemTypeLabel } from "../../utils/itemTypes";
@@ -15,9 +16,10 @@ import { styles } from "./styles";
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
 
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
-  const { folders, items, updateItem, deleteItem } = useWaitingList();
+  const { folders, items, updateItem, deleteItem, canEditItem } = useWaitingList();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const canEditCurrentItem = item ? canEditItem(item.id) : false;
 
   const folderItems = useMemo(
     () => (item ? getItemsInFolder(items, item.folderId) : []),
@@ -63,18 +65,18 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   );
 
   const onPressEdit = useCallback(() => {
-    if (!item) return;
+    if (!item || !canEditCurrentItem) return;
     navigation.navigate("AddEditItem", { itemId: item.id });
-  }, [item, navigation]);
+  }, [canEditCurrentItem, item, navigation]);
 
   const onPressMarkDone = useCallback(() => {
-    if (!item) return;
+    if (!item || !canEditCurrentItem) return;
     updateItem(item.id, { status: "done" });
-  }, [item, updateItem]);
+  }, [canEditCurrentItem, item, updateItem]);
 
   const onPressToggleChecklistItem = useCallback(
     (listItemId: string): void => {
-      if (!item?.listItems) return;
+      if (!item?.listItems || !canEditCurrentItem) return;
 
       const listItems = item.listItems.map((listItem) =>
         listItem.id === listItemId && listItem.kind === "check"
@@ -89,7 +91,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         status: isChecklistComplete ? "done" : item.status === "done" ? "waiting" : item.status,
       });
     },
-    [item, updateItem],
+    [canEditCurrentItem, item, updateItem],
   );
 
   const onPressOpenUrl = useCallback(() => {
@@ -101,7 +103,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   }, [item?.sourceUrl]);
 
   const confirmDelete = useCallback((): void => {
-    if (!item) return;
+    if (!item || !canEditCurrentItem) return;
     Alert.alert("Delete item?", "This removes it from your Waiting List.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -119,7 +121,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         },
       },
     ]);
-  }, [deleteItem, item, navigation]);
+  }, [canEditCurrentItem, deleteItem, item, navigation]);
 
   if (!item) {
     return (
@@ -176,6 +178,11 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         <Text style={styles.type}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
+        {isSharedAccess(item) && (
+          <View style={styles.accessBadge}>
+            <Text style={styles.accessBadgeText}>Shared · {accessRoleLabel(item.accessRole)}</Text>
+          </View>
+        )}
 
         {!!item.url && (
           <View style={styles.preview}>
@@ -270,9 +277,15 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        <AppButton label="Edit / Move" onPress={onPressEdit} style={styles.button} />
-        <AppButton label="Mark as done" variant="secondary" onPress={onPressMarkDone} style={styles.button} />
-        <AppButton label="Delete item" variant="danger" onPress={confirmDelete} style={styles.button} />
+        {canEditCurrentItem ? (
+          <>
+            <AppButton label="Edit / Move" onPress={onPressEdit} style={styles.button} />
+            <AppButton label="Mark as done" variant="secondary" onPress={onPressMarkDone} style={styles.button} />
+            <AppButton label="Delete item" variant="danger" onPress={confirmDelete} style={styles.button} />
+          </>
+        ) : (
+          <Text style={styles.readOnlyNote}>You have view-only access to this item.</Text>
+        )}
       </ScrollView>
     </View>
   );

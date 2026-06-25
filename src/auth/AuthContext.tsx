@@ -3,6 +3,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Alert, Linking, Platform } from "react-native";
+import { upsertProfileForUser } from "../collaboration/profiles";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { AUTH_CALLBACK_URL } from "./authRedirect";
 
@@ -152,6 +153,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       subscription.remove();
     };
   }, [handleAuthCallbackUrl]);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase || !session?.user) return;
+
+    void upsertProfileForUser(supabase, session.user);
+  }, [session?.user]);
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase();

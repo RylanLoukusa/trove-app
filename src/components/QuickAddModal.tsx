@@ -13,15 +13,20 @@ type Props = {
 };
 
 export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
-  const { folders, items, createItem } = useWaitingList();
+  const { folders, items, createItem, canEditFolderContent } = useWaitingList();
   const [content, setContent] = useState("");
-  const suggestions = useMemo(() => suggestFolders(content, folders, items), [content, folders, items]);
+  const editableFolders = useMemo(
+    () => folders.filter((folder) => canEditFolderContent(folder.id)),
+    [canEditFolderContent, folders],
+  );
+  const suggestions = useMemo(() => suggestFolders(content, editableFolders, items), [content, editableFolders, items]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(currentFolderId);
-  const targetFolderId = selectedFolderId ?? suggestions[0]?.folder.id ?? currentFolderId ?? folders[0]?.id;
+  const targetFolderId = selectedFolderId ?? suggestions[0]?.folder.id ?? currentFolderId ?? editableFolders[0]?.id;
 
   useEffect(() => {
-    if (visible) setSelectedFolderId(currentFolderId);
-  }, [currentFolderId, visible]);
+    if (!visible) return;
+    setSelectedFolderId(currentFolderId && canEditFolderContent(currentFolderId) ? currentFolderId : undefined);
+  }, [canEditFolderContent, currentFolderId, visible]);
 
   const preview = useMemo(
     () => ({ title: suggestTitle(content), type: detectItemType(content), tags: suggestTags(content) }),
@@ -29,8 +34,8 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
   );
 
   const save = (): void => {
-    if (!targetFolderId || content.trim().length === 0) return;
-    createItem({
+    if (!targetFolderId || content.trim().length === 0 || !canEditFolderContent(targetFolderId)) return;
+    const item = createItem({
       folderId: targetFolderId,
       title: preview.title,
       description: content.trim(),
@@ -41,6 +46,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
       status: "waiting",
       priority: "medium",
     });
+    if (!item) return;
     setContent("");
     setSelectedFolderId(undefined);
     onClose();
@@ -80,7 +86,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
           </Pressable>
         )}
         <Text style={styles.section}>Folder</Text>
-        <FolderPickerField folders={folders} selectedFolderId={targetFolderId} onSelectFolder={setSelectedFolderId} />
+        <FolderPickerField folders={editableFolders} selectedFolderId={targetFolderId} onSelectFolder={setSelectedFolderId} />
         <AppButton label="Save to Waiting List" onPress={save} style={styles.save} />
       </ScrollView>
     </Modal>

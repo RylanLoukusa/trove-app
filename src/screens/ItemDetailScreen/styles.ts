@@ -76,6 +76,21 @@ export const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: spacing.xs,
   },
+  accessBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  accessBadgeText: {
+    color: colors.accentDark,
+    fontSize: 12,
+    fontWeight: "900",
+  },
   description: {
     color: colors.ink,
     fontSize: 16,
@@ -210,5 +225,11 @@ export const styles = StyleSheet.create({
   },
   button: {
     marginTop: spacing.md,
+  },
+  readOnlyNote: {
+    color: colors.muted,
+    fontWeight: "800",
+    marginTop: spacing.lg,
+    textAlign: "center",
   },
 });

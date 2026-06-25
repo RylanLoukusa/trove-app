@@ -12,12 +12,20 @@ export const getChildFolders = (folders: Folder[], parentFolderId: string | null
     .filter((folder) => folder.parentFolderId === parentFolderId)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+export const getVisibleRootFolders = (folders: Folder[]): Folder[] => {
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  return folders
+    .filter((folder) => folder.parentFolderId === null || !folderIds.has(folder.parentFolderId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
 export const getFolderHierarchyRows = (folders: Folder[]): FolderHierarchyRow[] => {
   const rows: FolderHierarchyRow[] = [];
   const seen = new Set<string>();
 
   const visit = (parentFolderId: string | null, depth: number): void => {
-    getChildFolders(folders, parentFolderId).forEach((folder) => {
+    const children = parentFolderId === null ? getVisibleRootFolders(folders) : getChildFolders(folders, parentFolderId);
+    children.forEach((folder) => {
       if (seen.has(folder.id)) return;
       seen.add(folder.id);
       rows.push({ folder, depth });

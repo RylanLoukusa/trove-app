@@ -52,6 +52,21 @@ export const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: spacing.sm,
   },
+  accessBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  accessBadgeText: {
+    color: colors.accentDark,
+    fontSize: 12,
+    fontWeight: "900",
+  },
   actions: {
     flexDirection: "row",
     gap: spacing.sm,

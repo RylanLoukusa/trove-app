@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
@@ -43,16 +43,23 @@ const priorityChoices: Record<ItemPriority, { label: string; detail: string; ton
 };
 
 export const AddEditItemScreen = ({ navigation, route }: Props) => {
-  const { folders, items, createItem, updateItem } = useWaitingList();
+  const { folders, items, createItem, updateItem, canEditFolderContent, canEditItem } = useWaitingList();
   const editing = items.find((item) => item.id === route.params?.itemId);
+  const editableFolders = useMemo(
+    () => folders.filter((folder) => canEditFolderContent(folder.id)),
+    [canEditFolderContent, folders],
+  );
+  const scrollViewRef = useRef<ScrollView>(null);
+  const titleInputRef = useRef<TextInput>(null);
 
   const [title, setTitle] = useState(editing?.title ?? "");
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [noteText, setNoteText] = useState(editing?.type === "text" ? editing.description ?? editing.richText ?? "" : "");
   const [linkText, setLinkText] = useState(editing?.type === "link" ? editing.url ?? "" : "");
   const [sourceUrl, setSourceUrl] = useState(editing?.sourceUrl ?? "");
   const [sharedText, setSharedText] = useState(editing?.sharedText ?? "");
   const [type, setType] = useState<ItemType>(normalizeItemType(editing?.type ?? "text"));
-  const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? folders[0]?.id ?? "");
+  const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? editableFolders[0]?.id ?? "");
   const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
   const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
   const [priority, setPriority] = useState<ItemPriority>(editing?.priority ?? "medium");
@@ -86,6 +93,25 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [isSaving, setIsSaving] = useState(false);
   const sharedImportId = route.params?.sharedImportId;
   const [loadedSharedImportId, setLoadedSharedImportId] = useState<string | null>(null);
+  const folderPickerFolders = useMemo(() => {
+    if (!folderId || editableFolders.some((folder) => folder.id === folderId)) {
+      return editableFolders;
+    }
+
+    const selectedFolder = folders.find((folder) => folder.id === folderId);
+    return selectedFolder ? [selectedFolder, ...editableFolders] : editableFolders;
+  }, [editableFolders, folderId, folders]);
+
+  useEffect(() => {
+    if (editing) return;
+    if (!folderId && editableFolders[0]) {
+      setFolderId(editableFolders[0].id);
+      return;
+    }
+    if (folderId && !canEditFolderContent(folderId) && editableFolders[0]) {
+      setFolderId(editableFolders[0].id);
+    }
+  }, [canEditFolderContent, editableFolders, editing, folderId]);
 
   useEffect(() => {
     if (!sharedImportId || editing || loadedSharedImportId === sharedImportId) return;
@@ -137,7 +163,35 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     setListItems((current) => (current.length > 1 ? current.filter((item) => item.id !== itemId) : current));
   }, []);
 
+  const updateTitle = useCallback(
+    (nextTitle: string): void => {
+      setTitle(nextTitle);
+      if (titleError && nextTitle.trim()) {
+        setTitleError(null);
+      }
+    },
+    [titleError],
+  );
+
   const save = useCallback(async (): Promise<void> => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setTitleError("Title is required.");
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      requestAnimationFrame(() => titleInputRef.current?.focus());
+      return;
+    }
+
+    if (editing && !canEditItem(editing.id)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return;
+    }
+
+    if (!editing && !canEditFolderContent(folderId)) {
+      Alert.alert("Cannot save item", "Choose a folder where you have edit access.");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const trimmedNote = noteText.trim();
@@ -194,7 +248,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
 
       const payload = {
         folderId,
-        title,
+        title: trimmedTitle,
         description: type === "text" ? trimmedNote || undefined : undefined,
         type: normalizeItemType(type),
         url: type === "link" ? trimmedLink || undefined : undefined,
@@ -224,6 +278,10 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         navigation.goBack();
       } else {
         const item = createItem(payload);
+        if (!item) {
+          setIsSaving(false);
+          return;
+        }
         if (sharedImportId) {
           await clearSharedImport(sharedImportId);
         }
@@ -232,16 +290,26 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     } finally {
       setIsSaving(false);
     }
-  }, [createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, priority, sharedImportId, sharedText, sourceUrl, status, tags, title, type, updateItem]);
+  }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, priority, sharedImportId, sharedText, sourceUrl, status, tags, title, type, updateItem]);
 
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>{editing ? "Edit item" : "Add item"}</Text>
 
-        <Text style={styles.label}>Title</Text>
-        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="What are you saving?" />
+        <Text style={styles.label}>
+          Title <Text style={styles.requiredMarker}>*</Text>
+        </Text>
+        <TextInput
+          ref={titleInputRef}
+          style={[styles.input, titleError && styles.inputError]}
+          value={title}
+          onChangeText={updateTitle}
+          placeholder="What are you saving?"
+          returnKeyType="done"
+        />
+        {titleError && <Text style={styles.errorText}>{titleError}</Text>}
 
         <Text style={styles.section}>Type</Text>
         {types.map((choice) => {
@@ -363,7 +431,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         )}
 
         <Text style={styles.section}>Folder</Text>
-        <FolderPickerField folders={folders} selectedFolderId={folderId} onSelectFolder={setFolderId} />
+        <FolderPickerField folders={folderPickerFolders} selectedFolderId={folderId} onSelectFolder={setFolderId} />
 
         <Text style={styles.label}>Tags</Text>
         <TextInput

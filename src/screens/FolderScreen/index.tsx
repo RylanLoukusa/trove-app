@@ -11,6 +11,7 @@ import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
+import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
@@ -127,7 +128,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 });
 
 export const FolderScreen = ({ navigation, route }: Props) => {
-  const { folders, items, updateItem, deleteFolder } = useWaitingList();
+  const { folders, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useWaitingList();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
@@ -142,6 +143,8 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     ? folderItems.filter((item) => selectedPattern.itemIds.includes(item.id))
     : folderItems;
   const canNestMore = folder ? canAddChildFolder(folders, folder.id) : false;
+  const canManageCurrentFolder = folder ? canManageFolder(folder.id) : false;
+  const canEditCurrentFolderContent = folder ? canEditFolderContent(folder.id) : false;
 
   const onBreadcrumbHome = useCallback(() => {
     navigation.navigate("Home");
@@ -172,6 +175,10 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     (itemId: string, listItemId: string): void => {
       const currentItem = items.find((candidate) => candidate.id === itemId);
       if (!currentItem?.listItems) return;
+      if (!canEditItem(itemId)) {
+        Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+        return;
+      }
 
       const listItems = currentItem.listItems.map((listItem) =>
         listItem.id === listItemId && listItem.kind === "check"
@@ -186,23 +193,27 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         status: isChecklistComplete ? "done" : currentItem.status === "done" ? "waiting" : currentItem.status,
       });
     },
-    [items, updateItem],
+    [canEditItem, items, updateItem],
   );
 
   const onPressEditFolder = useCallback(() => {
-    if (!folder) return;
+    if (!folder || !canManageCurrentFolder) return;
     navigation.navigate("AddEditFolder", { folderId: folder.id });
-  }, [folder, navigation]);
+  }, [canManageCurrentFolder, folder, navigation]);
 
   const onPressAddItem = useCallback(() => {
     if (!folder) return;
+    if (!canEditCurrentFolderContent) {
+      Alert.alert("Cannot add item", "You only have view access to this folder.");
+      return;
+    }
     navigation.navigate("AddEditItem", { folderId: folder.id });
-  }, [folder, navigation]);
+  }, [canEditCurrentFolderContent, folder, navigation]);
 
   const onPressAddSubfolder = useCallback(() => {
-    if (!folder || !canNestMore) return;
+    if (!folder || !canNestMore || !canManageCurrentFolder) return;
     navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
-  }, [canNestMore, folder, navigation]);
+  }, [canManageCurrentFolder, canNestMore, folder, navigation]);
 
   const onPressPickSomething = useCallback(() => {
     if (!folder) return;
@@ -213,6 +224,11 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     }
     navigation.navigate("ItemDetail", { itemId: picked.id });
   }, [folder, folders, items, navigation]);
+
+  const onPressManageAccess = useCallback(() => {
+    if (!folder || !canManageCurrentFolder) return;
+    navigation.navigate("ShareFolder", { folderId: folder.id });
+  }, [canManageCurrentFolder, folder, navigation]);
 
   const onPressShare = useCallback(async (): Promise<void> => {
     if (!folder) return;
@@ -229,7 +245,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   }, [folder, folderItems, subfolders]);
 
   const confirmDelete = useCallback((): void => {
-    if (!folder) return;
+    if (!folder || !canManageCurrentFolder) return;
     Alert.alert(
       "Delete folder?",
       "This recursively deletes nested subfolders and saved items inside this folder.",
@@ -251,18 +267,25 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         },
       ],
     );
-  }, [deleteFolder, folder, navigation]);
+  }, [canManageCurrentFolder, deleteFolder, folder, navigation]);
 
   const onOpenMenu = useCallback((): void => {
     if (!folder) return;
     Alert.alert("Folder actions", folder.name, [
-      { text: "Edit", onPress: onPressEditFolder },
+      ...(canManageCurrentFolder
+        ? [
+            { text: "Edit", onPress: onPressEditFolder },
+            { text: "Manage access", onPress: onPressManageAccess },
+          ]
+        : []),
       { text: "Pick Something", onPress: onPressPickSomething },
-      { text: "Share", onPress: () => void onPressShare() },
-      { text: "Delete folder", style: "destructive", onPress: confirmDelete },
+      { text: "Share summary", onPress: () => void onPressShare() },
+      ...(canManageCurrentFolder
+        ? [{ text: "Delete folder", style: "destructive" as const, onPress: confirmDelete }]
+        : []),
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [confirmDelete, folder, onPressEditFolder, onPressPickSomething, onPressShare]);
+  }, [canManageCurrentFolder, confirmDelete, folder, onPressEditFolder, onPressManageAccess, onPressPickSomething, onPressShare]);
 
   const onPressPattern = useCallback((patternId: string): void => {
     setSelectedPatternId((current) => (current === patternId ? null : patternId));
@@ -297,22 +320,35 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             <Text style={styles.moreButtonText}>More</Text>
           </Pressable>
         </View>
+        {isSharedAccess(folder) && (
+          <View style={styles.accessBadge}>
+            <Text style={styles.accessBadgeText}>Shared · {accessRoleLabel(folder.accessRole)}</Text>
+          </View>
+        )}
         {!!folder.purpose && <Text style={styles.purpose}>{folder.purpose}</Text>}
 
         <View style={styles.actions}>
-          <AppButton label="Add item" onPress={onPressAddItem} style={styles.action} />
           <AppButton
-            label={canNestMore ? "Add subfolder" : "Max depth reached"}
+            label={canEditCurrentFolderContent ? "Add item" : "View only"}
+            onPress={onPressAddItem}
+            style={styles.action}
+            disabled={!canEditCurrentFolderContent}
+          />
+          <AppButton
+            label={!canManageCurrentFolder ? "Owner only" : canNestMore ? "Add subfolder" : "Max depth reached"}
             variant="secondary"
             onPress={onPressAddSubfolder}
             style={styles.action}
-            disabled={!canNestMore}
+            disabled={!canNestMore || !canManageCurrentFolder}
           />
         </View>
 
         <Text style={styles.section}>Subfolders</Text>
         {subfolders.length === 0 ? (
-          <EmptyState title="No subfolders yet." message="Create a subfolder to organize this list." />
+          <EmptyState
+            title="No subfolders yet."
+            message={canManageCurrentFolder ? "Create a subfolder to organize this list." : "No shared subfolders are visible here."}
+          />
         ) : (
           <>
             {visibleSubfolders.map((child) => (
