@@ -89,6 +89,10 @@ export const SettingsScreen = ({ navigation }: Props) => {
     navigation.navigate("Login");
   }, [navigation]);
 
+  const onPressProfile = useCallback(() => {
+    navigation.navigate("Profile");
+  }, [navigation]);
+
   const openLegalLink = useCallback(async (url: string): Promise<void> => {
     try {
       await Linking.openURL(url);
@@ -123,6 +127,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
         ) : session?.user ? (
           <>
             <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
+            <AppButton label="Profile" variant="secondary" onPress={onPressProfile} style={styles.button} />
             <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
             <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.button} />
           </>
