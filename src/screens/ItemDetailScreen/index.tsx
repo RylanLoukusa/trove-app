@@ -104,7 +104,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
 
   const confirmDelete = useCallback((): void => {
     if (!item || !canEditCurrentItem) return;
-    Alert.alert("Delete item?", "This removes it from your Waiting List.", [
+    Alert.alert("Delete item?", "This removes it from Trove.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",

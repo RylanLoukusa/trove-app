@@ -54,7 +54,7 @@ const resendFromEmail = env("RESEND_FROM_EMAIL");
 const publicBaseUrl = env("APP_PUBLIC_BASE_URL").replace(/\/$/, "");
 
 const appLink = (path: string): string =>
-  publicBaseUrl ? `${publicBaseUrl}${path}` : `thewaitinglist://${path.replace(/^\//, "")}`;
+  publicBaseUrl ? `${publicBaseUrl}${path}` : `trove://${path.replace(/^\//, "")}`;
 
 const escapeHtml = (value: string): string =>
   value
@@ -184,7 +184,7 @@ const sendEmail = async (input: {
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #191919;">
           <h1 style="font-size: 22px; margin-bottom: 12px;">${escapedOwnerLabel} shared a folder with you</h1>
-          <p>You have been invited to ${escapedRole} <strong>${escapedFolderName}</strong> in The Waiting List.</p>
+          <p>You have been invited to ${escapedRole} <strong>${escapedFolderName}</strong> in Trove.</p>
           <p>This invite includes ${escapedScope}.</p>
           <p style="margin: 28px 0;">
             <a href="${input.acceptUrl}" style="background: #111111; color: #ffffff; padding: 12px 18px; border-radius: 8px; text-decoration: none; display: inline-block;">
@@ -195,7 +195,7 @@ const sendEmail = async (input: {
           <p style="word-break: break-all; color: #666666; font-size: 13px;">${escapeHtml(input.acceptUrl)}</p>
         </div>
       `,
-      text: `${input.ownerLabel} shared "${input.folderName}" with you in The Waiting List.\n\n${actionLabel}: ${input.acceptUrl}`,
+      text: `${input.ownerLabel} shared "${input.folderName}" with you in Trove.\n\n${actionLabel}: ${input.acceptUrl}`,
     }),
     headers: {
       Authorization: `Bearer ${resendApiKey}`,

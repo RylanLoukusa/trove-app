@@ -77,7 +77,7 @@ export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
         <Text style={styles.title}>Shared folder invite</Text>
         <Text style={styles.message}>
           {session?.user
-            ? "Accept this invite to add the shared folder to The Waiting List."
+            ? "Accept this invite to add the shared folder to Trove."
             : "Sign in with the invited email address to accept this folder invite."}
         </Text>
 

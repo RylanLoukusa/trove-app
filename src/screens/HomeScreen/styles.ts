@@ -26,6 +26,27 @@ export const styles = StyleSheet.create({
     letterSpacing: -1,
     marginBottom: spacing.md,
   },
+  syncPill: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  syncPillFailed: {
+    borderColor: colors.danger,
+  },
+  syncPillText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  syncPillTextFailed: {
+    color: colors.danger,
+  },
   search: {
     backgroundColor: colors.surface,
     borderRadius: 999,

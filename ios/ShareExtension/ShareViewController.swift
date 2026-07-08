@@ -129,7 +129,7 @@ final class ShareViewController: UIViewController {
     contentStack.translatesAutoresizingMaskIntoConstraints = false
     scrollView.addSubview(contentStack)
 
-    headerLabel.text = "Save to The Waiting List"
+    headerLabel.text = "Save to Trove"
     headerLabel.font = .preferredFont(forTextStyle: .title3)
     headerLabel.adjustsFontForContentSizeCategory = true
     headerLabel.textColor = TWLStyle.ink
@@ -878,7 +878,7 @@ final class ShareViewController: UIViewController {
       return
     }
     guard let folderId = selectedFolderId else {
-      statusLabel.text = "Open The Waiting List once to sync folders before saving from the share sheet."
+      statusLabel.text = "Open Trove once to sync folders before saving from the share sheet."
       statusLabel.textColor = TWLStyle.danger
       return
     }
@@ -934,7 +934,7 @@ final class ShareViewController: UIViewController {
     setComposerVisible(false)
     loadingIndicator.stopAnimating()
     loadingIndicator.isHidden = true
-    statusLabel.text = "Saved to The Waiting List"
+    statusLabel.text = "Saved to Trove"
     statusLabel.textColor = TWLStyle.muted
 
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {

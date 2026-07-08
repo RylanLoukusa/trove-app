@@ -8,6 +8,7 @@ import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
+import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useAuth } from "../../auth/AuthContext";
 import { Folder, SavedItem } from "../../types/models";
 import { getDescendantFolderIds, getFolderPathLabel, getVisibleRootFolders } from "../../utils/folderTree";
@@ -44,7 +45,7 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 });
 
 export const HomeScreen = ({ navigation }: Props) => {
-  const { folders, items } = useWaitingList();
+  const { folders, items, syncSnapshot, syncToRemote } = useWaitingList();
   const { session, signOut } = useAuth();
 
   const onPressSearch = useCallback(() => {
@@ -101,6 +102,18 @@ export const HomeScreen = ({ navigation }: Props) => {
     Alert.alert("Menu", "Choose an action", buttons);
   }, [onPressSettings, onPressLogin, onSignOut, session?.user]);
 
+  const onPressSyncStatus = useCallback(async () => {
+    if (syncSnapshot.status === "conflicted") {
+      navigation.navigate("SyncConflict");
+      return;
+    }
+
+    const result = await syncToRemote();
+    if (!result.ok) {
+      Alert.alert("Sync failed", result.error ?? "Unable to sync Trove.");
+    }
+  }, [navigation, syncSnapshot.status, syncToRemote]);
+
   const topFolders = getVisibleRootFolders(folders);
   const recentItems = [...items]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -116,7 +129,34 @@ export const HomeScreen = ({ navigation }: Props) => {
       <ScreenTopBar navigation={navigation} showBack={false} onMenuPress={onOpenMenu} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.kicker}>Save ideas now. Pick the perfect one later.</Text>
-        <Text style={styles.title}>The Waiting List</Text>
+        <Text style={styles.title}>Trove</Text>
+
+        {session?.user ? (
+          <Pressable
+            accessibilityRole={
+              syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted"
+                ? "button"
+                : "text"
+            }
+            disabled={syncSnapshot.status !== "failed" && syncSnapshot.status !== "conflicted"}
+            onPress={onPressSyncStatus}
+            style={[
+              styles.syncPill,
+              (syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted") &&
+                styles.syncPillFailed,
+            ]}
+          >
+            <Text
+              style={[
+                styles.syncPillText,
+                (syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted") &&
+                  styles.syncPillTextFailed,
+              ]}
+            >
+              {displayTextForSyncSnapshot(syncSnapshot)}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <Pressable style={styles.search} onPress={onPressSearch}>
           <Text style={styles.searchText}>Search folders, ideas, tags, URLs...</Text>
@@ -159,7 +199,7 @@ export const HomeScreen = ({ navigation }: Props) => {
         {recentItems.length === 0 ? (
           <EmptyState
             title="No items here yet."
-            message="Add a note, list, link, or media item to your Waiting List."
+            message="Add a note, list, link, or media item to Trove."
           />
         ) : (
           recentItems.map((item) => (

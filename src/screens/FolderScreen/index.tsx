@@ -226,9 +226,9 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   }, [folder, folders, items, navigation]);
 
   const onPressManageAccess = useCallback(() => {
-    if (!folder || !canManageCurrentFolder) return;
+    if (!folder) return;
     navigation.navigate("ShareFolder", { folderId: folder.id });
-  }, [canManageCurrentFolder, folder, navigation]);
+  }, [folder, navigation]);
 
   const onPressShare = useCallback(async (): Promise<void> => {
     if (!folder) return;
@@ -277,7 +277,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             { text: "Edit", onPress: onPressEditFolder },
             { text: "Manage access", onPress: onPressManageAccess },
           ]
-        : []),
+        : [{ text: "View access", onPress: onPressManageAccess }]),
       { text: "Pick Something", onPress: onPressPickSomething },
       { text: "Share summary", onPress: () => void onPressShare() },
       ...(canManageCurrentFolder

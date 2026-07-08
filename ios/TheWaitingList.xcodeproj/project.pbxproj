@@ -11,36 +11,24 @@
 		19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */; };
 		244BF043D225B92FCE868DA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		A03C101C6A36F63A7AFACFF9 /* libPods-TheWaitingList.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */; };
 		A1B2C3D4E5F6012345678902 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678901 /* ShareViewController.swift */; };
 		A1B2C3D4E5F6012345678907 /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678905 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1B2C3D4E5F6012345678914 /* SharedImportModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */; };
 		A1B2C3D4E5F6012345678915 /* SharedImportModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */; };
-		A03C101C6A36F63A7AFACFF9 /* libPods-TheWaitingList.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* TheWaitingList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TheWaitingList.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = TheWaitingList/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = TheWaitingList/Info.plist; sourceTree = "<group>"; };
-		41E2AD3279CCEC6B1C8C6A4F /* Pods-TheWaitingList.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.release.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.release.xcconfig"; sourceTree = "<group>"; };
-		5369AB779FF23CE7A9F3DAE2 /* Pods-TheWaitingList.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.debug.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.debug.xcconfig"; sourceTree = "<group>"; };
-		564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-TheWaitingList/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TheWaitingList.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = TheWaitingList/SplashScreen.storyboard; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678901 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678904 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678905 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedImportModule.swift; path = TheWaitingList/SharedImportModule.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SharedImportModuleBridge.m; path = TheWaitingList/SharedImportModuleBridge.m; sourceTree = "<group>"; };
-		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = TheWaitingList/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = TheWaitingList/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* TheWaitingList-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "TheWaitingList-Bridging-Header.h"; path = "TheWaitingList/TheWaitingList-Bridging-Header.h"; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D4E5F601234567890E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D4E5F601234567890C;
+			remoteInfo = ShareExtension;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		A1B2C3D4E5F601234567890B /* Embed App Extensions */ = {
@@ -55,6 +43,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		13B07F961A680F5B00A75B9A /* TheWaitingList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TheWaitingList.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = TheWaitingList/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = TheWaitingList/Info.plist; sourceTree = "<group>"; };
+		41E2AD3279CCEC6B1C8C6A4F /* Pods-TheWaitingList.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.release.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.release.xcconfig"; sourceTree = "<group>"; };
+		5369AB779FF23CE7A9F3DAE2 /* Pods-TheWaitingList.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.debug.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.debug.xcconfig"; sourceTree = "<group>"; };
+		564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-TheWaitingList/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TheWaitingList.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6012345678901 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678904 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678905 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedImportModule.swift; path = TheWaitingList/SharedImportModule.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SharedImportModuleBridge.m; path = TheWaitingList/SharedImportModuleBridge.m; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = TheWaitingList/SplashScreen.storyboard; sourceTree = "<group>"; };
+		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = TheWaitingList/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = TheWaitingList/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* TheWaitingList-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "TheWaitingList-Bridging-Header.h"; path = "TheWaitingList/TheWaitingList-Bridging-Header.h"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
@@ -142,6 +152,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		A1B2C3D4E5F6012345678911 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6012345678901 /* ShareViewController.swift */,
+				A1B2C3D4E5F6012345678903 /* Info.plist */,
+				A1B2C3D4E5F6012345678904 /* ShareExtension.entitlements */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
 		B32652956759906635FD0460 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
@@ -157,16 +177,6 @@
 			);
 			name = Supporting;
 			path = TheWaitingList/Supporting;
-			sourceTree = "<group>";
-		};
-		A1B2C3D4E5F6012345678911 /* ShareExtension */ = {
-			isa = PBXGroup;
-			children = (
-				A1B2C3D4E5F6012345678901 /* ShareViewController.swift */,
-				A1B2C3D4E5F6012345678903 /* Info.plist */,
-				A1B2C3D4E5F6012345678904 /* ShareExtension.entitlements */,
-			);
-			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 		C6F939F8C2C17DDEB5D8BA57 /* TheWaitingList */ = {
@@ -222,16 +232,6 @@
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
-
-/* Begin PBXContainerItemProxy section */
-		A1B2C3D4E5F601234567890E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = A1B2C3D4E5F601234567890C;
-			remoteInfo = ShareExtension;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXProject section */
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
@@ -523,57 +523,6 @@
 			};
 			name = Release;
 		};
-		A1B2C3D4E5F601234567890D /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9YNCQGQ47P;
-				INFOPLIST_FILE = ShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
-				PRODUCT_NAME = ShareExtension;
-				SKIP_INSTALL = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		A1B2C3D4E5F6012345678916 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9YNCQGQ47P;
-				INFOPLIST_FILE = ShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
-				PRODUCT_NAME = ShareExtension;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
 		83CBBA201A601CBA00E9B192 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -692,6 +641,59 @@
 			};
 			name = Release;
 		};
+		A1B2C3D4E5F601234567890D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9YNCQGQ47P;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
+				PRODUCT_NAME = ShareExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6012345678916 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9YNCQGQ47P;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
+				PRODUCT_NAME = ShareExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -704,20 +706,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1B2C3D4E5F601234567890F /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A1B2C3D4E5F601234567890D /* Debug */,
-				A1B2C3D4E5F6012345678916 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "TheWaitingList" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F601234567890F /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F601234567890D /* Debug */,
+				A1B2C3D4E5F6012345678916 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

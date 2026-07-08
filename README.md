@@ -1,6 +1,6 @@
-# The Waiting List
+# Trove: Plans & Collections
 
-A clean React Native + TypeScript MVP for saving ideas, links, media, and notes into flexible nested folders.
+A clean React Native + TypeScript app for saving plans, ideas, links, media, and notes into flexible shared collections.
 
 ## Run
 
@@ -13,7 +13,7 @@ npm run start
 
 1. Create a project at [supabase.com](https://supabase.com) and run the SQL in [`supabase/migrations/20250514120000_waiting_list_data.sql`](supabase/migrations/20250514120000_waiting_list_data.sql) (SQL Editor or `supabase db push`).
 2. Enable **Email** auth under Authentication → Providers (adjust confirmations as you like for dev).
-3. Under Authentication → URL configuration, add your app redirect URLs (e.g. Expo dev: `exp://127.0.0.1:8081`, production build scheme from `app.json`: `thewaitinglist://`).
+3. Under Authentication → URL configuration, add your app redirect URLs (e.g. Expo dev: `exp://127.0.0.1:8081`, production build scheme from `app.json`: `trove://`).
 4. Copy **Project URL** and **anon public** key into a root `.env` file (do not commit):
 
 ```bash
@@ -54,11 +54,10 @@ separate terminal
 
 npx expo run:ios --device
 
-npx expo start --tunnel --clear --scheme thewaitinglist
+npx expo start --tunnel --clear --scheme trove
 
 
 npm run ios
-
 
 
 

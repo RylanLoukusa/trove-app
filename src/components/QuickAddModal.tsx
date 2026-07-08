@@ -87,7 +87,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
         )}
         <Text style={styles.section}>Folder</Text>
         <FolderPickerField folders={editableFolders} selectedFolderId={targetFolderId} onSelectFolder={setSelectedFolderId} />
-        <AppButton label="Save to Waiting List" onPress={save} style={styles.save} />
+        <AppButton label="Save to Trove" onPress={save} style={styles.save} />
       </ScrollView>
     </Modal>
   );

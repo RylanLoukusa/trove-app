@@ -2,6 +2,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AccessRole, Folder, SavedItem, ShareScope, WaitingListData } from "../types/models";
+import {
+  baselineFromWaitingList,
+  loadSyncBaseline,
+  saveSyncBaseline,
+  SyncConflictField,
+  SyncConflictSummary,
+} from "./syncBaseline";
 import { canEditFolderContentRecord, canManageFolderRecord } from "../utils/access";
 import {
   normalizeItemType,
@@ -24,9 +31,14 @@ type WaitingListRealtimeSubscription = {
 };
 
 type PushWaitingListResult = {
+  conflict?: SyncConflictSummary;
   error?: string;
   ok: boolean;
   updatedAt?: string;
+};
+
+type PushWaitingListOptions = {
+  skipConflictCheck?: boolean;
 };
 
 type SyncStateRow = {
@@ -110,6 +122,9 @@ const errorMessage = (error: unknown, fallback: string): string => {
 
   return fallback;
 };
+
+const isSyncConflictError = (error: unknown): boolean =>
+  errorMessage(error, "").toLowerCase().includes("sync conflict");
 
 const folderSyncErrorMessage = (error: unknown): string => {
   const message = errorMessage(error, "Unable to sync this folder before sharing.");
@@ -404,10 +419,12 @@ const savedItemToRow = (
 const upsertFolderRowForCurrentUser = async (
   supabase: SupabaseClient,
   folderRow: FolderRow,
+  expectedUpdatedAt?: string,
 ): Promise<void> => {
   const { error } = await supabase.rpc("upsert_waiting_list_folder_for_current_user", {
     target_color: folderRow.color,
     target_created_at: folderRow.created_at,
+    target_expected_updated_at: expectedUpdatedAt ?? null,
     target_folder_id: folderRow.id,
     target_icon: folderRow.icon,
     target_name: folderRow.name,
@@ -421,25 +438,92 @@ const upsertFolderRowForCurrentUser = async (
   }
 };
 
-const postgrestInList = (values: string[]): string =>
-  `(${values.map((value) => `"${value.replace(/"/g, '\\"')}"`).join(",")})`;
+const upsertItemRowForCurrentUser = async (
+  supabase: SupabaseClient,
+  itemRow: ItemRow,
+  expectedUpdatedAt?: string,
+): Promise<void> => {
+  const { error } = await supabase.rpc("upsert_waiting_list_item_for_current_user", {
+    target_attachments: itemRow.attachments,
+    target_connections: itemRow.connections,
+    target_created_at: itemRow.created_at,
+    target_description: itemRow.description,
+    target_expected_updated_at: expectedUpdatedAt ?? null,
+    target_folder_id: itemRow.folder_id,
+    target_item_id: itemRow.id,
+    target_list_items: itemRow.list_items,
+    target_media: itemRow.media,
+    target_media_items: itemRow.media_items,
+    target_media_uri: itemRow.media_uri,
+    target_notes: itemRow.notes,
+    target_priority: itemRow.priority,
+    target_rich_text: itemRow.rich_text,
+    target_shared_text: itemRow.shared_text,
+    target_source_platform: itemRow.source_platform,
+    target_source_url: itemRow.source_url,
+    target_status: itemRow.status,
+    target_tags: itemRow.tags,
+    target_thumbnail_uri: itemRow.thumbnail_uri,
+    target_title: itemRow.title,
+    target_type: itemRow.type,
+    target_updated_at: itemRow.updated_at,
+    target_url: itemRow.url,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
 
 const deleteOwnedRowsMissing = async (
   supabase: SupabaseClient,
   table: "waiting_list_folders" | "waiting_list_items",
-  userId: string,
   ids: string[],
+  knownUpdatedAt: Record<string, string>,
+  skipConflictCheck: boolean,
 ): Promise<void> => {
-  let query = supabase.from(table).delete().eq("owner_id", userId);
+  const { error } =
+    table === "waiting_list_folders"
+      ? await supabase.rpc("delete_missing_waiting_list_folders_for_current_user", {
+          known_updated_at: knownUpdatedAt,
+          local_folder_ids: ids,
+          skip_conflict_check: skipConflictCheck,
+        })
+      : await supabase.rpc("delete_missing_waiting_list_items_for_current_user", {
+          known_updated_at: knownUpdatedAt,
+          local_item_ids: ids,
+          skip_conflict_check: skipConflictCheck,
+        });
 
-  if (ids.length > 0) {
-    query = query.not("id", "in", postgrestInList(ids));
-  }
-
-  const { error } = await query;
   if (error) {
     throw error;
   }
+};
+
+const deleteWaitingListItemForUser = async (
+  supabase: SupabaseClient,
+  itemId: string,
+  expectedUpdatedAt?: string,
+  skipConflictCheck = false,
+): Promise<PushWaitingListResult> => {
+  const { error } = await supabase.rpc("delete_waiting_list_item_for_current_user", {
+    skip_conflict_check: skipConflictCheck,
+    target_expected_updated_at: expectedUpdatedAt ?? null,
+    target_item_id: itemId,
+  });
+
+  if (!error) {
+    return { ok: true };
+  }
+
+  if (isSyncConflictError(error)) {
+    return {
+      ok: false,
+      error: "This item changed somewhere else. Refresh before deleting it.",
+    };
+  }
+
+  return { ok: false, error: errorMessage(error, "Unable to delete this item.") };
 };
 
 const fetchLegacyWaitingListForUser = async (
@@ -458,7 +542,7 @@ const fetchLegacyWaitingListForUser = async (
     .maybeSingle();
 
   if (error) {
-    console.warn("Failed to pull legacy remote waiting list data", error);
+    console.warn("Failed to pull legacy remote Trove data", error);
     return { kind: "error" };
   }
 
@@ -468,7 +552,7 @@ const fetchLegacyWaitingListForUser = async (
 
   const row = data as LegacyRemoteRow;
   if (!isWaitingListPayload(row.payload)) {
-    console.warn("Remote waiting list payload is invalid");
+    console.warn("Remote Trove payload is invalid");
     return { kind: "invalid" };
   }
 
@@ -540,22 +624,22 @@ const fetchNormalizedWaitingListForUser = async (
   ]);
 
   if (syncStateResult.error) {
-    console.warn("Failed to pull waiting list sync state", syncStateResult.error);
+    console.warn("Failed to pull Trove sync state", syncStateResult.error);
     return { kind: "error" };
   }
 
   if (foldersResult.error) {
-    console.warn("Failed to pull remote waiting list folders", foldersResult.error);
+    console.warn("Failed to pull remote Trove folders", foldersResult.error);
     return { kind: "error" };
   }
 
   if (itemsResult.error) {
-    console.warn("Failed to pull remote waiting list items", itemsResult.error);
+    console.warn("Failed to pull remote Trove items", itemsResult.error);
     return { kind: "error" };
   }
 
   if (sharesResult.error) {
-    console.warn("Failed to pull remote waiting list shares", sharesResult.error);
+    console.warn("Failed to pull remote Trove shares", sharesResult.error);
     return { kind: "error" };
   }
 
@@ -611,10 +695,245 @@ const upsertSyncState = async (
   return ((data as SyncStateRow | null)?.updated_at as string | undefined) ?? updatedAt;
 };
 
+const remoteChangedSinceBaseline = (
+  remoteUpdatedAt: string,
+  baselineUpdatedAt?: string,
+): boolean =>
+  typeof baselineUpdatedAt === "string" && remoteUpdatedAt > baselineUpdatedAt;
+
+const conflictValue = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") {
+    return "Empty";
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "Empty";
+    return value
+      .map((entry) => {
+        if (typeof entry === "string") return entry;
+        if (typeof entry === "object" && entry !== null && "text" in entry) {
+          const text = (entry as { text?: unknown }).text;
+          return typeof text === "string" ? text : JSON.stringify(entry);
+        }
+        return JSON.stringify(entry);
+      })
+      .join(", ");
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+};
+
+const changedFields = <T extends Record<string, unknown>>(
+  local: T,
+  remote: T,
+  fieldNames: Array<keyof T>,
+): SyncConflictField[] =>
+  fieldNames
+    .filter((fieldName) => JSON.stringify(local[fieldName]) !== JSON.stringify(remote[fieldName]))
+    .map((fieldName) => ({
+      field: String(fieldName),
+      localRawValue: local[fieldName],
+      localValue: conflictValue(local[fieldName]),
+      remoteRawValue: remote[fieldName],
+      remoteValue: conflictValue(remote[fieldName]),
+    }));
+
+const folderConflictFields = (local: Folder, remote: Folder): SyncConflictField[] =>
+  changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
+    "name",
+    "parentFolderId",
+    "icon",
+    "color",
+    "purpose",
+  ]);
+
+const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictField[] =>
+  changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
+    "title",
+    "description",
+    "folderId",
+    "type",
+    "url",
+    "sourceUrl",
+    "sourcePlatform",
+    "sharedText",
+    "media",
+    "mediaItems",
+    "attachments",
+    "listItems",
+    "richText",
+    "connections",
+    "tags",
+    "status",
+    "priority",
+    "notes",
+  ]);
+
+const firstSyncConflict = async (
+  supabase: SupabaseClient,
+  userId: string,
+  waitingList: WaitingListData,
+): Promise<SyncConflictSummary | null> => {
+  const baseline = await loadSyncBaseline(userId);
+  const hasBaseline =
+    Object.keys(baseline.folders).length > 0 ||
+    Object.keys(baseline.items).length > 0;
+
+  if (!hasBaseline) {
+    const remoteResult = await fetchNormalizedWaitingListForUser(supabase, userId);
+    if (remoteResult.kind === "error") {
+      throw new Error("Unable to check the latest synced data before saving.");
+    }
+
+    const remoteFolder = remoteResult.data.folders.find((folder) => (folder.ownerId ?? userId) === userId);
+    if (remoteFolder) {
+      return {
+        entityId: remoteFolder.id,
+        entityKind: "folders",
+        reason: "remote_changed",
+        remoteLabel: remoteFolder.name,
+        remoteUpdatedAt: remoteFolder.updatedAt,
+      };
+    }
+
+    const remoteItem = remoteResult.data.items.find((item) => (item.ownerId ?? userId) === userId);
+    if (remoteItem) {
+      return {
+        entityId: remoteItem.id,
+        entityKind: "items",
+        reason: "remote_changed",
+        remoteLabel: remoteItem.title,
+        remoteUpdatedAt: remoteItem.updatedAt,
+      };
+    }
+
+    return null;
+  }
+
+  const normalizedData = normalizeWaitingListData(waitingList);
+  const localOwnedFolders = normalizedData.folders.filter((folder) =>
+    (folder.ownerId ?? userId) === userId && canManageFolderRecord(folder),
+  );
+  const localFoldersById = new Map(localOwnedFolders.map((folder) => [folder.id, folder]));
+  const localItemsById = new Map(normalizedData.items.map((item) => [item.id, item]));
+
+  const remoteResult = await fetchNormalizedWaitingListForUser(supabase, userId);
+  if (remoteResult.kind === "error") {
+    throw new Error("Unable to check the latest synced data before saving.");
+  }
+
+  const remoteFolders = remoteResult.data.folders.filter((folder) =>
+    (folder.ownerId ?? userId) === userId && canManageFolderRecord(folder),
+  );
+  const remoteFolderIds = new Set(remoteFolders.map((folder) => folder.id));
+  for (const remoteFolder of remoteFolders) {
+    const localFolder = localFoldersById.get(remoteFolder.id);
+    const baselineUpdatedAt = baseline.folders[remoteFolder.id];
+
+    if (localFolder) {
+      if (
+        localFolder.updatedAt !== remoteFolder.updatedAt &&
+        remoteChangedSinceBaseline(remoteFolder.updatedAt, baselineUpdatedAt)
+      ) {
+        return {
+          entityId: remoteFolder.id,
+          entityKind: "folders",
+          fields: folderConflictFields(localFolder, remoteFolder),
+          localLabel: localFolder.name,
+          localUpdatedAt: localFolder.updatedAt,
+          reason: "remote_changed",
+          remoteLabel: remoteFolder.name,
+          remoteUpdatedAt: remoteFolder.updatedAt,
+        };
+      }
+    } else if (
+      baselineUpdatedAt === undefined ||
+      remoteChangedSinceBaseline(remoteFolder.updatedAt, baselineUpdatedAt)
+    ) {
+      return {
+        entityId: remoteFolder.id,
+        entityKind: "folders",
+        reason: "remote_changed",
+        remoteLabel: remoteFolder.name,
+        remoteUpdatedAt: remoteFolder.updatedAt,
+      };
+    }
+  }
+
+  for (const localFolder of localFoldersById.values()) {
+    if (baseline.folders[localFolder.id] && !remoteFolderIds.has(localFolder.id)) {
+      return {
+        entityId: localFolder.id,
+        entityKind: "folders",
+        localLabel: localFolder.name,
+        localUpdatedAt: localFolder.updatedAt,
+        reason: "remote_deleted",
+        remoteUpdatedAt: baseline.folders[localFolder.id],
+      };
+    }
+  }
+
+  const remoteItemsById = new Map(remoteResult.data.items.map((item) => [item.id, item]));
+
+  for (const remoteItem of remoteItemsById.values()) {
+    const localItem = localItemsById.get(remoteItem.id);
+    const baselineUpdatedAt = baseline.items[remoteItem.id];
+
+    if (localItem) {
+      if (
+        localItem.updatedAt !== remoteItem.updatedAt &&
+        remoteChangedSinceBaseline(remoteItem.updatedAt, baselineUpdatedAt)
+      ) {
+        return {
+          entityId: remoteItem.id,
+          entityKind: "items",
+          fields: itemConflictFields(localItem, remoteItem),
+          localLabel: localItem.title,
+          localUpdatedAt: localItem.updatedAt,
+          reason: "remote_changed",
+          remoteLabel: remoteItem.title,
+          remoteUpdatedAt: remoteItem.updatedAt,
+        };
+      }
+    } else if (
+      baselineUpdatedAt === undefined ||
+      remoteChangedSinceBaseline(remoteItem.updatedAt, baselineUpdatedAt)
+    ) {
+      return {
+        entityId: remoteItem.id,
+        entityKind: "items",
+        reason: "remote_changed",
+        remoteLabel: remoteItem.title,
+        remoteUpdatedAt: remoteItem.updatedAt,
+      };
+    }
+  }
+
+  for (const localItem of localItemsById.values()) {
+    if (baseline.items[localItem.id] && !remoteItemsById.has(localItem.id)) {
+      return {
+        entityId: localItem.id,
+        entityKind: "items",
+        localLabel: localItem.title,
+        localUpdatedAt: localItem.updatedAt,
+        reason: "remote_deleted",
+        remoteUpdatedAt: baseline.items[localItem.id],
+      };
+    }
+  }
+
+  return null;
+};
+
 const replaceNormalizedWaitingListForUser = async (
   supabase: SupabaseClient,
   userId: string,
   waitingList: WaitingListData,
+  options: PushWaitingListOptions = {},
 ): Promise<PushWaitingListResult> => {
   const normalizedData = normalizeWaitingListData(waitingList);
   const foldersById = new Map(normalizedData.folders.map((folder) => [folder.id, folder]));
@@ -630,23 +949,37 @@ const replaceNormalizedWaitingListForUser = async (
   });
 
   try {
+    const baseline = await loadSyncBaseline(userId);
+    if (!options.skipConflictCheck) {
+      const conflict = await firstSyncConflict(supabase, userId, normalizedData);
+      if (conflict) {
+        return {
+          conflict,
+          ok: false,
+          error: "This content changed somewhere else. Resolve the conflict before syncing again.",
+        };
+      }
+    }
+
     const folderRows = sortFoldersParentFirst(ownedFolders).map((folder) =>
       folderToRow(folder, userId),
     );
 
     for (const folderRow of folderRows) {
-      await upsertFolderRowForCurrentUser(supabase, folderRow);
+      await upsertFolderRowForCurrentUser(
+        supabase,
+        folderRow,
+        options.skipConflictCheck ? undefined : baseline.folders[folderRow.id],
+      );
     }
 
     const itemRows = writableItems.map((item) => savedItemToRow(item, userId, foldersById));
-    if (itemRows.length > 0) {
-      const { error } = await supabase
-        .from("waiting_list_items")
-        .upsert(itemRows, { onConflict: "id" });
-
-      if (error) {
-        throw error;
-      }
+    for (const itemRow of itemRows) {
+      await upsertItemRowForCurrentUser(
+        supabase,
+        itemRow,
+        options.skipConflictCheck ? undefined : baseline.items[itemRow.id],
+      );
     }
 
     const localItemIds = normalizedData.items
@@ -655,25 +988,54 @@ const replaceNormalizedWaitingListForUser = async (
     await deleteOwnedRowsMissing(
       supabase,
       "waiting_list_items",
-      userId,
       localItemIds,
+      baseline.items,
+      options.skipConflictCheck ?? false,
     );
 
     const localFolderIds = ownedFolders.map((folder) => folder.id);
     await deleteOwnedRowsMissing(
       supabase,
       "waiting_list_folders",
-      userId,
       localFolderIds,
+      baseline.folders,
+      options.skipConflictCheck ?? false,
     );
 
     const updatedAt = await upsertSyncState(supabase, userId);
     await writeStoredRemoteUpdatedAt(userId, updatedAt);
+    const remoteAfterPush = await fetchNormalizedWaitingListForUser(supabase, userId);
+    await saveSyncBaseline(
+      userId,
+      remoteAfterPush.kind === "data"
+        ? baselineFromWaitingList(remoteAfterPush.data)
+        : baselineFromWaitingList(normalizedData),
+    );
 
     return { ok: true, updatedAt };
   } catch (error) {
-    console.warn("Failed to push normalized waiting list data", error);
-    return { ok: false, error: errorMessage(error, "Failed to sync waiting list data.") };
+    if (!options.skipConflictCheck && isSyncConflictError(error)) {
+      try {
+        const conflict = await firstSyncConflict(supabase, userId, normalizedData);
+        if (conflict) {
+          return {
+            conflict,
+            ok: false,
+            error: "This content changed somewhere else. Resolve the conflict before syncing again.",
+          };
+        }
+      } catch (conflictError) {
+        console.warn("Failed to inspect Trove sync conflict", conflictError);
+      }
+
+      return {
+        ok: false,
+        error: "This content changed somewhere else. Refresh before syncing again.",
+      };
+    }
+
+    console.warn("Failed to push normalized Trove data", error);
+    return { ok: false, error: errorMessage(error, "Failed to sync Trove data.") };
   }
 };
 
@@ -720,6 +1082,16 @@ const pushFolderBranchForUser = async (
   }
 
   try {
+    const conflict = await firstSyncConflict(supabase, userId, waitingList);
+    if (conflict) {
+      return {
+        conflict,
+        ok: false,
+        error: "This content changed somewhere else. Resolve the conflict before sharing.",
+      };
+    }
+
+    const baseline = await loadSyncBaseline(userId);
     const folderRows = branchResult.folders.map((folder) => folderToRow(folder, userId));
     const ownershipResult = await ensureRemoteFoldersOwnedByUser(
       supabase,
@@ -732,14 +1104,38 @@ const pushFolderBranchForUser = async (
     }
 
     for (const folderRow of folderRows) {
-      await upsertFolderRowForCurrentUser(supabase, folderRow);
+      await upsertFolderRowForCurrentUser(supabase, folderRow, baseline.folders[folderRow.id]);
     }
 
     const updatedAt = await upsertSyncState(supabase, userId);
     await writeStoredRemoteUpdatedAt(userId, updatedAt);
+    const remoteAfterPush = await fetchNormalizedWaitingListForUser(supabase, userId);
+    if (remoteAfterPush.kind === "data") {
+      await saveSyncBaseline(userId, baselineFromWaitingList(remoteAfterPush.data));
+    }
 
     return { ok: true, updatedAt };
   } catch (error) {
+    if (isSyncConflictError(error)) {
+      try {
+        const conflict = await firstSyncConflict(supabase, userId, waitingList);
+        if (conflict) {
+          return {
+            conflict,
+            ok: false,
+            error: "This content changed somewhere else. Resolve the conflict before sharing.",
+          };
+        }
+      } catch (conflictError) {
+        console.warn("Failed to inspect Trove folder sync conflict", conflictError);
+      }
+
+      return {
+        ok: false,
+        error: "This folder changed somewhere else. Refresh before sharing again.",
+      };
+    }
+
     console.warn("Failed to push folder branch before sharing", error);
     return { ok: false, error: folderSyncErrorMessage(error) };
   }
@@ -769,17 +1165,19 @@ const pullWaitingListForUser = async (
       try {
         remoteUpdatedAt = await upsertSyncState(supabase, userId);
       } catch (error) {
-        console.warn("Failed to initialize waiting list sync state", error);
+        console.warn("Failed to initialize Trove sync state", error);
         return { kind: "error" };
       }
     }
 
     const storedUpdatedAt = await readStoredRemoteUpdatedAt(userId);
     if (storedUpdatedAt && remoteUpdatedAt <= storedUpdatedAt) {
+      await saveSyncBaseline(userId, baselineFromWaitingList(normalizedResult.data));
       return { kind: "noop_up_to_date", remoteUpdatedAt };
     }
 
     await writeStoredRemoteUpdatedAt(userId, remoteUpdatedAt);
+    await saveSyncBaseline(userId, baselineFromWaitingList(normalizedResult.data));
     return {
       kind: "applied",
       data: normalizeWaitingListData(normalizedResult.data),
@@ -821,8 +1219,9 @@ const pushWaitingListForUser = async (
   supabase: SupabaseClient,
   userId: string,
   waitingList: WaitingListData,
+  options?: PushWaitingListOptions,
 ): Promise<PushWaitingListResult> =>
-  replaceNormalizedWaitingListForUser(supabase, userId, waitingList);
+  replaceNormalizedWaitingListForUser(supabase, userId, waitingList, options);
 
 const ensureRemoteRowForUser = async (
   supabase: SupabaseClient,
@@ -902,6 +1301,7 @@ const subscribeWaitingListRealtimeForUser = (
 
 export {
   clearStoredRemoteUpdatedAt,
+  deleteWaitingListItemForUser,
   ensureRemoteRowForUser,
   pullWaitingListForUser,
   pushFolderBranchForUser,
@@ -909,4 +1309,4 @@ export {
   readStoredRemoteUpdatedAt,
   subscribeWaitingListRealtimeForUser,
 };
-export type { PullWaitingListResult, WaitingListRealtimeSubscription };
+export type { PullWaitingListResult, PushWaitingListResult, WaitingListRealtimeSubscription };

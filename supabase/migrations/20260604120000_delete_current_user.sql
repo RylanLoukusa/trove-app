@@ -1,4 +1,4 @@
--- Deletes the signed-in user's account and Waiting List cloud data.
+-- Deletes the signed-in user's account and Trove cloud data.
 -- Run via Supabase CLI (`supabase db push`) or paste into SQL Editor in the dashboard.
 
 create or replace function public.delete_current_user()

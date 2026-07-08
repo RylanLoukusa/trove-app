@@ -7,13 +7,32 @@ import { getSupabase } from "../lib/supabase";
 import { syncShareExtensionFolders } from "../share/sharedImport";
 import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
 import {
+  loadSyncBaseline,
+  saveSyncBaseline,
+} from "../sync/syncBaseline";
+import type { SyncBaseline, SyncEntityKind } from "../sync/syncBaseline";
+import { mergeConflictFields } from "../sync/syncConflictResolution";
+import type { SyncConflictResolution } from "../sync/syncConflictResolution";
+import {
   clearStoredRemoteUpdatedAt,
+  deleteWaitingListItemForUser,
   ensureRemoteRowForUser,
   pullWaitingListForUser,
   pushFolderBranchForUser,
   pushWaitingListForUser,
   subscribeWaitingListRealtimeForUser,
 } from "../sync/waitingListSync";
+import type { PushWaitingListResult } from "../sync/waitingListSync";
+import {
+  conflictedSyncSnapshot,
+  failedSyncSnapshot,
+  loadSyncSnapshot,
+  queuedSyncSnapshot,
+  saveSyncSnapshot,
+  savingSyncSnapshot,
+  SyncSnapshot,
+  syncedSyncSnapshot,
+} from "../sync/syncStatus";
 import { seedData } from "../data/seedData";
 import { Folder, SavedItem, WaitingListData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
@@ -27,12 +46,20 @@ const FOREGROUND_REFRESH_INTERVAL_MS = 30_000;
 
 const hasWaitingListData = (data: WaitingListData): boolean => data.folders.length > 0 || data.items.length > 0;
 
+const hasPendingSync = (snapshot: SyncSnapshot): boolean =>
+  snapshot.status === "queued" ||
+  snapshot.status === "saving" ||
+  snapshot.status === "retrying" ||
+  snapshot.status === "failed" ||
+  snapshot.status === "conflicted";
+
 type RefreshFromRemoteOptions = {
   force?: boolean;
 };
 
 type WaitingListContextValue = WaitingListData & {
   isReady: boolean;
+  syncSnapshot: SyncSnapshot;
   createFolder: (input: Pick<Folder, "name" | "parentFolderId"> & Partial<Pick<Folder, "icon" | "color" | "purpose">>) => Folder | null;
   updateFolder: (folderId: string, updates: Partial<Pick<Folder, "name" | "parentFolderId" | "icon" | "color" | "purpose">>) => boolean;
   deleteFolder: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -43,6 +70,7 @@ type WaitingListContextValue = WaitingListData & {
   canEditFolderContent: (folderId?: string | null) => boolean;
   canEditItem: (itemId: string) => boolean;
   refreshFromRemote: (options?: RefreshFromRemoteOptions) => Promise<{ ok: boolean; error?: string }>;
+  resolveSyncConflict: (resolution: SyncConflictResolution) => Promise<{ ok: boolean; error?: string }>;
   syncFolderForSharing: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
   syncToRemote: () => Promise<{ ok: boolean; error?: string }>;
   resetToSeed: () => void;
@@ -78,15 +106,66 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
   const [data, setData] = useState<WaitingListData>(seedData);
   const [isReady, setIsReady] = useState(false);
+  const [syncSnapshot, setSyncSnapshot] = useState<SyncSnapshot>({
+    retryCount: 0,
+    status: "synced",
+  });
   const activeUserId = isAuthReady ? session?.user?.id ?? null : null;
   const dataRef = useRef(data);
   dataRef.current = data;
+  const syncSnapshotRef = useRef(syncSnapshot);
+  syncSnapshotRef.current = syncSnapshot;
   const skipRemotePushRef = useRef(true);
   const skipNextRemotePushRef = useRef(false);
   const remoteRowExistsRef = useRef(false);
   const pendingRemotePushRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const lastForegroundRefreshAtRef = useRef(0);
+
+  const setAndPersistSyncSnapshot = useCallback(
+    (nextSnapshot: SyncSnapshot) => {
+      setSyncSnapshot(nextSnapshot);
+      if (activeUserId) {
+        void saveSyncSnapshot(activeUserId, nextSnapshot);
+      }
+    },
+    [activeUserId],
+  );
+
+  const markLocalChangePending = useCallback(() => {
+    if (!activeUserId) return;
+    setSyncSnapshot((current) => {
+      const nextSnapshot = queuedSyncSnapshot(current);
+      void saveSyncSnapshot(activeUserId, nextSnapshot);
+      return nextSnapshot;
+    });
+  }, [activeUserId]);
+
+  const applyPushResult = useCallback(
+    (result: PushWaitingListResult, fallbackError: string): { ok: boolean; error?: string } => {
+      if (result.ok) {
+        remoteRowExistsRef.current = true;
+        setAndPersistSyncSnapshot(syncedSyncSnapshot());
+        return { ok: true };
+      }
+
+      if (result.conflict) {
+        setAndPersistSyncSnapshot(
+          conflictedSyncSnapshot(syncSnapshotRef.current, result.conflict),
+        );
+        return { ok: false, error: result.error ?? "Resolve the sync conflict before syncing again." };
+      }
+
+      setAndPersistSyncSnapshot(
+        failedSyncSnapshot(
+          syncSnapshotRef.current,
+          result.error ?? fallbackError,
+        ),
+      );
+      return { ok: false, error: result.error ?? fallbackError };
+    },
+    [setAndPersistSyncSnapshot],
+  );
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -96,19 +175,36 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     skipNextRemotePushRef.current = false;
     remoteRowExistsRef.current = false;
     pendingRemotePushRef.current = false;
+    setSyncSnapshot({ retryCount: 0, status: "synced" });
     setIsReady(false);
     setData(activeUserId ? emptyData : seedData);
 
-    void loadWaitingListData(activeUserId)
-      .then((loaded) => {
-        if (!cancelled) setData(loaded);
-      })
-      .catch(() => {
-        if (!cancelled) setData(activeUserId ? emptyData : seedData);
-      })
-      .finally(() => {
+    void (async () => {
+      try {
+        const [loadedData, loadedSnapshot] = await Promise.all([
+          loadWaitingListData(activeUserId),
+          activeUserId
+            ? loadSyncSnapshot(activeUserId)
+            : Promise.resolve<SyncSnapshot>({ retryCount: 0, status: "synced" }),
+        ]);
+
+        if (cancelled) return;
+
+        setData(loadedData);
+        setSyncSnapshot(
+          loadedSnapshot.status === "saving"
+            ? { ...loadedSnapshot, status: "queued" }
+            : loadedSnapshot,
+        );
+      } catch {
+        if (!cancelled) {
+          setData(activeUserId ? emptyData : seedData);
+          setSyncSnapshot({ retryCount: 0, status: "synced" });
+        }
+      } finally {
         if (!cancelled) setIsReady(true);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -137,6 +233,11 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
 
     const supabase = getSupabase();
     if (!supabase) {
+      skipRemotePushRef.current = false;
+      return;
+    }
+
+    if (hasPendingSync(syncSnapshotRef.current)) {
       skipRemotePushRef.current = false;
       return;
     }
@@ -198,11 +299,24 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     let didStartPush = false;
     const handle = setTimeout(() => {
       didStartPush = true;
+      setSyncSnapshot((current) => {
+        const nextSnapshot = savingSyncSnapshot(current);
+        void saveSyncSnapshot(userId, nextSnapshot);
+        return nextSnapshot;
+      });
       void pushWaitingListForUser(supabase, userId, data)
         .then((result) => {
-          if (result.ok) {
-            remoteRowExistsRef.current = true;
-          }
+          applyPushResult(result, "Unable to sync Trove data.");
+        })
+        .catch((error) => {
+          setSyncSnapshot((current) => {
+            const nextSnapshot = failedSyncSnapshot(
+              current,
+              error instanceof Error ? error.message : "Unable to sync Trove data.",
+            );
+            void saveSyncSnapshot(userId, nextSnapshot);
+            return nextSnapshot;
+          });
         })
         .finally(() => {
           pendingRemotePushRef.current = false;
@@ -215,7 +329,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         pendingRemotePushRef.current = false;
       }
     };
-  }, [activeUserId, data, isReady, isAuthReady]);
+  }, [activeUserId, applyPushResult, data, isReady, isAuthReady]);
 
   const createFolder = useCallback<WaitingListContextValue["createFolder"]>((input) => {
     const parentFolder = dataRef.current.folders.find((folder) => folder.id === input.parentFolderId);
@@ -238,8 +352,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       updatedAt: timestamp,
     };
     setData((current) => ({ ...current, folders: [...current.folders, folder] }));
+    markLocalChangePending();
     return folder;
-  }, [activeUserId]);
+  }, [activeUserId, markLocalChangePending]);
 
   const updateFolder = useCallback<WaitingListContextValue["updateFolder"]>((folderId, updates) => {
     let didUpdate = false;
@@ -273,8 +388,11 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         }),
       };
     });
+    if (didUpdate) {
+      markLocalChangePending();
+    }
     return didUpdate;
-  }, []);
+  }, [markLocalChangePending]);
 
   const deleteFolder = useCallback<WaitingListContextValue["deleteFolder"]>(async (folderId) => {
     const folder = dataRef.current.folders.find((candidate) => candidate.id === folderId);
@@ -288,8 +406,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     if (!mediaResult.ok) return mediaResult;
 
     setData((current) => deleteFolderRecursively(current.folders, current.items, folderId));
+    markLocalChangePending();
     return { ok: true };
-  }, []);
+  }, [markLocalChangePending]);
 
   const createItem = useCallback<WaitingListContextValue["createItem"]>((input) => {
     const folder = dataRef.current.folders.find((candidate) => candidate.id === input.folderId);
@@ -311,10 +430,12 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       updatedAt: timestamp,
     };
     setData((current) => ({ ...current, items: [item, ...current.items] }));
+    markLocalChangePending();
     return item;
-  }, [activeUserId]);
+  }, [activeUserId, markLocalChangePending]);
 
   const updateItem = useCallback<WaitingListContextValue["updateItem"]>((itemId, updates) => {
+    let didUpdate = false;
     setData((current) => ({
       ...current,
       items: current.items.map((item) => {
@@ -333,6 +454,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
           return item;
         }
 
+        didUpdate = true;
         return {
           ...item,
           ...updates,
@@ -344,7 +466,10 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         };
       }),
     }));
-  }, [activeUserId]);
+    if (didUpdate) {
+      markLocalChangePending();
+    }
+  }, [activeUserId, markLocalChangePending]);
 
   const canManageFolder = useCallback<WaitingListContextValue["canManageFolder"]>((folderId) => {
     if (!folderId) return true;
@@ -376,16 +501,18 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         return { ok: false, error: "Supabase not configured" };
       }
 
-      const { error } = await supabase
-        .from("waiting_list_items")
-        .delete()
-        .eq("id", itemId);
-      if (error) {
-        return { ok: false, error: error.message };
+      const deleteResult = await deleteWaitingListItemForUser(
+        supabase,
+        itemId,
+        itemToDelete?.updatedAt,
+      );
+      if (!deleteResult.ok) {
+        return { ok: false, error: deleteResult.error };
       }
 
       void deleteStoredMediaForItems(itemToDelete ? [itemToDelete] : []);
       setData((current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }));
+      markLocalChangePending();
       return { ok: true };
     }
 
@@ -395,8 +522,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setData((current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }));
+    markLocalChangePending();
     return { ok: true };
-  }, [activeUserId]);
+  }, [activeUserId, markLocalChangePending]);
 
   const refreshFromRemote = useCallback<WaitingListContextValue["refreshFromRemote"]>(async (options) => {
     const userId = activeUserId;
@@ -420,6 +548,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         skipNextRemotePushRef.current = true;
         setData(result.data);
         remoteRowExistsRef.current = true;
+        setAndPersistSyncSnapshot(syncedSyncSnapshot());
         return { ok: true };
       }
 
@@ -430,6 +559,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
           folders: current.folders.filter((folder) => !folder.ownerId || folder.ownerId === userId),
           items: current.items.filter((item) => !item.ownerId || item.ownerId === userId),
         }));
+        setAndPersistSyncSnapshot(syncedSyncSnapshot());
         return { ok: true };
       }
 
@@ -441,7 +571,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Unable to refresh shared folders." };
     }
-  }, [activeUserId]);
+  }, [activeUserId, setAndPersistSyncSnapshot]);
 
   const syncToRemote = useCallback<WaitingListContextValue["syncToRemote"]>(async () => {
     const userId = activeUserId;
@@ -455,16 +585,12 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }
 
     pendingRemotePushRef.current = true;
+    setAndPersistSyncSnapshot(savingSyncSnapshot(syncSnapshotRef.current));
     const result = await pushWaitingListForUser(supabase, userId, dataRef.current);
     pendingRemotePushRef.current = false;
 
-    if (!result.ok) {
-      return { ok: false, error: result.error ?? "Unable to sync this folder before sharing." };
-    }
-
-    remoteRowExistsRef.current = true;
-    return { ok: true };
-  }, [activeUserId]);
+    return applyPushResult(result, "Unable to sync this folder before sharing.");
+  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
   const syncFolderForSharing = useCallback<WaitingListContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
@@ -478,16 +604,68 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }
 
     pendingRemotePushRef.current = true;
+    setAndPersistSyncSnapshot(savingSyncSnapshot(syncSnapshotRef.current));
     const result = await pushFolderBranchForUser(supabase, userId, dataRef.current, folderId);
     pendingRemotePushRef.current = false;
 
-    if (!result.ok) {
-      return { ok: false, error: result.error ?? "Unable to sync this folder before sharing." };
+    return applyPushResult(result, "Unable to sync this folder before sharing.");
+  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
+
+  const resolveSyncConflict = useCallback<WaitingListContextValue["resolveSyncConflict"]>(async (resolution) => {
+    const userId = activeUserId;
+    if (!userId) {
+      return { ok: false, error: "Sign in to resolve sync conflicts." };
     }
 
-    remoteRowExistsRef.current = true;
-    return { ok: true };
-  }, [activeUserId]);
+    if (syncSnapshotRef.current.status !== "conflicted") {
+      return { ok: true };
+    }
+
+    if (resolution === "useRemote") {
+      return refreshFromRemote({ force: true });
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      return { ok: false, error: "Supabase not configured." };
+    }
+
+    pendingRemotePushRef.current = true;
+    setAndPersistSyncSnapshot(savingSyncSnapshot(syncSnapshotRef.current));
+    const conflict = syncSnapshotRef.current.conflict;
+    let resolvedData = dataRef.current;
+
+    if (typeof resolution === "object" && conflict?.fields) {
+      resolvedData = mergeConflictFields(
+        dataRef.current,
+        conflict,
+        resolution.fieldChoices,
+        new Date().toISOString(),
+      );
+
+      dataRef.current = resolvedData;
+      setData(resolvedData);
+      await saveWaitingListData(resolvedData, userId);
+      const baseline = await loadSyncBaseline(userId);
+      const entityKind = conflict.entityKind as SyncEntityKind;
+      const nextBaseline: SyncBaseline = {
+        folders: { ...baseline.folders },
+        items: { ...baseline.items },
+      };
+      nextBaseline[entityKind][conflict.entityId] = conflict.remoteUpdatedAt;
+      await saveSyncBaseline(userId, nextBaseline);
+    }
+
+    const result = await pushWaitingListForUser(
+      supabase,
+      userId,
+      resolvedData,
+      { skipConflictCheck: resolution === "keepLocal" },
+    );
+    pendingRemotePushRef.current = false;
+
+    return applyPushResult(result, "Unable to resolve this sync conflict.");
+  }, [activeUserId, applyPushResult, refreshFromRemote, setAndPersistSyncSnapshot]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady || !activeUserId) return;
@@ -506,7 +684,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       }
 
       lastForegroundRefreshAtRef.current = now;
-      void refreshFromRemote({ force: !pendingRemotePushRef.current });
+      void refreshFromRemote({
+        force: !pendingRemotePushRef.current && !hasPendingSync(syncSnapshotRef.current),
+      });
     });
 
     return () => subscription.remove();
@@ -519,7 +699,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     if (!supabase) return;
 
     const subscription = subscribeWaitingListRealtimeForUser(supabase, activeUserId, () => {
-      void refreshFromRemote({ force: !pendingRemotePushRef.current });
+      void refreshFromRemote({
+        force: !pendingRemotePushRef.current && !hasPendingSync(syncSnapshotRef.current),
+      });
     });
 
     return () => subscription.unsubscribe();
@@ -532,6 +714,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       ...data,
       isReady,
+      syncSnapshot,
       createFolder,
       updateFolder,
       deleteFolder,
@@ -542,6 +725,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       canEditFolderContent,
       canEditItem,
       refreshFromRemote,
+      resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
       resetToSeed,
@@ -550,6 +734,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     [
       data,
       isReady,
+      syncSnapshot,
       createFolder,
       updateFolder,
       deleteFolder,
@@ -560,6 +745,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       canEditFolderContent,
       canEditItem,
       refreshFromRemote,
+      resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
       resetToSeed,

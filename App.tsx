@@ -20,13 +20,14 @@ import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
+import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
 import { clearSharedImport, getLatestSharedImportId, inferSourcePlatform, markSharedImportConsumed, readSharedImport, titleFromSharedImport } from "./src/share/sharedImport";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ["thewaitinglist://"],
+  prefixes: ["trove://", "thewaitinglist://"],
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
@@ -39,6 +40,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       PickSomething: "pick-something",
       Search: "search",
       Settings: "settings",
+      SyncConflict: "sync-conflict",
     },
   },
 };
@@ -175,6 +177,7 @@ function AppNavigator() {
             <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
             <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="PickSomething" component={PickSomethingScreen} />
+            <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
           </>

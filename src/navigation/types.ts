@@ -10,5 +10,6 @@ export type RootStackParamList = {
   Search: undefined;
   ShareFolder: { folderId: string };
   PickSomething: { folderId?: string } | undefined;
+  SyncConflict: undefined;
   Settings: undefined;
 };

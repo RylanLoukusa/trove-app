@@ -9,7 +9,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>The Waiting List</string>
+    <string>Trove</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -29,6 +29,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>trove</string>
           <string>thewaitinglist</string>
           <string>com.rylanloukusa.thewaitinglist</string>
         </array>
@@ -36,6 +37,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>exp+trove-app</string>
           <string>exp+the-waiting-list</string>
         </array>
       </dict>
@@ -60,11 +62,11 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Allow The Waiting List to use your camera so you can capture media for saved items.</string>
+    <string>Allow Trove to use your camera so you can capture media for saved items.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow The Waiting List to use your microphone when capturing videos.</string>
+    <string>Allow Trove to use your microphone when capturing videos.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow The Waiting List to access your photos and videos so you can attach media to saved items.</string>
+    <string>Allow Trove to access your photos and videos so you can attach media to saved items.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>

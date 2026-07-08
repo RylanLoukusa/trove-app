@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "The Waiting List",
-    "slug": "the-waiting-list",
-    "scheme": "thewaitinglist",
+    "name": "Trove",
+    "slug": "trove-app",
+    "scheme": "trove",
     "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.rylanloukusa.thewaitinglist"

@@ -16,15 +16,18 @@ import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import {
-  FolderShare,
+  FolderAccess,
   FolderShareInvite,
   FolderShareRole,
   FolderShareScope,
+  SavedCollaborator,
   buildFolderInviteLink,
   loadFolderSharing,
+  loadSavedCollaborators,
   removeFolderShare,
   revokeFolderInvite,
   shareFolderByEmail,
+  shareFolderWithCollaborator,
   updateFolderShare,
 } from "../../collaboration/folderSharing";
 import { getSupabase } from "../../lib/supabase";
@@ -58,23 +61,47 @@ const scopeLabel = (scope: FolderShareScope): string =>
 const roleLabel = (role: FolderShareRole): string =>
   role === "editor" ? "Can edit" : "Can view";
 
+const accessRoleLabel = (role: FolderAccess["role"]): string => {
+  if (role === "owner") return "Owner";
+  return roleLabel(role);
+};
+
 const emailLooksValid = (email: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-const shareUserLabel = (share: FolderShare): string =>
-  share.sharedWithProfile?.displayName ??
-  share.sharedWithProfile?.email ??
-  `User ${share.sharedWithUserId.slice(0, 8)}`;
-
-const shareUserInitials = (share: FolderShare): string => {
-  const label = shareUserLabel(share);
+const initialsFromLabel = (label: string, fallback = "U"): string => {
   const words = label
     .split(/[\s@._-]+/)
     .map((word) => word.trim())
     .filter(Boolean);
 
-  return (words[0]?.[0] ?? "U").concat(words[1]?.[0] ?? "").toUpperCase();
+  return (words[0]?.[0] ?? fallback).concat(words[1]?.[0] ?? "").toUpperCase();
 };
+
+const accessUserLabel = (access: FolderAccess): string =>
+  access.displayName ?? access.email ?? `User ${access.userId.slice(0, 8)}`;
+
+const accessUserInitials = (access: FolderAccess): string =>
+  initialsFromLabel(accessUserLabel(access), access.kind === "owner" ? "O" : "U");
+
+const accessMetaLabel = (access: FolderAccess): string => {
+  if (access.kind === "owner") {
+    return "Owner";
+  }
+
+  const role = accessRoleLabel(access.role);
+  if (access.kind === "inherited") {
+    return `${role} · Inherited from ${access.sourceFolderName ?? "parent folder"}`;
+  }
+
+  return `${role} · ${scopeLabel(access.scope as FolderShareScope)}`;
+};
+
+const collaboratorLabel = (collaborator: SavedCollaborator): string =>
+  collaborator.displayName ?? collaborator.email ?? `User ${collaborator.id.slice(0, 8)}`;
+
+const collaboratorInitials = (collaborator: SavedCollaborator): string =>
+  initialsFromLabel(collaboratorLabel(collaborator));
 
 const ChoicePills = <T extends string,>({
   options,
@@ -120,7 +147,8 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<FolderShareRole>("viewer");
   const [scope, setScope] = useState<FolderShareScope>("folder_only");
-  const [shares, setShares] = useState<FolderShare[]>([]);
+  const [accessRows, setAccessRows] = useState<FolderAccess[]>([]);
+  const [collaborators, setCollaborators] = useState<SavedCollaborator[]>([]);
   const [invites, setInvites] = useState<FolderShareInvite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,6 +158,17 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const folderPath = useMemo(
     () => (folder ? getFolderPathLabel(folders, folder.id) : ""),
     [folder, folders],
+  );
+  const canManageAccess = !folder?.accessRole || folder.accessRole === "owner";
+  const visibleAccessRows = useMemo(
+    () =>
+      accessRows.filter(
+        (access) =>
+          access.kind === "owner" ||
+          !session?.user ||
+          access.userId !== session.user.id,
+      ),
+    [accessRows, session?.user],
   );
 
   const load = useCallback(
@@ -152,19 +191,26 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
         setIsLoading(true);
       }
 
-      const result = await loadFolderSharing(supabase, folder.id);
-      if (result.error) {
-        setError(result.error);
+      const [sharingResult, collaboratorsResult] = await Promise.all([
+        loadFolderSharing(supabase, folder.id),
+        canManageAccess
+          ? loadSavedCollaborators(supabase)
+          : Promise.resolve({ collaborators: [], error: undefined }),
+      ]);
+
+      if (sharingResult.error) {
+        setError(sharingResult.error);
       } else {
-        setError(null);
-        setInvites(result.invites);
-        setShares(result.shares);
+        setError(collaboratorsResult.error ?? null);
+        setAccessRows(sharingResult.access);
+        setInvites(sharingResult.invites);
+        setCollaborators(collaboratorsResult.collaborators);
       }
 
       setIsLoading(false);
       setIsRefreshing(false);
     },
-    [folder, session?.user],
+    [canManageAccess, folder, session?.user],
   );
 
   useEffect(() => {
@@ -243,12 +289,62 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     );
   }, [email, folder, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing]);
 
-  const onUpdateShare = useCallback(
-    async (share: FolderShare, updates: { role?: FolderShareRole; scope?: FolderShareScope }): Promise<void> => {
+  const onShareCollaborator = useCallback(
+    async (collaborator: SavedCollaborator): Promise<void> => {
+      if (!folder) return;
+
+      const supabase = getSupabase();
+      if (!supabase || !session?.user) {
+        setError("Sign in with sync enabled to share folders.");
+        return;
+      }
+
+      setIsSaving(true);
+      setError(null);
+
+      const syncResult = await syncFolderForSharing(folder.id);
+      if (!syncResult.ok) {
+        setIsSaving(false);
+        setError(syncResult.error ?? "Sync this folder before sharing it.");
+        return;
+      }
+
+      const result = await shareFolderWithCollaborator(supabase, {
+        collaborator,
+        folderId: folder.id,
+        role,
+        scope,
+      });
+
+      setIsSaving(false);
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      await refreshAfterMutation();
+
+      Alert.alert(
+        result.emailSent ? "Access email sent" : "Access added",
+        result.emailSent
+          ? `${collaboratorLabel(collaborator)} now has access to the folder, and an email was sent.`
+          : `${collaboratorLabel(collaborator)} now has access to the folder.${
+              result.emailError ? `\n\n${result.emailError}` : ""
+            }`,
+      );
+    },
+    [folder, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing],
+  );
+
+  const onUpdateAccess = useCallback(
+    async (access: FolderAccess, updates: { role?: FolderShareRole; scope?: FolderShareScope }): Promise<void> => {
+      if (!access.shareId || access.kind !== "direct") return;
+
       const supabase = getSupabase();
       if (!supabase) return;
 
-      const result = await updateFolderShare(supabase, share.id, updates);
+      const result = await updateFolderShare(supabase, access.shareId, updates);
       if (result.error) {
         Alert.alert("Could not update access", result.error);
         return;
@@ -259,9 +355,12 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     [refreshAfterMutation],
   );
 
-  const onRemoveShare = useCallback(
-    (share: FolderShare): void => {
-      Alert.alert("Remove access?", `${shareUserLabel(share)} will lose access to this folder.`, [
+  const onRemoveAccess = useCallback(
+    (access: FolderAccess): void => {
+      if (!access.shareId || access.kind !== "direct") return;
+      const shareId = access.shareId;
+
+      Alert.alert("Remove access?", `${accessUserLabel(access)} will lose access to this folder.`, [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
@@ -271,7 +370,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
               const supabase = getSupabase();
               if (!supabase) return;
 
-              const result = await removeFolderShare(supabase, share.id);
+              const result = await removeFolderShare(supabase, shareId);
               if (result.error) {
                 Alert.alert("Could not remove access", result.error);
                 return;
@@ -317,7 +416,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     async (invite: FolderShareInvite): Promise<void> => {
       const link = buildFolderInviteLink(invite.token);
       await Share.share({
-        message: `You're invited to a shared folder in The Waiting List: ${link}`,
+        message: `You're invited to a shared folder in Trove: ${link}`,
         url: link,
       });
     },
@@ -355,74 +454,124 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
         <Text style={styles.title}>{folder.icon ?? "📁"} {folder.name}</Text>
         <Text style={styles.path}>{folderPath}</Text>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Invite by email</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            onChangeText={setEmail}
-            placeholder="name@example.com"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={email}
-          />
+        {canManageAccess && (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Share folder</Text>
+            {collaborators.length > 0 && (
+              <>
+                <Text style={styles.label}>Saved collaborators</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.collaboratorRow}
+                >
+                  {collaborators.map((collaborator) => (
+                    <Pressable
+                      key={collaborator.id}
+                      disabled={isSaving}
+                      onPress={() => {
+                        void onShareCollaborator(collaborator);
+                      }}
+                      style={({ pressed }) => [
+                        styles.collaboratorChip,
+                        pressed && styles.collaboratorChipPressed,
+                        isSaving && styles.disabledChip,
+                      ]}
+                    >
+                      <View style={styles.collaboratorAvatar}>
+                        <Text style={styles.avatarText}>{collaboratorInitials(collaborator)}</Text>
+                      </View>
+                      <View style={styles.collaboratorCopy}>
+                        <Text numberOfLines={1} style={styles.collaboratorName}>
+                          {collaboratorLabel(collaborator)}
+                        </Text>
+                        {!!collaborator.email && (
+                          <Text numberOfLines={1} style={styles.collaboratorEmail}>
+                            {collaborator.email}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            )}
 
-          <Text style={styles.label}>Permission</Text>
-          <ChoicePills options={roleOptions} selected={role} onSelect={setRole} />
+            <Text style={styles.label}>Invite by email</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              placeholder="name@example.com"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              value={email}
+            />
 
-          <Text style={styles.label}>Scope</Text>
-          <ChoicePills options={scopeOptions} selected={scope} onSelect={setScope} />
+            <Text style={styles.label}>Permission</Text>
+            <ChoicePills options={roleOptions} selected={role} onSelect={setRole} />
 
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <AppButton
-            disabled={isSaving}
-            label={isSaving ? "Saving..." : "Share Folder"}
-            onPress={() => {
-              void onSubmit();
-            }}
-            style={styles.submitButton}
-          />
-        </View>
+            <Text style={styles.label}>Scope</Text>
+            <ChoicePills options={scopeOptions} selected={scope} onSelect={setScope} />
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+            <AppButton
+              disabled={isSaving}
+              label={isSaving ? "Saving..." : "Share Folder"}
+              onPress={() => {
+                void onSubmit();
+              }}
+              style={styles.submitButton}
+            />
+          </View>
+        )}
+        {!canManageAccess && !!error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.section}>People with access</Text>
         {isLoading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator color={colors.accentDark} />
           </View>
-        ) : shares.length === 0 ? (
+        ) : visibleAccessRows.length === 0 ? (
           <EmptyState title="No shared access yet." message="Shared users will appear here." />
         ) : (
-          shares.map((share) => (
-            <View key={share.id} style={styles.accessCard}>
+          visibleAccessRows.map((access) => {
+            const canEditDirectAccess =
+              canManageAccess &&
+              access.kind === "direct" &&
+              !!access.shareId &&
+              access.role !== "owner";
+
+            return (
+            <View key={access.id} style={styles.accessCard}>
               <View style={styles.accessHeader}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{shareUserInitials(share)}</Text>
+                  <Text style={styles.avatarText}>{accessUserInitials(access)}</Text>
                 </View>
                 <View style={styles.accessCopy}>
-                  <Text style={styles.accessTitle}>{shareUserLabel(share)}</Text>
-                  <Text style={styles.accessMeta}>
-                    {roleLabel(share.role)} · {scopeLabel(share.scope)}
-                  </Text>
+                  <Text style={styles.accessTitle}>{accessUserLabel(access)}</Text>
+                  <Text style={styles.accessMeta}>{accessMetaLabel(access)}</Text>
                 </View>
               </View>
 
-              <View style={styles.inlineActions}>
+              {canEditDirectAccess ? (
+                <View style={styles.inlineActions}>
                 <Pressable
                   onPress={() => {
-                    void onUpdateShare(share, { role: share.role === "editor" ? "viewer" : "editor" });
+                    void onUpdateAccess(access, { role: access.role === "editor" ? "viewer" : "editor" });
                   }}
                   style={({ pressed }) => [styles.smallButton, pressed && styles.smallButtonPressed]}
                 >
                   <Text style={styles.smallButtonText}>
-                    {share.role === "editor" ? "Make viewer" : "Make editor"}
+                    {access.role === "editor" ? "Make viewer" : "Make editor"}
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    void onUpdateShare(share, {
+                    void onUpdateAccess(access, {
                       scope:
-                        share.scope === "folder_and_subfolders"
+                        access.scope === "folder_and_subfolders"
                           ? "folder_only"
                           : "folder_and_subfolders",
                     });
@@ -430,29 +579,41 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
                   style={({ pressed }) => [styles.smallButton, pressed && styles.smallButtonPressed]}
                 >
                   <Text style={styles.smallButtonText}>
-                    {share.scope === "folder_and_subfolders" ? "Folder only" : "Include subfolders"}
+                    {access.scope === "folder_and_subfolders" ? "Folder only" : "Include subfolders"}
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => onRemoveShare(share)}
+                  onPress={() => onRemoveAccess(access)}
                   style={({ pressed }) => [styles.smallButton, styles.dangerButton, pressed && styles.smallButtonPressed]}
                 >
                   <Text style={[styles.smallButtonText, styles.dangerButtonText]}>Remove</Text>
                 </Pressable>
-              </View>
+                </View>
+              ) : (
+                <View style={styles.inlineActions}>
+                  <View style={styles.lockedPill}>
+                    <Text style={styles.lockedPillText}>
+                      {access.kind === "inherited" ? "Managed on parent folder" : "Locked"}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
-          ))
+            );
+          })
         )}
 
-        <Text style={styles.section}>Invites</Text>
-        {isLoading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.accentDark} />
-          </View>
-        ) : invites.length === 0 ? (
-          <EmptyState title="No invites yet." message="Pending invites will appear here." />
-        ) : (
-          invites.map((invite) => (
+        {canManageAccess && (
+          <>
+            <Text style={styles.section}>Invites</Text>
+            {isLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.accentDark} />
+              </View>
+            ) : invites.length === 0 ? (
+              <EmptyState title="No invites yet." message="Pending invites will appear here." />
+            ) : (
+              invites.map((invite) => (
             <View key={invite.id} style={styles.accessCard}>
               <View style={styles.accessHeader}>
                 <View style={styles.avatar}>
@@ -484,7 +645,9 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
                 </View>
               )}
             </View>
-          ))
+              ))
+            )}
+          </>
         )}
       </ScrollView>
     </View>

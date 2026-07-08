@@ -25,7 +25,9 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="trove"/>
         <data android:scheme="thewaitinglist"/>
+        <data android:scheme="exp+trove-app"/>
         <data android:scheme="exp+the-waiting-list"/>
       </intent-filter>
     </activity>

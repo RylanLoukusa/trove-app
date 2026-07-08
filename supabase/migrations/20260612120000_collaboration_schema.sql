@@ -1,4 +1,4 @@
--- Normalized collaboration schema for shared Waiting List folders and items.
+-- Normalized collaboration schema for shared Trove folders and items.
 -- This runs alongside waiting_list_data while the app migrates off JSON payload sync.
 
 create extension if not exists pgcrypto;

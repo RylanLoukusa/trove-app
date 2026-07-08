@@ -48,7 +48,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
     if (!result.error) {
       clearLocalData();
       setBusy(false);
-      Alert.alert("Account deleted", "Your account and synced Waiting List data have been deleted.");
+      Alert.alert("Account deleted", "Your account and synced Trove data have been deleted.");
       return;
     }
 
@@ -89,8 +89,8 @@ export const SettingsScreen = ({ navigation }: Props) => {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.body}>
-          The Waiting List works offline and stores folders and items locally on this device. Sign in to sync your
-          Waiting List to Supabase when configured.
+          Trove works offline and stores folders and items locally on this device. Sign in to sync your
+          plans and collections to Supabase when configured.
         </Text>
         <Text style={styles.stat}>{folders.length} folders</Text>
         <Text style={styles.stat}>{items.length} saved items</Text>
@@ -111,7 +111,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
         ) : (
           <>
             <Text style={styles.body}>
-              Sign in to sync your Waiting List with Supabase. You can also create a new account from the login screen.
+              Sign in to sync Trove with Supabase. You can also create a new account from the login screen.
             </Text>
             <AppButton label="Go to login screen" variant="secondary" onPress={onPressLogin} style={styles.button} />
           </>

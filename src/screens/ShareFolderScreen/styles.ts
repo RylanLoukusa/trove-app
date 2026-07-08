@@ -67,6 +67,51 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: spacing.md,
   },
+  collaboratorRow: {
+    gap: spacing.sm,
+    paddingRight: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  collaboratorChip: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 64,
+    paddingHorizontal: spacing.sm,
+    width: 220,
+  },
+  collaboratorChipPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.99 }],
+  },
+  disabledChip: {
+    opacity: 0.5,
+  },
+  collaboratorAvatar: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  collaboratorCopy: {
+    flex: 1,
+  },
+  collaboratorName: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  collaboratorEmail: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
   choiceRow: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -202,5 +247,20 @@ export const styles = StyleSheet.create({
   },
   dangerButtonText: {
     color: colors.danger,
+  },
+  lockedPill: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+  },
+  lockedPillText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

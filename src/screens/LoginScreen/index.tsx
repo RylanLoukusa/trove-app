@@ -72,7 +72,7 @@ const AuthOptionButton = ({ label, onPress, disabled, children }: AuthOptionButt
 
 const LegalAgreement = ({ onPressTerms, onPressPrivacy }: { onPressTerms: () => void; onPressPrivacy: () => void }) => (
   <Text style={styles.legalText}>
-    By continuing, you agree to The Waiting List,{" "}
+    By continuing, you agree to Trove,{" "}
     <Text onPress={onPressTerms} style={styles.legalLink}>
       Terms of Use
     </Text>{" "}
@@ -186,7 +186,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
         <View style={styles.content}>
-          <Text style={styles.title}>Log in to The Waiting List</Text>
+          <Text style={styles.title}>Log in to Trove</Text>
           <Text style={styles.body}>
             Supabase is not configured yet. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment.
           </Text>
@@ -208,7 +208,7 @@ export const LoginScreen = ({ navigation }: Props) => {
         <ScreenTopBar navigation={navigation} />
       )}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Log in to The Waiting List</Text>
+        <Text style={styles.title}>Log in to Trove</Text>
         {session?.user ? (
           <>
             <Text style={styles.body}>You are already signed in. {getSignedInLabel(session)}.</Text>

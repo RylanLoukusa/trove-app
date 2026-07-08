@@ -19,7 +19,7 @@ module.exports = {
       package: "com.rylanloukusa.thewaitinglist",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#FFFFFF",
+        backgroundColor: "#173F2A",
       },
     },
     plugins: [
@@ -31,9 +31,9 @@ module.exports = {
       [
         "expo-image-picker",
         {
-          photosPermission: "Allow The Waiting List to access your photos and videos so you can attach media to saved items.",
-          cameraPermission: "Allow The Waiting List to use your camera so you can capture media for saved items.",
-          microphonePermission: "Allow The Waiting List to use your microphone when capturing videos.",
+          photosPermission: "Allow Trove to access your photos and videos so you can attach media to saved items.",
+          cameraPermission: "Allow Trove to use your camera so you can capture media for saved items.",
+          microphonePermission: "Allow Trove to use your microphone when capturing videos.",
         },
       ],
     ],
