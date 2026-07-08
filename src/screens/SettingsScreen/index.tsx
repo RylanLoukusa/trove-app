@@ -5,6 +5,7 @@ import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
 import { getSignedInLabel } from "../../auth/authDisplay";
 import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
@@ -13,8 +14,21 @@ import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
+const SettingsSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonBlock height={38} radius={16} width="46%" />
+    <SkeletonText lineCount={3} lineWidths={["94%", "86%", "64%"]} style={styles.skeletonBody} />
+    <SkeletonBlock height={50} radius={16} />
+    <SkeletonBlock height={50} radius={16} />
+    <SkeletonBlock height={22} radius={11} width="34%" style={styles.skeletonSection} />
+    <SkeletonBlock height={52} radius={16} />
+    <SkeletonBlock height={22} radius={11} width="28%" style={styles.skeletonSection} />
+    <SkeletonBlock height={104} radius={16} />
+  </ScreenSkeleton>
+);
+
 export const SettingsScreen = ({ navigation }: Props) => {
-  const { folders, items, resetToSeed, clearLocalData } = useWaitingList();
+  const { folders, isReady, items, resetToSeed, clearLocalData } = useWaitingList();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();
 
@@ -87,6 +101,10 @@ export const SettingsScreen = ({ navigation }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {!isReady ? (
+          <SettingsSkeleton />
+        ) : (
+          <>
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.body}>
           Trove works offline and stores folders and items locally on this device. Sign in to sync your
@@ -131,6 +149,8 @@ export const SettingsScreen = ({ navigation }: Props) => {
 
         <AppButton label="Reset to sample data" variant="danger" onPress={confirmReset} style={styles.button} />
         {busy ? <ActivityIndicator style={styles.button} /> : null}
+          </>
+        )}
       </ScrollView>
     </View>
   );

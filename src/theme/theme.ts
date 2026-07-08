@@ -9,6 +9,7 @@ export const colors = {
   warm: "#DFAE73",
   danger: "#B85B53",
   blue: "#6F8FAF",
+  skeleton: "#E7DDD1",
 };
 
 export const spacing = {

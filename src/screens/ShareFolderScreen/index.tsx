@@ -1,7 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -15,6 +14,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { SkeletonAvatar, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import {
   FolderAccess,
   FolderShareInvite,
@@ -38,6 +38,28 @@ import { getFolderById, getFolderPathLabel } from "../../utils/folderTree";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ShareFolder">;
+
+const AccessListSkeleton = () => (
+  <SkeletonList
+    count={5}
+    renderItem={() => (
+      <View style={styles.accessCard}>
+        <View style={styles.accessHeader}>
+          <SkeletonAvatar size={36} />
+          <SkeletonText
+            lineCount={2}
+            lineWidths={["68%", "48%"]}
+            style={styles.accessCopy}
+          />
+        </View>
+        <View style={styles.inlineActions}>
+          <SkeletonBlock height={38} radius={19} width={112} />
+          <SkeletonBlock height={38} radius={19} width={148} />
+        </View>
+      </View>
+    )}
+  />
+);
 
 type PillOption<T extends string> = {
   detail?: string;
@@ -530,9 +552,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
 
         <Text style={styles.section}>People with access</Text>
         {isLoading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.accentDark} />
-          </View>
+          <AccessListSkeleton />
         ) : visibleAccessRows.length === 0 ? (
           <EmptyState title="No shared access yet." message="Shared users will appear here." />
         ) : (
@@ -607,9 +627,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
           <>
             <Text style={styles.section}>Invites</Text>
             {isLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.accentDark} />
-              </View>
+              <AccessListSkeleton />
             ) : invites.length === 0 ? (
               <EmptyState title="No invites yet." message="Pending invites will appear here." />
             ) : (

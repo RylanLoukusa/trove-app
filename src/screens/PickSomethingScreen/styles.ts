@@ -56,4 +56,21 @@ export const styles = StyleSheet.create({
   button: {
     marginVertical: spacing.lg,
   },
+  skeletonChoice: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    minHeight: 54,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  skeletonChoiceDetail: {
+    marginTop: spacing.xs,
+  },
+  skeletonSection: {
+    marginTop: spacing.lg,
+  },
 });

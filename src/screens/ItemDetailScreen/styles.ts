@@ -232,4 +232,7 @@ export const styles = StyleSheet.create({
     marginTop: spacing.lg,
     textAlign: "center",
   },
+  skeletonSection: {
+    marginTop: spacing.lg,
+  },
 });

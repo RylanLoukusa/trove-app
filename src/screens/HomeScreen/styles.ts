@@ -83,4 +83,18 @@ export const styles = StyleSheet.create({
   settings: {
     marginTop: spacing.lg,
   },
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  skeletonCardText: {
+    marginTop: spacing.sm,
+  },
+  skeletonSection: {
+    marginTop: spacing.lg,
+  },
 });

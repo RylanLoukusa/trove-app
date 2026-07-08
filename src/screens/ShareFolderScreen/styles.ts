@@ -169,15 +169,6 @@ export const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginTop: spacing.lg,
   },
-  loadingRow: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    minHeight: 84,
-    justifyContent: "center",
-  },
   accessCard: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

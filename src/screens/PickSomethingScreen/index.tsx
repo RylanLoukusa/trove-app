@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
@@ -7,6 +7,7 @@ import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { ItemCard } from "../../components/ItemCard";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { SavedItem } from "../../types/models";
@@ -15,6 +16,34 @@ import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PickSomething">;
+
+const PickSomethingSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonBlock height={38} radius={16} width="64%" />
+    <SkeletonText lineCount={2} lineWidths={["92%", "72%"]} />
+    <SkeletonBlock height={22} radius={11} width="28%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={5}
+      renderItem={() => (
+        <View style={styles.skeletonChoice}>
+          <SkeletonBlock height={20} radius={10} width="64%" />
+          <SkeletonBlock height={14} radius={7} width="42%" style={styles.skeletonChoiceDetail} />
+        </View>
+      )}
+    />
+    <SkeletonBlock height={22} radius={11} width="32%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={2}
+      renderItem={() => (
+        <View style={styles.skeletonChoice}>
+          <SkeletonBlock height={20} radius={10} width="58%" />
+          <SkeletonBlock height={14} radius={7} width="48%" style={styles.skeletonChoiceDetail} />
+        </View>
+      )}
+    />
+    <SkeletonBlock height={52} radius={16} style={styles.button} />
+  </ScreenSkeleton>
+);
 
 const priorityFilterChoices = [
   { value: false, label: "Any priority", detail: "Pull from everything waiting", tone: "#6E8F72" },
@@ -38,13 +67,18 @@ const PickedItemRow = React.memo(function PickedItemRow({
 });
 
 export const PickSomethingScreen = ({ navigation, route }: Props) => {
-  const { folders, items } = useWaitingList();
+  const { folders, isReady, items } = useWaitingList();
   const [folderId, setFolderId] = useState<string | undefined>(route.params?.folderId);
   const [highPriorityOnly, setHighPriorityOnly] = useState(false);
   const [picked, setPicked] = useState<SavedItem | undefined>(() =>
     pickRandomWaitingItem(items, folders, route.params?.folderId, false),
   );
   const folderRows = useMemo(() => getFolderHierarchyRows(folders), [folders]);
+
+  useEffect(() => {
+    if (!isReady || picked) return;
+    setPicked(pickRandomWaitingItem(items, folders, folderId, highPriorityOnly));
+  }, [folderId, folders, highPriorityOnly, isReady, items, picked]);
 
   const pick = useCallback((): void => {
     setPicked(pickRandomWaitingItem(items, folders, folderId, highPriorityOnly));
@@ -61,6 +95,10 @@ export const PickSomethingScreen = ({ navigation, route }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {!isReady ? (
+          <PickSomethingSkeleton />
+        ) : (
+          <>
         <Text style={styles.title}>Pick Something</Text>
         <Text style={styles.subtitle}>
           Randomly choose from waiting items. Narrow it by folder or high priority.
@@ -108,6 +146,8 @@ export const PickSomethingScreen = ({ navigation, route }: Props) => {
             title="Nothing waiting here."
             message="Try a different folder or turn off high-priority filtering."
           />
+        )}
+          </>
         )}
       </ScrollView>
     </View>

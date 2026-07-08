@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
@@ -13,6 +14,32 @@ import { searchFoldersAndItems } from "../../utils/itemFilters";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Search">;
+
+const SearchSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonBlock height={38} radius={16} width="42%" />
+    <SkeletonBlock height={50} radius={25} />
+    <SkeletonBlock height={24} radius={12} width="36%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={4}
+      renderItem={() => (
+        <View style={styles.skeletonCard}>
+          <SkeletonBlock height={24} radius={12} width={56} />
+          <SkeletonText lineCount={2} lineWidths={["72%", "44%"]} style={styles.skeletonCardText} />
+        </View>
+      )}
+    />
+    <SkeletonBlock height={24} radius={12} width="28%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={5}
+      renderItem={() => (
+        <View style={styles.skeletonCard}>
+          <SkeletonText lineCount={3} lineWidths={["82%", "58%", "36%"]} />
+        </View>
+      )}
+    />
+  </ScreenSkeleton>
+);
 
 type SearchFolderRowProps = {
   folder: Folder;
@@ -42,7 +69,7 @@ const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, onOp
 });
 
 export const SearchScreen = ({ navigation }: Props) => {
-  const { folders, items } = useWaitingList();
+  const { folders, isReady, items } = useWaitingList();
   const [query, setQuery] = useState("");
 
   const results = useMemo(() => searchFoldersAndItems(query, folders, items), [query, folders, items]);
@@ -65,6 +92,10 @@ export const SearchScreen = ({ navigation }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {!isReady ? (
+          <SearchSkeleton />
+        ) : (
+          <>
         <Text style={styles.title}>Search</Text>
         <TextInput
           style={styles.input}
@@ -96,6 +127,8 @@ export const SearchScreen = ({ navigation }: Props) => {
               onOpenItemDetail={onOpenItemDetail}
             />
           ))
+        )}
+          </>
         )}
       </ScrollView>
     </View>

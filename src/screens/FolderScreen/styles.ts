@@ -305,4 +305,26 @@ export const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
   },
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  skeletonCardText: {
+    marginTop: spacing.sm,
+  },
+  skeletonFullItemCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  skeletonSection: {
+    marginTop: spacing.lg,
+  },
 });

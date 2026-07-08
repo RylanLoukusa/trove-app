@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
@@ -15,8 +16,29 @@ import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
 
+const ItemDetailSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonBlock height={42} radius={21} />
+    <SkeletonBlock height={14} radius={7} width="28%" />
+    <SkeletonText lineCount={2} lineWidths={["88%", "58%"]} lineHeight={30} />
+    <SkeletonBlock height={18} radius={9} width="52%" />
+    <SkeletonBlock height={260} radius={18} style={styles.mediaPreview} />
+    <SkeletonText lineCount={4} lineWidths={["94%", "86%", "76%", "42%"]} style={styles.skeletonSection} />
+    <View style={styles.row}>
+      <SkeletonBlock height={38} radius={19} width={92} />
+      <SkeletonBlock height={38} radius={19} width={128} />
+    </View>
+    <SkeletonBlock height={20} radius={10} width="28%" style={styles.skeletonSection} />
+    <SkeletonText lineCount={1} lineWidths={["48%"]} />
+    <SkeletonList
+      count={3}
+      renderItem={() => <SkeletonBlock height={52} radius={16} style={styles.button} />}
+    />
+  </ScreenSkeleton>
+);
+
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
-  const { folders, items, updateItem, deleteItem, canEditItem } = useWaitingList();
+  const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useWaitingList();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
@@ -122,6 +144,17 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
       },
     ]);
   }, [canEditCurrentItem, deleteItem, item, navigation]);
+
+  if (!isReady) {
+    return (
+      <View style={styles.screen}>
+        <ScreenTopBar navigation={navigation} />
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          <ItemDetailSkeleton />
+        </ScrollView>
+      </View>
+    );
+  }
 
   if (!item) {
     return (

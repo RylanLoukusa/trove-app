@@ -6,6 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
@@ -15,6 +16,37 @@ import { getDescendantFolderIds, getFolderPathLabel, getVisibleRootFolders } fro
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+
+const HomeSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonText lineCount={1} lineWidths={["72%"]} />
+    <SkeletonBlock height={44} radius={14} width="46%" />
+    <SkeletonBlock height={48} radius={24} />
+    <View style={styles.actions}>
+      <SkeletonBlock height={52} radius={16} style={styles.action} />
+      <SkeletonBlock height={52} radius={16} style={styles.action} />
+    </View>
+    <SkeletonBlock height={24} radius={12} width="42%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={5}
+      renderItem={() => (
+        <View style={styles.skeletonCard}>
+          <SkeletonBlock height={24} radius={12} width={56} />
+          <SkeletonText lineCount={2} lineWidths={["72%", "38%"]} style={styles.skeletonCardText} />
+        </View>
+      )}
+    />
+    <SkeletonBlock height={24} radius={12} width="52%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={5}
+      renderItem={() => (
+        <View style={styles.skeletonCard}>
+          <SkeletonText lineCount={3} lineWidths={["80%", "54%", "32%"]} />
+        </View>
+      )}
+    />
+  </ScreenSkeleton>
+);
 
 type FolderListItemProps = {
   folder: Folder;
@@ -45,7 +77,7 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 });
 
 export const HomeScreen = ({ navigation }: Props) => {
-  const { folders, items, syncSnapshot, syncToRemote } = useWaitingList();
+  const { folders, isReady, items, syncSnapshot, syncToRemote } = useWaitingList();
   const { session, signOut } = useAuth();
 
   const onPressSearch = useCallback(() => {
@@ -128,6 +160,10 @@ export const HomeScreen = ({ navigation }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} showBack={false} onMenuPress={onOpenMenu} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {!isReady ? (
+          <HomeSkeleton />
+        ) : (
+          <>
         <Text style={styles.kicker}>Save ideas now. Pick the perfect one later.</Text>
         <Text style={styles.title}>Trove</Text>
 
@@ -218,6 +254,8 @@ export const HomeScreen = ({ navigation }: Props) => {
           onPress={onPressSettings}
           style={styles.settings}
         />
+          </>
+        )}
       </ScrollView>
     </View>
   );

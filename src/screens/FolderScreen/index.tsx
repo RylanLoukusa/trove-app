@@ -7,6 +7,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
@@ -19,6 +20,45 @@ import { getItemTypeLabel } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
+
+const FolderSkeleton = () => (
+  <ScreenSkeleton>
+    <SkeletonBlock height={20} radius={10} width="58%" />
+    <View style={styles.titleRow}>
+      <SkeletonBlock height={38} radius={16} style={{ flex: 1 }} />
+      <SkeletonBlock height={42} radius={21} width={82} />
+    </View>
+    <SkeletonText lineCount={2} lineWidths={["86%", "64%"]} />
+    <View style={styles.actions}>
+      <SkeletonBlock height={52} radius={16} style={styles.action} />
+      <SkeletonBlock height={52} radius={16} style={styles.action} />
+    </View>
+    <SkeletonBlock height={24} radius={12} width="44%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={3}
+      renderItem={() => (
+        <View style={styles.skeletonCard}>
+          <SkeletonBlock height={24} radius={12} width={56} />
+          <SkeletonText lineCount={2} lineWidths={["70%", "36%"]} style={styles.skeletonCardText} />
+        </View>
+      )}
+    />
+    <SkeletonBlock height={24} radius={12} width="32%" style={styles.skeletonSection} />
+    <SkeletonList
+      count={5}
+      renderItem={() => (
+        <View style={styles.skeletonFullItemCard}>
+          <View style={styles.fullItemHeader}>
+            <SkeletonText lineCount={1} lineWidths={["32%"]} style={styles.fullItemTitleGroup} />
+            <SkeletonBlock height={40} radius={20} width={96} />
+          </View>
+          <SkeletonBlock height={160} radius={14} style={styles.fullItemMedia} />
+          <SkeletonText lineCount={3} lineWidths={["88%", "72%", "42%"]} style={styles.skeletonCardText} />
+        </View>
+      )}
+    />
+  </ScreenSkeleton>
+);
 
 type SubfolderRowProps = {
   child: Folder;
@@ -128,7 +168,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 });
 
 export const FolderScreen = ({ navigation, route }: Props) => {
-  const { folders, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useWaitingList();
+  const { folders, isReady, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useWaitingList();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
@@ -290,6 +330,17 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const onPressPattern = useCallback((patternId: string): void => {
     setSelectedPatternId((current) => (current === patternId ? null : patternId));
   }, []);
+
+  if (!isReady) {
+    return (
+      <View style={styles.screen}>
+        <ScreenTopBar navigation={navigation} />
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          <FolderSkeleton />
+        </ScrollView>
+      </View>
+    );
+  }
 
   if (!folder) {
     return (

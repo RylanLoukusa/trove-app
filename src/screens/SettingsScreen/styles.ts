@@ -105,4 +105,10 @@ export const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 26,
   },
+  skeletonBody: {
+    marginTop: spacing.lg,
+  },
+  skeletonSection: {
+    marginTop: spacing.lg,
+  },
 });
