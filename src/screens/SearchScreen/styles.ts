@@ -25,6 +25,93 @@ export const styles = StyleSheet.create({
     borderRadius: 999,
     padding: spacing.md,
   },
+  clearQuery: {
+    alignSelf: "flex-end",
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  clearQueryText: {
+    color: colors.accentDark,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  controlScroller: {
+    marginTop: spacing.md,
+  },
+  controlRow: {
+    gap: spacing.xs,
+    paddingRight: spacing.lg,
+  },
+  filterChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  filterChipSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  filterChipText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  filterChipTextSelected: {
+    color: colors.surface,
+  },
+  sortBlock: {
+    marginTop: spacing.md,
+  },
+  sortLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: spacing.xs,
+    textTransform: "uppercase",
+  },
+  sortRow: {
+    gap: spacing.xs,
+    paddingRight: spacing.lg,
+  },
+  sortChip: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  sortChipSelected: {
+    backgroundColor: colors.surface,
+    borderColor: colors.accent,
+  },
+  sortChipText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  sortChipTextSelected: {
+    color: colors.accentDark,
+  },
+  controlPressed: {
+    opacity: 0.72,
+  },
+  resetRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: spacing.md,
+  },
+  resetText: {
+    color: colors.accentDark,
+    fontSize: 13,
+    fontWeight: "900",
+    paddingLeft: spacing.md,
+  },
   section: {
     color: colors.ink,
     fontSize: 20,

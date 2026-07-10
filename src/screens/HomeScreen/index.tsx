@@ -114,6 +114,10 @@ export const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("Settings");
   }, [navigation]);
 
+  const onPressProfile = useCallback(() => {
+    navigation.navigate("Profile");
+  }, [navigation]);
+
   const onPressLogin = useCallback(() => {
     navigation.navigate("Login");
   }, [navigation]);
@@ -124,6 +128,7 @@ export const HomeScreen = ({ navigation }: Props) => {
 
   const onOpenMenu = useCallback(() => {
     const buttons = [
+      ...(session?.user ? [{ text: "Profile", onPress: onPressProfile }] : []),
       { text: "Settings", onPress: onPressSettings },
       session?.user
         ? { text: "Logout", style: "destructive" as const, onPress: onSignOut }
@@ -132,7 +137,7 @@ export const HomeScreen = ({ navigation }: Props) => {
     ];
 
     Alert.alert("Menu", "Choose an action", buttons);
-  }, [onPressSettings, onPressLogin, onSignOut, session?.user]);
+  }, [onPressProfile, onPressSettings, onPressLogin, onSignOut, session?.user]);
 
   const onPressSyncStatus = useCallback(async () => {
     if (syncSnapshot.status === "conflicted") {
