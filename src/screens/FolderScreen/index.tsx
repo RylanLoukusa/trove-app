@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -7,6 +7,7 @@ import { CommentThread } from "../../components/CommentThread";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
+import { MediaImage } from "../../components/MediaImage";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
@@ -148,7 +149,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
           <View style={styles.fullItemAttachments}>
             {item.attachments?.map((attachment) =>
               attachment.mediaType === "image" ? (
-                <Image key={attachment.id} source={{ uri: attachment.uri }} style={styles.fullItemAttachmentImage} />
+                <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.fullItemAttachmentImage} />
               ) : (
                 <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.fullItemAttachmentVideo} />
               ),

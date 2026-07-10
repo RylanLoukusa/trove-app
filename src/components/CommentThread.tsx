@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Maximize2, Minimize2, SmilePlus } from "lucide-react-native";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -13,6 +13,7 @@ import { emojiCategories } from "../data/emojiPalette";
 import { getSupabase } from "../lib/supabase";
 import { colors, spacing } from "../theme/theme";
 import type { CommentAuthor, CommentReactionType, CommentTargetType, WaitingListComment } from "../types/models";
+import { MediaImage } from "./MediaImage";
 
 type Props = {
   targetId: string;
@@ -332,7 +333,7 @@ const ReactionRosterSheet = ({ comment, onClose }: ReactionRosterSheetProps) => 
         {visibleDetails.map((detail) => (
           <View key={`${detail.userId}:${detail.reaction}`} style={styles.reactionRosterRow}>
             {detail.user.avatarUrl ? (
-              <Image source={{ uri: detail.user.avatarUrl }} style={styles.reactionRosterAvatar} />
+              <MediaImage source={{ uri: detail.user.avatarUrl }} skeletonRadius={16} style={styles.reactionRosterAvatar} />
             ) : (
               <View style={styles.reactionRosterAvatarFallback}>
                 <Text style={styles.reactionRosterAvatarText}>{initialsForAuthor(detail.user)}</Text>

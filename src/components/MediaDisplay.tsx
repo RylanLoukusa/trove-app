@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import { Linking, Text, TouchableOpacity, View } from "react-native";
 import { MediaMetadata } from "../types/models";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
+import { SkeletonBlock } from "./Skeleton";
+import { MediaImage } from "./MediaImage";
 import { VideoPreview } from "./VideoPreview";
 
 interface MediaDisplayProps {
@@ -45,7 +47,7 @@ export const MediaDisplay: React.FC<MediaDisplayProps> = ({ media, imageHeight =
   // Stored media (image/video)
   if (media.storagePath && signedUrl) {
     if (media.mediaType === "image") {
-      return <Image source={{ uri: signedUrl }} style={[{ width: "100%", height: imageHeight, borderRadius: 8 }, style]} />;
+      return <MediaImage source={{ uri: signedUrl }} style={[{ width: "100%", height: imageHeight, borderRadius: 8 }, style]} />;
     }
 
     if (media.mediaType === "video") {
@@ -54,7 +56,7 @@ export const MediaDisplay: React.FC<MediaDisplayProps> = ({ media, imageHeight =
   }
 
   if (isLoading) {
-    return <ActivityIndicator size="large" style={[{ marginVertical: 12 }, style]} />;
+    return <SkeletonBlock height={media.mediaType === "video" ? videoHeight : imageHeight} radius={8} style={[{ marginVertical: 12 }, style]} />;
   }
 
   return null;

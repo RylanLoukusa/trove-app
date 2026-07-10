@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "./AppButton";
+import { MediaImage } from "./MediaImage";
+import { SkeletonBlock } from "./Skeleton";
 import { VideoPreview } from "./VideoPreview";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
 import { MediaCollectionItem } from "../types/models";
@@ -36,18 +38,16 @@ const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
   return (
     <View style={styles.thumbnailFrame}>
       {isLoading || !uri ? (
-        <View style={styles.thumbnailLoading}>
-          <ActivityIndicator />
-        </View>
+        <SkeletonBlock height="100%" radius={14} width="100%" />
       ) : item.mediaType === "video" ? (
         <View>
-          <VideoPreview contentFit="cover" nativeControls={false} uri={uri} style={styles.thumbnailMedia} />
+          <VideoPreview contentFit="cover" nativeControls={false} skeletonRadius={14} uri={uri} style={styles.thumbnailMedia} />
           <View style={styles.videoBadge}>
             <Text style={styles.videoBadgeText}>Video</Text>
           </View>
         </View>
       ) : (
-        <Image source={{ uri }} style={styles.thumbnailImage} />
+        <MediaImage source={{ uri }} skeletonRadius={14} style={styles.thumbnailImage} />
       )}
       <Pressable
         accessibilityLabel="Remove media"
@@ -184,13 +184,6 @@ const styles = StyleSheet.create({
   },
   thumbnailImage: {
     height: "100%",
-    width: "100%",
-  },
-  thumbnailLoading: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    height: "100%",
-    justifyContent: "center",
     width: "100%",
   },
   thumbnailMedia: {

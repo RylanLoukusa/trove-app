@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet } from "react-native";
 import { MediaCollectionItem, MediaMetadata } from "../types/models";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
+import { SkeletonBlock } from "./Skeleton";
+import { MediaImage } from "./MediaImage";
 import { VideoPreview } from "./VideoPreview";
 
 type Props = {
@@ -51,15 +53,11 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMed
       );
     }
 
-    return <Image source={{ uri: displayUrl! }} style={[styles.image, { height, width }]} />;
+    return <MediaImage source={{ uri: displayUrl }} style={[styles.image, { height, width }]} />;
   }
 
   if (isLoading) {
-    return (
-      <View style={[styles.loadingTile, { height, width }]}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <SkeletonBlock height={height} radius={8} width={width} />;
   }
 
   return null;
@@ -91,11 +89,6 @@ export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems
 const styles = StyleSheet.create({
   image: {
     borderRadius: 8,
-  },
-  loadingTile: {
-    alignItems: "center",
-    borderRadius: 8,
-    justifyContent: "center",
   },
   row: {
     gap: 10,

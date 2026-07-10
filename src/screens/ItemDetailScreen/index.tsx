@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useRef } from "react";
-import { Alert, GestureResponderEvent, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, GestureResponderEvent, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
+import { MediaImage } from "../../components/MediaImage";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
@@ -276,7 +277,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           <View style={styles.attachmentBlock}>
             {item.attachments?.map((attachment) =>
               attachment.mediaType === "image" ? (
-                <Image key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
+                <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
               ) : (
                 <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.attachmentVideo} />
               ),

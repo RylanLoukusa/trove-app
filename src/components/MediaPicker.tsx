@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Image, View } from "react-native";
+import { ActivityIndicator, Alert, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "./AppButton";
 import { ItemAttachment } from "../types/models";
 import { createId } from "../utils/id";
+import { MediaImage } from "./MediaImage";
 import { VideoPreview } from "./VideoPreview";
 
 interface MediaPickerProps {
@@ -97,7 +98,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
           {attachments.map((attachment) => (
             <View key={attachment.id}>
               {attachment.mediaType === "image" ? (
-                <Image source={{ uri: attachment.uri }} style={{ width: "100%", height: 160, borderRadius: 8 }} />
+                <MediaImage source={{ uri: attachment.uri }} style={{ width: "100%", height: 160, borderRadius: 8 }} />
               ) : (
                 <VideoPreview uri={attachment.uri} style={{ width: "100%", height: 160 }} />
               )}
@@ -107,7 +108,9 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
         </View>
       )}
 
-      {!isMulti && selectedUri && mediaType === "image" && <Image source={{ uri: selectedUri }} style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12 }} />}
+      {!isMulti && selectedUri && mediaType === "image" && (
+        <MediaImage source={{ uri: selectedUri }} style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12 }} />
+      )}
 
       {!isMulti && selectedUri && mediaType === "video" && (
         <VideoPreview uri={selectedUri} style={{ width: "100%", height: 200, marginBottom: 12 }} />

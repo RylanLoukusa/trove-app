@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Image, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { useAuth } from "../../auth/AuthContext";
 import {
   loadCurrentProfile,
@@ -8,6 +8,7 @@ import {
   UserProfile,
 } from "../../collaboration/profiles";
 import { AppButton } from "../../components/AppButton";
+import { MediaImage } from "../../components/MediaImage";
 import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { getSupabase } from "../../lib/supabase";
@@ -154,7 +155,7 @@ export const ProfileScreen = ({ navigation }: Props) => {
             <View style={styles.header}>
               <View style={styles.avatar}>
                 {profile?.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                  <MediaImage source={{ uri: profile.avatarUrl }} skeletonRadius={44} style={styles.avatarImage} />
                 ) : (
                   <Text style={styles.avatarText}>{initials}</Text>
                 )}
