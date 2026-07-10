@@ -5,6 +5,8 @@ export type ListItemKind = "check" | "bullet";
 export type ItemConnectionRelation = "related" | "similar" | "compare" | "alternative" | "part_of" | "inspired_by";
 export type AccessRole = "owner" | "editor" | "viewer";
 export type ShareScope = "folder_only" | "folder_and_subfolders";
+export type CommentTargetType = "item" | "folder";
+export type CommentReactionType = string;
 
 export type Folder = {
   id: string;
@@ -92,6 +94,40 @@ export type Tag = {
 export type WaitingListData = {
   folders: Folder[];
   items: SavedItem[];
+};
+
+export type CommentAuthor = {
+  avatarUrl: string | null;
+  displayName: string | null;
+  email: string | null;
+  id: string;
+};
+
+export type CommentReactionSummary = {
+  count: number;
+  reactedByMe: boolean;
+  type: CommentReactionType;
+};
+
+export type CommentReactionDetail = {
+  reaction: CommentReactionType;
+  user: CommentAuthor;
+  userId: string;
+};
+
+export type WaitingListComment = {
+  author: CommentAuthor | null;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  deletedAt: string | null;
+  id: string;
+  parentCommentId: string | null;
+  reactionDetails: CommentReactionDetail[];
+  reactions: CommentReactionSummary[];
+  targetId: string;
+  targetType: CommentTargetType;
+  updatedAt: string;
 };
 
 export type FolderSuggestion = {

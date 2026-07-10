@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef } from "react";
 import { Alert, GestureResponderEvent, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
@@ -309,6 +310,8 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
             ))}
           </>
         )}
+
+        <CommentThread targetType="item" targetId={item.id} />
 
         {canEditCurrentItem ? (
           <>

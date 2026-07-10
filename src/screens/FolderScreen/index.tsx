@@ -3,6 +3,7 @@ import { Alert, Image, Linking, Pressable, ScrollView, Share, Text, View } from 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { CommentThread } from "../../components/CommentThread";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
@@ -470,6 +471,8 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             />
           ))
         )}
+
+        <CommentThread targetType="folder" targetId={folder.id} />
       </ScrollView>
     </View>
   );
