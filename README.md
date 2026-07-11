@@ -11,7 +11,7 @@ npm run start
 
 ## Supabase (optional cloud sync)
 
-1. Create a project at [supabase.com](https://supabase.com) and run the SQL in [`supabase/migrations/20250514120000_waiting_list_data.sql`](supabase/migrations/20250514120000_waiting_list_data.sql) (SQL Editor or `supabase db push`).
+1. Create a project at [supabase.com](https://supabase.com) and apply the migrations in [`supabase/migrations`](supabase/migrations) (`supabase db push`, or paste each file into the SQL Editor in order).
 2. Enable **Email** auth under Authentication → Providers (adjust confirmations as you like for dev).
 3. Under Authentication → URL configuration, add your app redirect URLs (e.g. Expo dev: `exp://127.0.0.1:8081`, production build scheme from `app.json`: `trove://`).
 4. Copy **Project URL** and **anon public** key into a root `.env` file (do not commit):
@@ -42,7 +42,7 @@ npx expo install @react-native-google-signin/google-signin
 - On iOS you should create an iOS OAuth client ID in Google Cloud.
 - If you want browser redirect authentication too, add a Web OAuth client ID and set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
 
-Without these variables, the app stays **local-only** as before. After sign-in, data syncs as a JSON snapshot per user (`waiting_list_data` table) with debounced pushes and pull on session.
+Without these variables, the app stays **local-only** as before. After sign-in, data syncs per user across the `trove_folders`/`trove_items` tables (with `trove_data` kept only for legacy migration) with debounced pushes and pull on session.
 
 npx expo start --tunnel
 

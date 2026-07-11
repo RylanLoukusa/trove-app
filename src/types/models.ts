@@ -91,7 +91,7 @@ export type Tag = {
   color?: string;
 };
 
-export type WaitingListData = {
+export type TroveData = {
   folders: Folder[];
   items: SavedItem[];
 };
@@ -115,7 +115,7 @@ export type CommentReactionDetail = {
   userId: string;
 };
 
-export type WaitingListComment = {
+export type TroveComment = {
   author: CommentAuthor | null;
   authorId: string;
   body: string;

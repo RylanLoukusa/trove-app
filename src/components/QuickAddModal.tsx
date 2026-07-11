@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useWaitingList } from "../storage/storage";
+import { useTrove } from "../storage/storage";
 import { colors, spacing } from "../theme/theme";
 import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../utils/folderSuggestions";
 import { AppButton } from "./AppButton";
@@ -13,7 +13,7 @@ type Props = {
 };
 
 export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
-  const { folders, items, createItem, canEditFolderContent } = useWaitingList();
+  const { folders, items, createItem, canEditFolderContent } = useTrove();
   const [content, setContent] = useState("");
   const editableFolders = useMemo(
     () => folders.filter((folder) => canEditFolderContent(folder.id)),

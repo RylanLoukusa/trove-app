@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AccessRole, Folder, SavedItem, ShareScope, WaitingListData } from "../types/models";
+import type { AccessRole, Folder, SavedItem, ShareScope, TroveData } from "../types/models";
 import {
-  baselineFromWaitingList,
+  baselineFromTroveData,
   loadSyncBaseline,
   saveSyncBaseline,
   SyncConflictField,
@@ -13,31 +13,31 @@ import { canEditFolderContentRecord, canManageFolderRecord } from "../utils/acce
 import {
   normalizeItemType,
   normalizeSavedItem,
-  normalizeWaitingListData,
+  normalizeTroveData,
 } from "../utils/itemTypes";
 
 const remoteUpdatedAtKey = (userId: string) =>
-  `the-waiting-list:remoteUpdatedAt:${userId}`;
+  `trove:remoteUpdatedAt:${userId}`;
 
-type PullWaitingListResult =
-  | { kind: "applied"; data: WaitingListData; remoteUpdatedAt: string }
+type PullTroveResult =
+  | { kind: "applied"; data: TroveData; remoteUpdatedAt: string }
   | { kind: "noop_up_to_date"; remoteUpdatedAt: string }
   | { kind: "noop_invalid" }
   | { kind: "error" }
   | { kind: "no_row" };
 
-type WaitingListRealtimeSubscription = {
+type TroveRealtimeSubscription = {
   unsubscribe: () => void;
 };
 
-type PushWaitingListResult = {
+type PushTroveResult = {
   conflict?: SyncConflictSummary;
   error?: string;
   ok: boolean;
   updatedAt?: string;
 };
 
-type PushWaitingListOptions = {
+type PushTroveOptions = {
   skipConflictCheck?: boolean;
 };
 
@@ -99,12 +99,12 @@ type ShareRow = {
   updated_at: string;
 };
 
-const isWaitingListPayload = (payload: unknown): payload is WaitingListData => {
+const isTrovePayload = (payload: unknown): payload is TroveData => {
   if (!payload || typeof payload !== "object") {
     return false;
   }
 
-  const candidate = payload as Partial<WaitingListData>;
+  const candidate = payload as Partial<TroveData>;
   return Array.isArray(candidate.folders) && Array.isArray(candidate.items);
 };
 
@@ -132,7 +132,7 @@ const folderSyncErrorMessage = (error: unknown): string => {
 
   if (
     lowerMessage.includes("row-level security") &&
-    lowerMessage.includes("waiting_list_folders")
+    lowerMessage.includes("trove_folders")
   ) {
     return "This folder could not be synced as yours. Refresh your data, then try sharing it again.";
   }
@@ -184,7 +184,7 @@ const stringArray = (value: unknown): string[] =>
 const objectValue = <T>(value: unknown): T | undefined =>
   value && typeof value === "object" ? (value as T) : undefined;
 
-const hasWaitingListData = (data: WaitingListData): boolean =>
+const hasTroveData = (data: TroveData): boolean =>
   data.folders.length > 0 || data.items.length > 0;
 
 const latestTimestamp = (timestamps: Array<string | null | undefined>) => {
@@ -225,11 +225,11 @@ const sortFoldersParentFirst = (folders: Folder[]): Folder[] => {
 };
 
 const collectFolderBranchForSharing = (
-  waitingList: WaitingListData,
+  troveData: TroveData,
   userId: string,
   folderId: string,
 ): { error?: string; folders?: Folder[]; ok: boolean } => {
-  const normalizedData = normalizeWaitingListData(waitingList);
+  const normalizedData = normalizeTroveData(troveData);
   const foldersById = new Map(normalizedData.folders.map((folder) => [folder.id, folder]));
   const branch: Folder[] = [];
   const visited = new Set<string>();
@@ -421,7 +421,7 @@ const upsertFolderRowForCurrentUser = async (
   folderRow: FolderRow,
   expectedUpdatedAt?: string,
 ): Promise<void> => {
-  const { error } = await supabase.rpc("upsert_waiting_list_folder_for_current_user", {
+  const { error } = await supabase.rpc("trove_upsert_folder_for_current_user", {
     target_color: folderRow.color,
     target_created_at: folderRow.created_at,
     target_expected_updated_at: expectedUpdatedAt ?? null,
@@ -443,7 +443,7 @@ const upsertItemRowForCurrentUser = async (
   itemRow: ItemRow,
   expectedUpdatedAt?: string,
 ): Promise<void> => {
-  const { error } = await supabase.rpc("upsert_waiting_list_item_for_current_user", {
+  const { error } = await supabase.rpc("trove_upsert_item_for_current_user", {
     target_attachments: itemRow.attachments,
     target_connections: itemRow.connections,
     target_created_at: itemRow.created_at,
@@ -477,19 +477,19 @@ const upsertItemRowForCurrentUser = async (
 
 const deleteOwnedRowsMissing = async (
   supabase: SupabaseClient,
-  table: "waiting_list_folders" | "waiting_list_items",
+  table: "trove_folders" | "trove_items",
   ids: string[],
   knownUpdatedAt: Record<string, string>,
   skipConflictCheck: boolean,
 ): Promise<void> => {
   const { error } =
-    table === "waiting_list_folders"
-      ? await supabase.rpc("delete_missing_waiting_list_folders_for_current_user", {
+    table === "trove_folders"
+      ? await supabase.rpc("trove_delete_missing_folders_for_current_user", {
           known_updated_at: knownUpdatedAt,
           local_folder_ids: ids,
           skip_conflict_check: skipConflictCheck,
         })
-      : await supabase.rpc("delete_missing_waiting_list_items_for_current_user", {
+      : await supabase.rpc("trove_delete_missing_items_for_current_user", {
           known_updated_at: knownUpdatedAt,
           local_item_ids: ids,
           skip_conflict_check: skipConflictCheck,
@@ -500,13 +500,13 @@ const deleteOwnedRowsMissing = async (
   }
 };
 
-const deleteWaitingListItemForUser = async (
+const deleteTroveItemForUser = async (
   supabase: SupabaseClient,
   itemId: string,
   expectedUpdatedAt?: string,
   skipConflictCheck = false,
-): Promise<PushWaitingListResult> => {
-  const { error } = await supabase.rpc("delete_waiting_list_item_for_current_user", {
+): Promise<PushTroveResult> => {
+  const { error } = await supabase.rpc("trove_delete_item_for_current_user", {
     skip_conflict_check: skipConflictCheck,
     target_expected_updated_at: expectedUpdatedAt ?? null,
     target_item_id: itemId,
@@ -526,17 +526,17 @@ const deleteWaitingListItemForUser = async (
   return { ok: false, error: errorMessage(error, "Unable to delete this item.") };
 };
 
-const fetchLegacyWaitingListForUser = async (
+const fetchLegacyTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
 ): Promise<
-  | { kind: "data"; data: WaitingListData; updatedAt: string }
+  | { kind: "data"; data: TroveData; updatedAt: string }
   | { kind: "no_row" }
   | { kind: "invalid" }
   | { kind: "error" }
 > => {
   const { data, error } = await supabase
-    .from("waiting_list_data")
+    .from("trove_data")
     .select("payload, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
@@ -551,25 +551,25 @@ const fetchLegacyWaitingListForUser = async (
   }
 
   const row = data as LegacyRemoteRow;
-  if (!isWaitingListPayload(row.payload)) {
+  if (!isTrovePayload(row.payload)) {
     console.warn("Remote Trove payload is invalid");
     return { kind: "invalid" };
   }
 
   return {
     kind: "data",
-    data: normalizeWaitingListData(row.payload),
+    data: normalizeTroveData(row.payload),
     updatedAt: row.updated_at,
   };
 };
 
-const fetchNormalizedWaitingListForUser = async (
+const fetchNormalizedTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
 ): Promise<
   | {
       kind: "data";
-      data: WaitingListData;
+      data: TroveData;
       latestRowUpdatedAt: string | null;
       syncState: SyncStateRow | null;
     }
@@ -577,17 +577,17 @@ const fetchNormalizedWaitingListForUser = async (
 > => {
   const [syncStateResult, foldersResult, itemsResult, sharesResult] = await Promise.all([
     supabase
-      .from("waiting_list_sync_state")
+      .from("trove_sync_state")
       .select("updated_at, normalized_initialized")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
-      .from("waiting_list_folders")
+      .from("trove_folders")
       .select(
         "id, owner_id, parent_folder_id, name, icon, color, purpose, created_at, updated_at",
       ),
     supabase
-      .from("waiting_list_items")
+      .from("trove_items")
       .select(
         [
           "id",
@@ -618,7 +618,7 @@ const fetchNormalizedWaitingListForUser = async (
         ].join(", "),
       ),
     supabase
-      .from("waiting_list_folder_shares")
+      .from("trove_folder_shares")
       .select("folder_id, shared_with_user_id, role, scope, updated_at")
       .eq("shared_with_user_id", userId),
   ]);
@@ -676,7 +676,7 @@ const upsertSyncState = async (
 ): Promise<string> => {
   const updatedAt = new Date().toISOString();
   const { data, error } = await supabase
-    .from("waiting_list_sync_state")
+    .from("trove_sync_state")
     .upsert(
       {
         user_id: userId,
@@ -776,7 +776,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
 const firstSyncConflict = async (
   supabase: SupabaseClient,
   userId: string,
-  waitingList: WaitingListData,
+  troveData: TroveData,
 ): Promise<SyncConflictSummary | null> => {
   const baseline = await loadSyncBaseline(userId);
   const hasBaseline =
@@ -784,7 +784,7 @@ const firstSyncConflict = async (
     Object.keys(baseline.items).length > 0;
 
   if (!hasBaseline) {
-    const remoteResult = await fetchNormalizedWaitingListForUser(supabase, userId);
+    const remoteResult = await fetchNormalizedTroveDataForUser(supabase, userId);
     if (remoteResult.kind === "error") {
       throw new Error("Unable to check the latest synced data before saving.");
     }
@@ -814,14 +814,14 @@ const firstSyncConflict = async (
     return null;
   }
 
-  const normalizedData = normalizeWaitingListData(waitingList);
+  const normalizedData = normalizeTroveData(troveData);
   const localOwnedFolders = normalizedData.folders.filter((folder) =>
     (folder.ownerId ?? userId) === userId && canManageFolderRecord(folder),
   );
   const localFoldersById = new Map(localOwnedFolders.map((folder) => [folder.id, folder]));
   const localItemsById = new Map(normalizedData.items.map((item) => [item.id, item]));
 
-  const remoteResult = await fetchNormalizedWaitingListForUser(supabase, userId);
+  const remoteResult = await fetchNormalizedTroveDataForUser(supabase, userId);
   if (remoteResult.kind === "error") {
     throw new Error("Unable to check the latest synced data before saving.");
   }
@@ -929,13 +929,13 @@ const firstSyncConflict = async (
   return null;
 };
 
-const replaceNormalizedWaitingListForUser = async (
+const replaceNormalizedTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
-  waitingList: WaitingListData,
-  options: PushWaitingListOptions = {},
-): Promise<PushWaitingListResult> => {
-  const normalizedData = normalizeWaitingListData(waitingList);
+  troveData: TroveData,
+  options: PushTroveOptions = {},
+): Promise<PushTroveResult> => {
+  const normalizedData = normalizeTroveData(troveData);
   const foldersById = new Map(normalizedData.folders.map((folder) => [folder.id, folder]));
   const ownedFolders = normalizedData.folders.filter((folder) =>
     (folder.ownerId ?? userId) === userId && canManageFolderRecord(folder),
@@ -987,7 +987,7 @@ const replaceNormalizedWaitingListForUser = async (
       .map((item) => item.id);
     await deleteOwnedRowsMissing(
       supabase,
-      "waiting_list_items",
+      "trove_items",
       localItemIds,
       baseline.items,
       options.skipConflictCheck ?? false,
@@ -996,7 +996,7 @@ const replaceNormalizedWaitingListForUser = async (
     const localFolderIds = ownedFolders.map((folder) => folder.id);
     await deleteOwnedRowsMissing(
       supabase,
-      "waiting_list_folders",
+      "trove_folders",
       localFolderIds,
       baseline.folders,
       options.skipConflictCheck ?? false,
@@ -1004,12 +1004,12 @@ const replaceNormalizedWaitingListForUser = async (
 
     const updatedAt = await upsertSyncState(supabase, userId);
     await writeStoredRemoteUpdatedAt(userId, updatedAt);
-    const remoteAfterPush = await fetchNormalizedWaitingListForUser(supabase, userId);
+    const remoteAfterPush = await fetchNormalizedTroveDataForUser(supabase, userId);
     await saveSyncBaseline(
       userId,
       remoteAfterPush.kind === "data"
-        ? baselineFromWaitingList(remoteAfterPush.data)
-        : baselineFromWaitingList(normalizedData),
+        ? baselineFromTroveData(remoteAfterPush.data)
+        : baselineFromTroveData(normalizedData),
     );
 
     return { ok: true, updatedAt };
@@ -1049,7 +1049,7 @@ const ensureRemoteFoldersOwnedByUser = async (
   }
 
   const { data, error } = await supabase
-    .from("waiting_list_folders")
+    .from("trove_folders")
     .select("id, owner_id")
     .in("id", folderIds);
 
@@ -1070,10 +1070,10 @@ const ensureRemoteFoldersOwnedByUser = async (
 const pushFolderBranchForUser = async (
   supabase: SupabaseClient,
   userId: string,
-  waitingList: WaitingListData,
+  troveData: TroveData,
   folderId: string,
-): Promise<PushWaitingListResult> => {
-  const branchResult = collectFolderBranchForSharing(waitingList, userId, folderId);
+): Promise<PushTroveResult> => {
+  const branchResult = collectFolderBranchForSharing(troveData, userId, folderId);
   if (!branchResult.ok || !branchResult.folders) {
     return {
       ok: false,
@@ -1082,7 +1082,7 @@ const pushFolderBranchForUser = async (
   }
 
   try {
-    const conflict = await firstSyncConflict(supabase, userId, waitingList);
+    const conflict = await firstSyncConflict(supabase, userId, troveData);
     if (conflict) {
       return {
         conflict,
@@ -1109,16 +1109,16 @@ const pushFolderBranchForUser = async (
 
     const updatedAt = await upsertSyncState(supabase, userId);
     await writeStoredRemoteUpdatedAt(userId, updatedAt);
-    const remoteAfterPush = await fetchNormalizedWaitingListForUser(supabase, userId);
+    const remoteAfterPush = await fetchNormalizedTroveDataForUser(supabase, userId);
     if (remoteAfterPush.kind === "data") {
-      await saveSyncBaseline(userId, baselineFromWaitingList(remoteAfterPush.data));
+      await saveSyncBaseline(userId, baselineFromTroveData(remoteAfterPush.data));
     }
 
     return { ok: true, updatedAt };
   } catch (error) {
     if (isSyncConflictError(error)) {
       try {
-        const conflict = await firstSyncConflict(supabase, userId, waitingList);
+        const conflict = await firstSyncConflict(supabase, userId, troveData);
         if (conflict) {
           return {
             conflict,
@@ -1141,18 +1141,18 @@ const pushFolderBranchForUser = async (
   }
 };
 
-const pullWaitingListForUser = async (
+const pullTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
-): Promise<PullWaitingListResult> => {
-  const normalizedResult = await fetchNormalizedWaitingListForUser(supabase, userId);
+): Promise<PullTroveResult> => {
+  const normalizedResult = await fetchNormalizedTroveDataForUser(supabase, userId);
   if (normalizedResult.kind === "error") {
     return { kind: "error" };
   }
 
   const normalizedHasSource =
     normalizedResult.syncState !== null ||
-    hasWaitingListData(normalizedResult.data) ||
+    hasTroveData(normalizedResult.data) ||
     normalizedResult.latestRowUpdatedAt !== null;
 
   if (normalizedHasSource) {
@@ -1172,20 +1172,20 @@ const pullWaitingListForUser = async (
 
     const storedUpdatedAt = await readStoredRemoteUpdatedAt(userId);
     if (storedUpdatedAt && remoteUpdatedAt <= storedUpdatedAt) {
-      await saveSyncBaseline(userId, baselineFromWaitingList(normalizedResult.data));
+      await saveSyncBaseline(userId, baselineFromTroveData(normalizedResult.data));
       return { kind: "noop_up_to_date", remoteUpdatedAt };
     }
 
     await writeStoredRemoteUpdatedAt(userId, remoteUpdatedAt);
-    await saveSyncBaseline(userId, baselineFromWaitingList(normalizedResult.data));
+    await saveSyncBaseline(userId, baselineFromTroveData(normalizedResult.data));
     return {
       kind: "applied",
-      data: normalizeWaitingListData(normalizedResult.data),
+      data: normalizeTroveData(normalizedResult.data),
       remoteUpdatedAt,
     };
   }
 
-  const legacyResult = await fetchLegacyWaitingListForUser(supabase, userId);
+  const legacyResult = await fetchLegacyTroveDataForUser(supabase, userId);
   if (legacyResult.kind === "error") {
     return { kind: "error" };
   }
@@ -1198,7 +1198,7 @@ const pullWaitingListForUser = async (
     return { kind: "no_row" };
   }
 
-  const migrationResult = await replaceNormalizedWaitingListForUser(
+  const migrationResult = await replaceNormalizedTroveDataForUser(
     supabase,
     userId,
     legacyResult.data,
@@ -1215,33 +1215,33 @@ const pullWaitingListForUser = async (
   };
 };
 
-const pushWaitingListForUser = async (
+const pushTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
-  waitingList: WaitingListData,
-  options?: PushWaitingListOptions,
-): Promise<PushWaitingListResult> =>
-  replaceNormalizedWaitingListForUser(supabase, userId, waitingList, options);
+  troveData: TroveData,
+  options?: PushTroveOptions,
+): Promise<PushTroveResult> =>
+  replaceNormalizedTroveDataForUser(supabase, userId, troveData, options);
 
 const ensureRemoteRowForUser = async (
   supabase: SupabaseClient,
   userId: string,
-  waitingList: WaitingListData,
+  troveData: TroveData,
 ): Promise<{ created: boolean }> => {
-  const result = await replaceNormalizedWaitingListForUser(
+  const result = await replaceNormalizedTroveDataForUser(
     supabase,
     userId,
-    waitingList,
+    troveData,
   );
 
   return { created: result.ok };
 };
 
-const subscribeWaitingListRealtimeForUser = (
+const subscribeTroveRealtimeForUser = (
   supabase: SupabaseClient,
   userId: string,
   onChange: () => void,
-): WaitingListRealtimeSubscription => {
+): TroveRealtimeSubscription => {
   let refreshHandle: ReturnType<typeof setTimeout> | null = null;
   const scheduleRefresh = () => {
     if (refreshHandle) {
@@ -1252,40 +1252,40 @@ const subscribeWaitingListRealtimeForUser = (
   };
 
   const channel = supabase
-    .channel(`waiting-list-sync:${userId}`)
+    .channel(`trove-sync:${userId}`)
     .on(
       "postgres_changes",
       {
         event: "*",
         schema: "public",
-        table: "waiting_list_sync_state",
+        table: "trove_sync_state",
         filter: `user_id=eq.${userId}`,
       },
       scheduleRefresh,
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "waiting_list_folders" },
+      { event: "*", schema: "public", table: "trove_folders" },
       scheduleRefresh,
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "waiting_list_items" },
+      { event: "*", schema: "public", table: "trove_items" },
       scheduleRefresh,
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "waiting_list_folder_shares" },
+      { event: "*", schema: "public", table: "trove_folder_shares" },
       scheduleRefresh,
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "waiting_list_folder_share_invites" },
+      { event: "*", schema: "public", table: "trove_folder_share_invites" },
       scheduleRefresh,
     )
     .subscribe((status) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn("Waiting list realtime subscription issue", status);
+        console.warn("Trove realtime subscription issue", status);
       }
     });
 
@@ -1301,12 +1301,12 @@ const subscribeWaitingListRealtimeForUser = (
 
 export {
   clearStoredRemoteUpdatedAt,
-  deleteWaitingListItemForUser,
+  deleteTroveItemForUser,
   ensureRemoteRowForUser,
-  pullWaitingListForUser,
+  pullTroveDataForUser,
   pushFolderBranchForUser,
-  pushWaitingListForUser,
+  pushTroveDataForUser,
   readStoredRemoteUpdatedAt,
-  subscribeWaitingListRealtimeForUser,
+  subscribeTroveRealtimeForUser,
 };
-export type { PullWaitingListResult, PushWaitingListResult, WaitingListRealtimeSubscription };
+export type { PullTroveResult, PushTroveResult, TroveRealtimeSubscription };

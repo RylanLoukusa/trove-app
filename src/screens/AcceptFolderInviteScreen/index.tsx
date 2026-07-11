@@ -11,14 +11,14 @@ import {
 } from "../../collaboration/folderSharing";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AcceptFolderInvite">;
 
 export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
   const { session } = useAuth();
-  const { refreshFromRemote } = useWaitingList();
+  const { refreshFromRemote } = useTrove();
   const token = route.params.token;
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);

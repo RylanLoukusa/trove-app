@@ -1,4 +1,4 @@
-import { Folder, SavedItem, WaitingListData } from "../types/models";
+import { Folder, SavedItem, TroveData } from "../types/models";
 
 const now = "2026-05-15T00:00:00.000Z";
 
@@ -62,7 +62,7 @@ export const seedItems: SavedItem[] = [
   item("item-backpack", "things-to-buy", "Buy a new backpack", "Find a durable everyday backpack with a laptop sleeve.", ["buy", "gear", "shopping"], "low"),
 ];
 
-export const seedData: WaitingListData = {
+export const seedData: TroveData = {
   folders: seedFolders,
   items: seedItems,
 };

@@ -18,7 +18,7 @@ const defaultSnapshot: SyncSnapshot = {
   status: "synced",
 };
 
-const syncSnapshotKey = (userId: string) => `the-waiting-list:syncSnapshot:${userId}`;
+const syncSnapshotKey = (userId: string) => `trove:syncSnapshot:${userId}`;
 
 export const displayTextForSyncSnapshot = (snapshot: SyncSnapshot): string => {
   switch (snapshot.status) {

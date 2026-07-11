@@ -15,14 +15,14 @@ import { mergeConflictFields } from "../sync/syncConflictResolution";
 import type { SyncConflictResolution } from "../sync/syncConflictResolution";
 import {
   clearStoredRemoteUpdatedAt,
-  deleteWaitingListItemForUser,
+  deleteTroveItemForUser,
   ensureRemoteRowForUser,
-  pullWaitingListForUser,
+  pullTroveDataForUser,
   pushFolderBranchForUser,
-  pushWaitingListForUser,
-  subscribeWaitingListRealtimeForUser,
-} from "../sync/waitingListSync";
-import type { PushWaitingListResult } from "../sync/waitingListSync";
+  pushTroveDataForUser,
+  subscribeTroveRealtimeForUser,
+} from "../sync/troveSync";
+import type { PushTroveResult } from "../sync/troveSync";
 import {
   conflictedSyncSnapshot,
   failedSyncSnapshot,
@@ -34,17 +34,17 @@ import {
   syncedSyncSnapshot,
 } from "../sync/syncStatus";
 import { seedData } from "../data/seedData";
-import { Folder, SavedItem, WaitingListData } from "../types/models";
+import { Folder, SavedItem, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
-import { normalizeWaitingListData } from "../utils/itemTypes";
+import { normalizeTroveData } from "../utils/itemTypes";
 
-const STORAGE_KEY_PREFIX = "the-waiting-list:data:v1";
-const emptyData: WaitingListData = { folders: [], items: [] };
+const STORAGE_KEY_PREFIX = "trove:data:v1";
+const emptyData: TroveData = { folders: [], items: [] };
 const FOREGROUND_REFRESH_INTERVAL_MS = 30_000;
 
-const hasWaitingListData = (data: WaitingListData): boolean => data.folders.length > 0 || data.items.length > 0;
+const hasTroveData = (data: TroveData): boolean => data.folders.length > 0 || data.items.length > 0;
 
 const hasPendingSync = (snapshot: SyncSnapshot): boolean =>
   snapshot.status === "queued" ||
@@ -57,7 +57,7 @@ type RefreshFromRemoteOptions = {
   force?: boolean;
 };
 
-type WaitingListContextValue = WaitingListData & {
+type TroveContextValue = TroveData & {
   isReady: boolean;
   syncSnapshot: SyncSnapshot;
   createFolder: (input: Pick<Folder, "name" | "parentFolderId"> & Partial<Pick<Folder, "icon" | "color" | "purpose">>) => Folder | null;
@@ -77,7 +77,7 @@ type WaitingListContextValue = WaitingListData & {
   clearLocalData: () => void;
 };
 
-const WaitingListContext = createContext<WaitingListContextValue | undefined>(undefined);
+const TroveContext = createContext<TroveContextValue | undefined>(undefined);
 
 const cleanOptionalText = (value?: string): string | undefined => {
   const trimmed = value?.trim();
@@ -87,24 +87,24 @@ const cleanOptionalText = (value?: string): string | undefined => {
 const storageKeyForUser = (userId?: string | null): string =>
   userId ? `${STORAGE_KEY_PREFIX}:user:${userId}` : `${STORAGE_KEY_PREFIX}:anonymous`;
 
-export const loadWaitingListData = async (userId?: string | null): Promise<WaitingListData> => {
+export const loadTroveData = async (userId?: string | null): Promise<TroveData> => {
   const key = storageKeyForUser(userId);
   const stored = await AsyncStorage.getItem(key);
   if (!stored) {
     const initialData = userId ? emptyData : seedData;
     await AsyncStorage.setItem(key, JSON.stringify(initialData));
-    return normalizeWaitingListData(initialData);
+    return normalizeTroveData(initialData);
   }
-  return normalizeWaitingListData(JSON.parse(stored) as WaitingListData);
+  return normalizeTroveData(JSON.parse(stored) as TroveData);
 };
 
-export const saveWaitingListData = async (data: WaitingListData, userId?: string | null): Promise<void> => {
+export const saveTroveData = async (data: TroveData, userId?: string | null): Promise<void> => {
   await AsyncStorage.setItem(storageKeyForUser(userId), JSON.stringify(data));
 };
 
-const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
+const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
-  const [data, setData] = useState<WaitingListData>(seedData);
+  const [data, setData] = useState<TroveData>(seedData);
   const [isReady, setIsReady] = useState(false);
   const [syncSnapshot, setSyncSnapshot] = useState<SyncSnapshot>({
     retryCount: 0,
@@ -142,7 +142,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
   }, [activeUserId]);
 
   const applyPushResult = useCallback(
-    (result: PushWaitingListResult, fallbackError: string): { ok: boolean; error?: string } => {
+    (result: PushTroveResult, fallbackError: string): { ok: boolean; error?: string } => {
       if (result.ok) {
         remoteRowExistsRef.current = true;
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
@@ -182,7 +182,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     void (async () => {
       try {
         const [loadedData, loadedSnapshot] = await Promise.all([
-          loadWaitingListData(activeUserId),
+          loadTroveData(activeUserId),
           activeUserId
             ? loadSyncSnapshot(activeUserId)
             : Promise.resolve<SyncSnapshot>({ retryCount: 0, status: "synced" }),
@@ -213,7 +213,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (isReady) {
-      void saveWaitingListData(data, activeUserId);
+      void saveTroveData(data, activeUserId);
     }
   }, [activeUserId, data, isReady]);
 
@@ -248,7 +248,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
 
     void (async () => {
       try {
-        const result = await pullWaitingListForUser(supabase, userId);
+        const result = await pullTroveDataForUser(supabase, userId);
         if (cancelled) return;
         if (result.kind === "applied") {
           remoteRowExistsRef.current = true;
@@ -258,14 +258,14 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         } else if (result.kind === "noop_up_to_date") {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
-          const local = await loadWaitingListData(userId);
+          const local = await loadTroveData(userId);
           if (!cancelled) {
             skipNextRemotePushRef.current = true;
             setData(local);
           }
         } else if (result.kind === "no_row") {
           shouldAllowRemotePush = true;
-          if (hasWaitingListData(dataRef.current)) {
+          if (hasTroveData(dataRef.current)) {
             const ensured = await ensureRemoteRowForUser(supabase, userId, dataRef.current);
             remoteRowExistsRef.current = ensured.created;
           }
@@ -293,7 +293,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       skipNextRemotePushRef.current = false;
       return;
     }
-    if (!remoteRowExistsRef.current && !hasWaitingListData(data)) return;
+    if (!remoteRowExistsRef.current && !hasTroveData(data)) return;
 
     pendingRemotePushRef.current = true;
     let didStartPush = false;
@@ -304,7 +304,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         void saveSyncSnapshot(userId, nextSnapshot);
         return nextSnapshot;
       });
-      void pushWaitingListForUser(supabase, userId, data)
+      void pushTroveDataForUser(supabase, userId, data)
         .then((result) => {
           applyPushResult(result, "Unable to sync Trove data.");
         })
@@ -331,7 +331,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [activeUserId, applyPushResult, data, isReady, isAuthReady]);
 
-  const createFolder = useCallback<WaitingListContextValue["createFolder"]>((input) => {
+  const createFolder = useCallback<TroveContextValue["createFolder"]>((input) => {
     const parentFolder = dataRef.current.folders.find((folder) => folder.id === input.parentFolderId);
     if (input.parentFolderId && !canManageFolderRecord(parentFolder)) {
       Alert.alert("Cannot create folder", "Only the folder owner can create subfolders here.");
@@ -356,7 +356,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return folder;
   }, [activeUserId, markLocalChangePending]);
 
-  const updateFolder = useCallback<WaitingListContextValue["updateFolder"]>((folderId, updates) => {
+  const updateFolder = useCallback<TroveContextValue["updateFolder"]>((folderId, updates) => {
     let didUpdate = false;
     setData((current) => {
       const folder = current.folders.find((candidate) => candidate.id === folderId);
@@ -394,7 +394,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return didUpdate;
   }, [markLocalChangePending]);
 
-  const deleteFolder = useCallback<WaitingListContextValue["deleteFolder"]>(async (folderId) => {
+  const deleteFolder = useCallback<TroveContextValue["deleteFolder"]>(async (folderId) => {
     const folder = dataRef.current.folders.find((candidate) => candidate.id === folderId);
     if (!canManageFolderRecord(folder)) {
       return { ok: false, error: "Only the folder owner can delete this folder." };
@@ -410,7 +410,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return { ok: true };
   }, [markLocalChangePending]);
 
-  const createItem = useCallback<WaitingListContextValue["createItem"]>((input) => {
+  const createItem = useCallback<TroveContextValue["createItem"]>((input) => {
     const folder = dataRef.current.folders.find((candidate) => candidate.id === input.folderId);
     if (input.folderId && !canEditFolderContentRecord(folder)) {
       Alert.alert("Cannot save item", "You do not have permission to add items to that folder.");
@@ -434,7 +434,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return item;
   }, [activeUserId, markLocalChangePending]);
 
-  const updateItem = useCallback<WaitingListContextValue["updateItem"]>((itemId, updates) => {
+  const updateItem = useCallback<TroveContextValue["updateItem"]>((itemId, updates) => {
     let didUpdate = false;
     setData((current) => ({
       ...current,
@@ -471,23 +471,23 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [activeUserId, markLocalChangePending]);
 
-  const canManageFolder = useCallback<WaitingListContextValue["canManageFolder"]>((folderId) => {
+  const canManageFolder = useCallback<TroveContextValue["canManageFolder"]>((folderId) => {
     if (!folderId) return true;
     return canManageFolderRecord(dataRef.current.folders.find((folder) => folder.id === folderId));
   }, []);
 
-  const canEditFolderContent = useCallback<WaitingListContextValue["canEditFolderContent"]>((folderId) => {
+  const canEditFolderContent = useCallback<TroveContextValue["canEditFolderContent"]>((folderId) => {
     if (!folderId) return true;
     return canEditFolderContentRecord(dataRef.current.folders.find((folder) => folder.id === folderId));
   }, []);
 
-  const canEditItem = useCallback<WaitingListContextValue["canEditItem"]>((itemId) => {
+  const canEditItem = useCallback<TroveContextValue["canEditItem"]>((itemId) => {
     const item = dataRef.current.items.find((candidate) => candidate.id === itemId);
     const folder = dataRef.current.folders.find((candidate) => candidate.id === item?.folderId);
     return canEditItemRecord(item, folder);
   }, []);
 
-  const deleteItem = useCallback<WaitingListContextValue["deleteItem"]>(async (itemId) => {
+  const deleteItem = useCallback<TroveContextValue["deleteItem"]>(async (itemId) => {
     const itemToDelete = dataRef.current.items.find((item) => item.id === itemId);
     const folder = dataRef.current.folders.find((candidate) => candidate.id === itemToDelete?.folderId);
     if (!canEditItemRecord(itemToDelete, folder)) {
@@ -501,7 +501,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         return { ok: false, error: "Supabase not configured" };
       }
 
-      const deleteResult = await deleteWaitingListItemForUser(
+      const deleteResult = await deleteTroveItemForUser(
         supabase,
         itemId,
         itemToDelete?.updatedAt,
@@ -526,7 +526,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return { ok: true };
   }, [activeUserId, markLocalChangePending]);
 
-  const refreshFromRemote = useCallback<WaitingListContextValue["refreshFromRemote"]>(async (options) => {
+  const refreshFromRemote = useCallback<TroveContextValue["refreshFromRemote"]>(async (options) => {
     const userId = activeUserId;
     if (!userId) {
       return { ok: false, error: "Sign in to sync shared folders." };
@@ -542,7 +542,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         await clearStoredRemoteUpdatedAt(userId);
       }
 
-      const result = await pullWaitingListForUser(supabase, userId);
+      const result = await pullTroveDataForUser(supabase, userId);
 
       if (result.kind === "applied") {
         skipNextRemotePushRef.current = true;
@@ -573,7 +573,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [activeUserId, setAndPersistSyncSnapshot]);
 
-  const syncToRemote = useCallback<WaitingListContextValue["syncToRemote"]>(async () => {
+  const syncToRemote = useCallback<TroveContextValue["syncToRemote"]>(async () => {
     const userId = activeUserId;
     if (!userId) {
       return { ok: false, error: "Sign in to sync folders before sharing." };
@@ -586,13 +586,13 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
 
     pendingRemotePushRef.current = true;
     setAndPersistSyncSnapshot(savingSyncSnapshot(syncSnapshotRef.current));
-    const result = await pushWaitingListForUser(supabase, userId, dataRef.current);
+    const result = await pushTroveDataForUser(supabase, userId, dataRef.current);
     pendingRemotePushRef.current = false;
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
   }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
-  const syncFolderForSharing = useCallback<WaitingListContextValue["syncFolderForSharing"]>(async (folderId) => {
+  const syncFolderForSharing = useCallback<TroveContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
     if (!userId) {
       return { ok: false, error: "Sign in to sync folders before sharing." };
@@ -611,7 +611,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return applyPushResult(result, "Unable to sync this folder before sharing.");
   }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
-  const resolveSyncConflict = useCallback<WaitingListContextValue["resolveSyncConflict"]>(async (resolution) => {
+  const resolveSyncConflict = useCallback<TroveContextValue["resolveSyncConflict"]>(async (resolution) => {
     const userId = activeUserId;
     if (!userId) {
       return { ok: false, error: "Sign in to resolve sync conflicts." };
@@ -645,7 +645,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
 
       dataRef.current = resolvedData;
       setData(resolvedData);
-      await saveWaitingListData(resolvedData, userId);
+      await saveTroveData(resolvedData, userId);
       const baseline = await loadSyncBaseline(userId);
       const entityKind = conflict.entityKind as SyncEntityKind;
       const nextBaseline: SyncBaseline = {
@@ -656,7 +656,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       await saveSyncBaseline(userId, nextBaseline);
     }
 
-    const result = await pushWaitingListForUser(
+    const result = await pushTroveDataForUser(
       supabase,
       userId,
       resolvedData,
@@ -698,7 +698,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     const supabase = getSupabase();
     if (!supabase) return;
 
-    const subscription = subscribeWaitingListRealtimeForUser(supabase, activeUserId, () => {
+    const subscription = subscribeTroveRealtimeForUser(supabase, activeUserId, () => {
       void refreshFromRemote({
         force: !pendingRemotePushRef.current && !hasPendingSync(syncSnapshotRef.current),
       });
@@ -710,7 +710,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
   const resetToSeed = useCallback(() => setData(seedData), []);
   const clearLocalData = useCallback(() => setData(emptyData), []);
 
-  const value = useMemo<WaitingListContextValue>(
+  const value = useMemo<TroveContextValue>(
     () => ({
       ...data,
       isReady,
@@ -753,15 +753,15 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     ],
   );
 
-  return <WaitingListContext.Provider value={value}>{children}</WaitingListContext.Provider>;
+  return <TroveContext.Provider value={value}>{children}</TroveContext.Provider>;
 };
 
-export const WaitingListProvider = ({ children }: { children: ReactNode }) => (
-  <InnerWaitingListProvider>{children}</InnerWaitingListProvider>
+export const TroveProvider = ({ children }: { children: ReactNode }) => (
+  <InnerTroveProvider>{children}</InnerTroveProvider>
 );
 
-export const useWaitingList = (): WaitingListContextValue => {
-  const context = useContext(WaitingListContext);
-  if (!context) throw new Error("useWaitingList must be used inside WaitingListProvider");
+export const useTrove = (): TroveContextValue => {
+  const context = useContext(TroveContext);
+  if (!context) throw new Error("useTrove must be used inside TroveProvider");
   return context;
 };

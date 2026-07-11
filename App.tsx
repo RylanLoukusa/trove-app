@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
-import { useWaitingList, WaitingListProvider } from "./src/storage/storage";
+import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
 import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
 import { AddEditFolderScreen } from "./src/screens/AddEditFolderScreen";
@@ -28,7 +28,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ["trove://", "thewaitinglist://"],
+  prefixes: ["trove://"],
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
@@ -49,12 +49,12 @@ const linking: LinkingOptions<RootStackParamList> = {
 
 function AppNavigator() {
   const { session, isAuthReady, isPasswordRecovery } = useAuth();
-  const { createItem, folders, isReady: isWaitingListReady } = useWaitingList();
+  const { createItem, folders, isReady: isTroveReady } = useTrove();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
 
   const openPendingSharedImport = React.useCallback(async () => {
-    if (!session || isPasswordRecovery || !isWaitingListReady || !navigationRef.isReady()) return;
+    if (!session || isPasswordRecovery || !isTroveReady || !navigationRef.isReady()) return;
 
     let importId: string | null = null;
     try {
@@ -114,7 +114,7 @@ function AppNavigator() {
 
     lastHandledSharedImportId.current = importId;
     navigationRef.navigate("AddEditItem", { sharedImportId: importId });
-  }, [createItem, folders, isPasswordRecovery, isWaitingListReady, session]);
+  }, [createItem, folders, isPasswordRecovery, isTroveReady, session]);
 
   React.useEffect(() => {
     void openPendingSharedImport();
@@ -199,9 +199,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <WaitingListProvider>
+        <TroveProvider>
           <AppNavigator />
-        </WaitingListProvider>
+        </TroveProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

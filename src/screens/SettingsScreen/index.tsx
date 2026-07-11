@@ -9,7 +9,7 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -28,7 +28,7 @@ const SettingsSkeleton = () => (
 );
 
 export const SettingsScreen = ({ navigation }: Props) => {
-  const { folders, isReady, items, resetToSeed, clearLocalData } = useWaitingList();
+  const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();
 

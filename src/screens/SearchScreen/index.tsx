@@ -7,7 +7,7 @@ import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import { searchFoldersAndItems } from "../../utils/itemFilters";
@@ -126,7 +126,7 @@ const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, onOp
 });
 
 export const SearchScreen = ({ navigation }: Props) => {
-  const { folders, isReady, items } = useWaitingList();
+  const { folders, isReady, items } = useTrove();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SearchFilter>("all");
   const [sort, setSort] = useState<SearchSort>("updated");

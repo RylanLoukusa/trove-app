@@ -16,7 +16,7 @@ module.exports = {
       usesAppleSignIn: true,
     },
     android: {
-      package: "com.rylanloukusa.thewaitinglist",
+      package: "com.rylanloukusa.trove",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
         backgroundColor: "#173F2A",

@@ -21,7 +21,6 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>trove</string>
-		<string>thewaitinglist</string>
 	</array>
 	<key>NSExtension</key>
 	<dict>

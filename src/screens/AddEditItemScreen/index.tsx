@@ -9,7 +9,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { clearSharedImport, inferSourcePlatform, readSharedImport, titleFromSharedImport } from "../../share/sharedImport";
 import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supabaseStorage";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
 import { isMediaItemType, normalizeItemType } from "../../utils/itemTypes";
@@ -43,7 +43,7 @@ const priorityChoices: Record<ItemPriority, { label: string; detail: string; ton
 };
 
 export const AddEditItemScreen = ({ navigation, route }: Props) => {
-  const { folders, items, createItem, updateItem, canEditFolderContent, canEditItem } = useWaitingList();
+  const { folders, items, createItem, updateItem, canEditFolderContent, canEditItem } = useTrove();
   const editing = items.find((item) => item.id === route.params?.itemId);
   const editableFolders = useMemo(
     () => folders.filter((folder) => canEditFolderContent(folder.id)),

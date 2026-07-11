@@ -7,7 +7,7 @@ import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { emojiCategories } from "../../data/emojiPalette";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { colors, spacing } from "../../theme/theme";
 import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
 import { styles } from "./styles";
@@ -52,7 +52,7 @@ const isSingleEmoji = (value: string): boolean => {
 const normalizeFolderIcon = (value: string): string => (isSingleEmoji(value) ? value.trim() : "📁");
 
 export const AddEditFolderScreen = ({ navigation, route }: Props) => {
-  const { folders, createFolder, updateFolder, canManageFolder } = useWaitingList();
+  const { folders, createFolder, updateFolder, canManageFolder } = useTrove();
   const editing = getFolderById(folders, route.params?.folderId);
 
   const [name, setName] = useState(editing?.name ?? "");

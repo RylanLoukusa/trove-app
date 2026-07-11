@@ -136,7 +136,7 @@ type SavedCollaboratorRow = {
   user_id: string;
 };
 
-const PENDING_INVITE_TOKEN_KEY = "the-waiting-list:pendingFolderInviteToken";
+const PENDING_INVITE_TOKEN_KEY = "trove:pendingFolderInviteToken";
 
 export const buildFolderInviteLink = (token: string): string =>
   `trove://share-invite/${encodeURIComponent(token)}`;
@@ -243,18 +243,18 @@ export const loadFolderSharing = async (
   shares: FolderShare[];
 }> => {
   const [accessResult, sharesResult, invitesResult] = await Promise.all([
-    supabase.rpc("list_waiting_list_folder_access", {
+    supabase.rpc("trove_list_folder_access", {
       target_folder_id: folderId,
     }),
     supabase
-      .from("waiting_list_folder_shares")
+      .from("trove_folder_shares")
       .select(
         "id, folder_id, owner_id, shared_with_user_id, role, scope, created_at, updated_at",
       )
       .eq("folder_id", folderId)
       .order("created_at", { ascending: false }),
     supabase
-      .from("waiting_list_folder_share_invites")
+      .from("trove_folder_share_invites")
       .select(
         "id, folder_id, owner_id, email, role, scope, status, token, accepted_by_user_id, accepted_at, email_delivery_id, email_last_error, email_sent_at, created_at, updated_at",
       )
@@ -300,7 +300,7 @@ export const loadFolderSharing = async (
     }
   }
 
-  if (accessResult.error && !isMissingRpcError(accessResult.error, "list_waiting_list_folder_access")) {
+  if (accessResult.error && !isMissingRpcError(accessResult.error, "trove_list_folder_access")) {
     return {
       access: [],
       error: errorMessage(accessResult.error, "Unable to load folder access."),
@@ -371,10 +371,10 @@ export const shareFolderByEmail = async (
 export const loadSavedCollaborators = async (
   supabase: SupabaseClient,
 ): Promise<{ collaborators: SavedCollaborator[]; error?: string }> => {
-  const { data, error } = await supabase.rpc("list_waiting_list_saved_collaborators");
+  const { data, error } = await supabase.rpc("trove_list_saved_collaborators");
 
   if (error) {
-    if (isMissingRpcError(error, "list_waiting_list_saved_collaborators")) {
+    if (isMissingRpcError(error, "trove_list_saved_collaborators")) {
       return { collaborators: [] };
     }
 
@@ -398,7 +398,7 @@ export const shareFolderWithCollaborator = async (
     scope: FolderShareScope;
   },
 ): Promise<{ emailError?: string; emailSent?: boolean; error?: string; result?: "invite" | "share" }> => {
-  const { error } = await supabase.rpc("share_waiting_list_folder_with_user", {
+  const { error } = await supabase.rpc("trove_share_folder_with_user", {
     target_folder_id: input.folderId,
     target_user_id: input.collaborator.id,
     share_role: input.role,
@@ -414,7 +414,7 @@ export const updateFolderShare = async (
   updates: { role?: FolderShareRole; scope?: FolderShareScope },
 ): Promise<{ error?: string }> => {
   const { error } = await supabase
-    .from("waiting_list_folder_shares")
+    .from("trove_folder_shares")
     .update(updates)
     .eq("id", shareId);
 
@@ -426,7 +426,7 @@ export const removeFolderShare = async (
   shareId: string,
 ): Promise<{ error?: string }> => {
   const { error } = await supabase
-    .from("waiting_list_folder_shares")
+    .from("trove_folder_shares")
     .delete()
     .eq("id", shareId);
 
@@ -438,7 +438,7 @@ export const revokeFolderInvite = async (
   inviteId: string,
 ): Promise<{ error?: string }> => {
   const { error } = await supabase
-    .from("waiting_list_folder_share_invites")
+    .from("trove_folder_share_invites")
     .update({ status: "revoked" })
     .eq("id", inviteId);
 
@@ -449,7 +449,7 @@ export const acceptFolderInvite = async (
   supabase: SupabaseClient,
   token: string,
 ): Promise<{ error?: string; shareId?: string }> => {
-  const { data, error } = await supabase.rpc("accept_waiting_list_folder_invite", {
+  const { data, error } = await supabase.rpc("trove_accept_folder_invite", {
     invite_token: token,
   });
 

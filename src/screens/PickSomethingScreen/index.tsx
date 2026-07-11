@@ -9,7 +9,7 @@ import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { SavedItem } from "../../types/models";
 import { getFolderHierarchyRows, getFolderPathLabel } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
@@ -67,7 +67,7 @@ const PickedItemRow = React.memo(function PickedItemRow({
 });
 
 export const PickSomethingScreen = ({ navigation, route }: Props) => {
-  const { folders, isReady, items } = useWaitingList();
+  const { folders, isReady, items } = useTrove();
   const [folderId, setFolderId] = useState<string | undefined>(route.params?.folderId);
   const [highPriorityOnly, setHighPriorityOnly] = useState(false);
   const [picked, setPicked] = useState<SavedItem | undefined>(() =>

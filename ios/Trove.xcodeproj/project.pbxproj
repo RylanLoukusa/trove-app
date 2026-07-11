@@ -11,7 +11,7 @@
 		19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */; };
 		244BF043D225B92FCE868DA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		A03C101C6A36F63A7AFACFF9 /* libPods-TheWaitingList.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */; };
+		A03C101C6A36F63A7AFACFF9 /* libPods-Trove.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81F66CC637A9D94B372566C1 /* libPods-Trove.a */; };
 		A1B2C3D4E5F6012345678902 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678901 /* ShareViewController.swift */; };
 		A1B2C3D4E5F6012345678907 /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678905 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1B2C3D4E5F6012345678914 /* SharedImportModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */; };
@@ -45,25 +45,25 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* TheWaitingList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TheWaitingList.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = TheWaitingList/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = TheWaitingList/Info.plist; sourceTree = "<group>"; };
-		41E2AD3279CCEC6B1C8C6A4F /* Pods-TheWaitingList.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.release.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.release.xcconfig"; sourceTree = "<group>"; };
-		5369AB779FF23CE7A9F3DAE2 /* Pods-TheWaitingList.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TheWaitingList.debug.xcconfig"; path = "Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList.debug.xcconfig"; sourceTree = "<group>"; };
-		564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-TheWaitingList/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TheWaitingList.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07F961A680F5B00A75B9A /* Trove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Trove.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Trove/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Trove/Info.plist; sourceTree = "<group>"; };
+		41E2AD3279CCEC6B1C8C6A4F /* Pods-Trove.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Trove.release.xcconfig"; path = "Target Support Files/Pods-Trove/Pods-Trove.release.xcconfig"; sourceTree = "<group>"; };
+		5369AB779FF23CE7A9F3DAE2 /* Pods-Trove.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Trove.debug.xcconfig"; path = "Target Support Files/Pods-Trove/Pods-Trove.debug.xcconfig"; sourceTree = "<group>"; };
+		564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Trove/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		81F66CC637A9D94B372566C1 /* libPods-Trove.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Trove.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F6012345678901 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6012345678903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F6012345678904 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		A1B2C3D4E5F6012345678905 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedImportModule.swift; path = TheWaitingList/SharedImportModule.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SharedImportModuleBridge.m; path = TheWaitingList/SharedImportModuleBridge.m; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = TheWaitingList/SplashScreen.storyboard; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedImportModule.swift; path = Trove/SharedImportModule.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SharedImportModuleBridge.m; path = Trove/SharedImportModuleBridge.m; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Trove/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = TheWaitingList/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Trove/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = TheWaitingList/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* TheWaitingList-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "TheWaitingList-Bridging-Header.h"; path = "TheWaitingList/TheWaitingList-Bridging-Header.h"; sourceTree = "<group>"; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Trove/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* Trove-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Trove-Bridging-Header.h"; path = "Trove/Trove-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,7 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A03C101C6A36F63A7AFACFF9 /* libPods-TheWaitingList.a in Frameworks */,
+				A03C101C6A36F63A7AFACFF9 /* libPods-Trove.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,27 +85,27 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		13B07FAE1A68108700A75B9A /* TheWaitingList */ = {
+		13B07FAE1A68108700A75B9A /* Trove */ = {
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */,
 				A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */,
-				F11748442D0722820044C1D9 /* TheWaitingList-Bridging-Header.h */,
+				F11748442D0722820044C1D9 /* Trove-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */,
 			);
-			name = TheWaitingList;
+			name = Trove;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				81F66CC637A9D94B372566C1 /* libPods-TheWaitingList.a */,
+				81F66CC637A9D94B372566C1 /* libPods-Trove.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -113,8 +113,8 @@
 		6A5F7DEBBF40767C90A8914A /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				5369AB779FF23CE7A9F3DAE2 /* Pods-TheWaitingList.debug.xcconfig */,
-				41E2AD3279CCEC6B1C8C6A4F /* Pods-TheWaitingList.release.xcconfig */,
+				5369AB779FF23CE7A9F3DAE2 /* Pods-Trove.debug.xcconfig */,
+				41E2AD3279CCEC6B1C8C6A4F /* Pods-Trove.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -130,7 +130,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				13B07FAE1A68108700A75B9A /* TheWaitingList */,
+				13B07FAE1A68108700A75B9A /* Trove */,
 				A1B2C3D4E5F6012345678911 /* ShareExtension */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
@@ -146,7 +146,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* TheWaitingList.app */,
+				13B07F961A680F5B00A75B9A /* Trove.app */,
 				A1B2C3D4E5F6012345678905 /* ShareExtension.appex */,
 			);
 			name = Products;
@@ -165,7 +165,7 @@
 		B32652956759906635FD0460 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				C6F939F8C2C17DDEB5D8BA57 /* TheWaitingList */,
+				C6F939F8C2C17DDEB5D8BA57 /* Trove */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -176,23 +176,23 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = TheWaitingList/Supporting;
+			path = Trove/Supporting;
 			sourceTree = "<group>";
 		};
-		C6F939F8C2C17DDEB5D8BA57 /* TheWaitingList */ = {
+		C6F939F8C2C17DDEB5D8BA57 /* Trove */ = {
 			isa = PBXGroup;
 			children = (
 				564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */,
 			);
-			name = TheWaitingList;
+			name = Trove;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* TheWaitingList */ = {
+		13B07F861A680F5B00A75B9A /* Trove */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "TheWaitingList" */;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Trove" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
 				2AEF6BE4505C66356A823F01 /* [Expo] Configure project */,
@@ -209,9 +209,9 @@
 			dependencies = (
 				A1B2C3D4E5F6012345678910 /* PBXTargetDependency */,
 			);
-			name = TheWaitingList;
-			productName = TheWaitingList;
-			productReference = 13B07F961A680F5B00A75B9A /* TheWaitingList.app */;
+			name = Trove;
+			productName = Trove;
+			productReference = 13B07F961A680F5B00A75B9A /* Trove.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A1B2C3D4E5F601234567890C /* ShareExtension */ = {
@@ -250,7 +250,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "TheWaitingList" */;
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Trove" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -263,7 +263,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* TheWaitingList */,
+				13B07F861A680F5B00A75B9A /* Trove */,
 				A1B2C3D4E5F601234567890C /* ShareExtension */,
 			);
 		};
@@ -323,7 +323,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-TheWaitingList-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-Trove-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -341,18 +341,18 @@
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/TheWaitingList/TheWaitingList.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-TheWaitingList/expo-configure-project.sh",
+				"$(SRCROOT)/Trove/Trove.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Trove/expo-configure-project.sh",
 			);
 			name = "[Expo] Configure project";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-TheWaitingList/ExpoModulesProvider.swift",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Trove/ExpoModulesProvider.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-TheWaitingList/expo-configure-project.sh\"\n";
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Trove/expo-configure-project.sh\"\n";
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -360,7 +360,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList-resources.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-Trove/Pods-Trove-resources.sh",
 				"${PODS_CONFIGURATION_BUILD_DIR}/AppAuth/AppAuthCore_Privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
@@ -393,7 +393,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Trove/Pods-Trove-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		8A61A46C83099734F913DA80 /* [CP] Embed Pods Frameworks */ = {
@@ -402,7 +402,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList-frameworks.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-Trove/Pods-Trove-frameworks.sh",
 				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
 				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
 				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
@@ -415,7 +415,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TheWaitingList/Pods-TheWaitingList-frameworks.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Trove/Pods-Trove-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -453,11 +453,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5369AB779FF23CE7A9F3DAE2 /* Pods-TheWaitingList.debug.xcconfig */;
+			baseConfigurationReference = 5369AB779FF23CE7A9F3DAE2 /* Pods-Trove.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = TheWaitingList/TheWaitingList.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Trove/Trove.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -467,7 +467,7 @@
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = TheWaitingList/Info.plist;
+				INFOPLIST_FILE = Trove/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -480,9 +480,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist;
-				PRODUCT_NAME = TheWaitingList;
-				SWIFT_OBJC_BRIDGING_HEADER = "TheWaitingList/TheWaitingList-Bridging-Header.h";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove;
+				PRODUCT_NAME = Trove;
+				SWIFT_OBJC_BRIDGING_HEADER = "Trove/Trove-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -492,16 +492,16 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 41E2AD3279CCEC6B1C8C6A4F /* Pods-TheWaitingList.release.xcconfig */;
+			baseConfigurationReference = 41E2AD3279CCEC6B1C8C6A4F /* Pods-Trove.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = TheWaitingList/TheWaitingList.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Trove/Trove.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9YNCQGQ47P;
-				INFOPLIST_FILE = TheWaitingList/Info.plist;
+				INFOPLIST_FILE = Trove/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -514,9 +514,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist;
-				PRODUCT_NAME = TheWaitingList;
-				SWIFT_OBJC_BRIDGING_HEADER = "TheWaitingList/TheWaitingList-Bridging-Header.h";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove;
+				PRODUCT_NAME = Trove;
+				SWIFT_OBJC_BRIDGING_HEADER = "Trove/Trove-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -659,7 +659,7 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove.ShareExtension;
 				PRODUCT_NAME = ShareExtension;
 				SKIP_INSTALL = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -686,7 +686,7 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.thewaitinglist.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove.ShareExtension;
 				PRODUCT_NAME = ShareExtension;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -697,7 +697,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "TheWaitingList" */ = {
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Trove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
@@ -706,7 +706,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "TheWaitingList" */ = {
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Trove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,

@@ -12,7 +12,7 @@ import {
 import { emojiCategories } from "../data/emojiPalette";
 import { getSupabase } from "../lib/supabase";
 import { colors, spacing } from "../theme/theme";
-import type { CommentAuthor, CommentReactionType, CommentTargetType, WaitingListComment } from "../types/models";
+import type { CommentAuthor, CommentReactionType, CommentTargetType, TroveComment } from "../types/models";
 import { MediaImage } from "./MediaImage";
 
 type Props = {
@@ -35,7 +35,7 @@ const legacyReactionEmoji: Record<string, string> = {
   seen: "👀",
 };
 
-const authorName = (comment: WaitingListComment): string =>
+const authorName = (comment: TroveComment): string =>
   comment.author?.displayName || comment.author?.email || "Someone";
 
 const timestamp = (value: string): string =>
@@ -112,7 +112,7 @@ const CommentComposer = ({
 };
 
 type CommentRowProps = {
-  comment: WaitingListComment;
+  comment: TroveComment;
   currentUserId: string;
   isReply?: boolean;
   onDelete: (commentId: string) => void;
@@ -121,12 +121,12 @@ type CommentRowProps = {
 };
 
 type EmojiReactionPickerProps = {
-  comment: WaitingListComment;
+  comment: TroveComment;
   onSelectReaction: (reaction: CommentReactionType) => void;
 };
 
 type ReactionRosterSheetProps = {
-  comment: WaitingListComment;
+  comment: TroveComment;
   onClose: () => void;
 };
 
@@ -488,7 +488,7 @@ const CommentRow = ({
 
 export const CommentThread = ({ targetId, targetType }: Props) => {
   const { session } = useAuth();
-  const [comments, setComments] = useState<WaitingListComment[]>([]);
+  const [comments, setComments] = useState<TroveComment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
@@ -532,7 +532,7 @@ export const CommentThread = ({ targetId, targetType }: Props) => {
   }, [currentUserId, reload, supabase, targetId, targetType]);
 
   const repliesByParentId = useMemo(() => {
-    const grouped = new Map<string, WaitingListComment[]>();
+    const grouped = new Map<string, TroveComment[]>();
     comments
       .filter((comment) => comment.parentCommentId)
       .forEach((reply) => {

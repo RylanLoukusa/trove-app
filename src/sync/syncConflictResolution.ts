@@ -1,4 +1,4 @@
-import type { Folder, SavedItem, WaitingListData } from "../types/models";
+import type { Folder, SavedItem, TroveData } from "../types/models";
 import type { SyncConflictSummary } from "./syncBaseline";
 
 export type SyncFieldChoice = "local" | "remote";
@@ -25,19 +25,19 @@ const applyRemoteFieldChoices = (
 };
 
 export const mergeConflictFields = (
-  waitingList: WaitingListData,
+  troveData: TroveData,
   conflict: SyncConflictSummary,
   fieldChoices: Record<string, SyncFieldChoice>,
   updatedAt: string,
-): WaitingListData => {
+): TroveData => {
   if (!conflict.fields || conflict.fields.length === 0) {
-    return waitingList;
+    return troveData;
   }
 
   if (conflict.entityKind === "folders") {
     return {
-      ...waitingList,
-      folders: waitingList.folders.map((folder) => {
+      ...troveData,
+      folders: troveData.folders.map((folder) => {
         if (folder.id !== conflict.entityId) return folder;
 
         return {
@@ -49,8 +49,8 @@ export const mergeConflictFields = (
   }
 
   return {
-    ...waitingList,
-    items: waitingList.items.map((item) => {
+    ...troveData,
+    items: troveData.items.map((item) => {
       if (item.id !== conflict.entityId) return item;
 
       return {

@@ -9,7 +9,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
@@ -40,7 +40,7 @@ const ItemDetailSkeleton = () => (
 );
 
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
-  const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useWaitingList();
+  const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useTrove();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;

@@ -8,7 +8,7 @@ import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useAuth } from "../../auth/AuthContext";
 import { Folder, SavedItem } from "../../types/models";
@@ -77,7 +77,7 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 });
 
 export const HomeScreen = ({ navigation }: Props) => {
-  const { folders, isReady, items, syncSnapshot, syncToRemote } = useWaitingList();
+  const { folders, isReady, items, syncSnapshot, syncToRemote } = useTrove();
   const { session, signOut } = useAuth();
 
   const onPressSearch = useCallback(() => {

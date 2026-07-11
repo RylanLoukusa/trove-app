@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "TheWaitingList.app"
-               BlueprintName = "TheWaitingList"
-               ReferencedContainer = "container:TheWaitingList.xcodeproj">
+               BuildableName = "Trove.app"
+               BlueprintName = "Trove"
+               ReferencedContainer = "container:Trove.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "TheWaitingListTests.xctest"
-               BlueprintName = "TheWaitingListTests"
-               ReferencedContainer = "container:TheWaitingList.xcodeproj">
+               BuildableName = "TroveTests.xctest"
+               BlueprintName = "TroveTests"
+               ReferencedContainer = "container:Trove.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TheWaitingList.app"
-            BlueprintName = "TheWaitingList"
-            ReferencedContainer = "container:TheWaitingList.xcodeproj">
+            BuildableName = "Trove.app"
+            BlueprintName = "Trove"
+            ReferencedContainer = "container:Trove.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TheWaitingList.app"
-            BlueprintName = "TheWaitingList"
-            ReferencedContainer = "container:TheWaitingList.xcodeproj">
+            BuildableName = "Trove.app"
+            BlueprintName = "Trove"
+            ReferencedContainer = "container:Trove.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

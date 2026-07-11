@@ -5,7 +5,7 @@
     "scheme": "trove",
     "icon": "./assets/icon.png",
     "ios": {
-      "bundleIdentifier": "com.rylanloukusa.thewaitinglist"
+      "bundleIdentifier": "com.rylanloukusa.trove"
     }
   }
 }

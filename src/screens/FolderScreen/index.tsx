@@ -12,7 +12,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
@@ -170,7 +170,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 });
 
 export const FolderScreen = ({ navigation, route }: Props) => {
-  const { folders, isReady, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useWaitingList();
+  const { folders, isReady, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 

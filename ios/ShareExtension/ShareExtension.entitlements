@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.rylanloukusa.thewaitinglist</string>
+		<string>group.com.rylanloukusa.trove</string>
 	</array>
 </dict>
 </plist>

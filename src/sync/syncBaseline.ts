@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { WaitingListData } from "../types/models";
+import type { TroveData } from "../types/models";
 
 export type SyncBaseline = {
   folders: Record<string, string>;
@@ -35,14 +35,14 @@ const emptyBaseline: SyncBaseline = {
   items: {},
 };
 
-const syncBaselineKey = (userId: string) => `the-waiting-list:syncBaseline:${userId}`;
+const syncBaselineKey = (userId: string) => `trove:syncBaseline:${userId}`;
 
-export const baselineFromWaitingList = (waitingList: WaitingListData): SyncBaseline => ({
+export const baselineFromTroveData = (troveData: TroveData): SyncBaseline => ({
   folders: Object.fromEntries(
-    waitingList.folders.map((folder) => [folder.id, folder.updatedAt]),
+    troveData.folders.map((folder) => [folder.id, folder.updatedAt]),
   ),
   items: Object.fromEntries(
-    waitingList.items.map((item) => [item.id, item.updatedAt]),
+    troveData.items.map((item) => [item.id, item.updatedAt]),
   ),
 });
 

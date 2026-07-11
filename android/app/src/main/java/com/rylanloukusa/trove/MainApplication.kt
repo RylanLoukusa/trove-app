@@ -1,4 +1,4 @@
-package com.rylanloukusa.thewaitinglist
+package com.rylanloukusa.trove
 
 import android.app.Application
 import android.content.res.Configuration

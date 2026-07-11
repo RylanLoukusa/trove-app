@@ -63,10 +63,10 @@ private struct ShareDraft {
 }
 
 final class ShareViewController: UIViewController {
-  private let appGroupIdentifier = "group.com.rylanloukusa.thewaitinglist"
+  private let appGroupIdentifier = "group.com.rylanloukusa.trove"
   private let folderSnapshotFileName = "share-extension-folders.json"
   private let latestImportIdKey = "latestSharedImportId"
-  private let logger = Logger(subsystem: "com.rylanloukusa.thewaitinglist.shareextension", category: "ShareImport")
+  private let logger = Logger(subsystem: "com.rylanloukusa.trove.shareextension", category: "ShareImport")
 
   private let scrollView = UIScrollView()
   private let contentStack = UIStackView()

@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import type { SyncConflictResolution, SyncFieldChoice } from "../../sync/syncConflictResolution";
 import { styles } from "./styles";
 
@@ -28,7 +28,7 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
     items,
     resolveSyncConflict,
     syncSnapshot,
-  } = useWaitingList();
+  } = useTrove();
   const [busy, setBusy] = useState<"keepLocal" | "merge" | "useRemote" | null>(null);
   const [fieldChoices, setFieldChoices] = useState<Record<string, SyncFieldChoice>>({});
 

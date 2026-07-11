@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.rylanloukusa.thewaitinglist'
+    namespace 'com.rylanloukusa.trove'
     defaultConfig {
-        applicationId 'com.rylanloukusa.thewaitinglist'
+        applicationId 'com.rylanloukusa.trove'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -30,15 +30,13 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>trove</string>
-          <string>thewaitinglist</string>
-          <string>com.rylanloukusa.thewaitinglist</string>
+          <string>com.rylanloukusa.trove</string>
         </array>
       </dict>
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
           <string>exp+trove-app</string>
-          <string>exp+the-waiting-list</string>
         </array>
       </dict>
       <dict>

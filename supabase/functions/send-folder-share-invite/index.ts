@@ -139,7 +139,7 @@ const updateInviteEmailStatus = async (
   if (!inviteId) return;
 
   await supabaseFetch(
-    `/rest/v1/waiting_list_folder_share_invites?id=eq.${encodeURIComponent(inviteId)}`,
+    `/rest/v1/trove_folder_share_invites?id=eq.${encodeURIComponent(inviteId)}`,
     {
       body: JSON.stringify({
         email_delivery_id: input.deliveryId ?? null,
@@ -249,7 +249,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "Email and folder are required." }, 400);
     }
 
-    const shareRows = await supabaseFetch<ShareRpcRow[]>("/rest/v1/rpc/share_waiting_list_folder", {
+    const shareRows = await supabaseFetch<ShareRpcRow[]>("/rest/v1/rpc/trove_share_folder", {
       body: JSON.stringify({
         target_email: email,
         target_folder_id: folderId,
@@ -264,7 +264,7 @@ Deno.serve(async (request) => {
     const result: ShareResult = shareRow?.share_id ? "share" : "invite";
 
     const folders = await supabaseFetch<FolderRow[]>(
-      `/rest/v1/waiting_list_folders?select=id,name,owner_id&id=eq.${encodeURIComponent(folderId)}&limit=1`,
+      `/rest/v1/trove_folders?select=id,name,owner_id&id=eq.${encodeURIComponent(folderId)}&limit=1`,
       { method: "GET", serviceRole: true },
     );
     const folder = folders[0];
@@ -277,7 +277,7 @@ Deno.serve(async (request) => {
 
     if (result === "invite" && inviteId) {
       const invites = await supabaseFetch<InviteRow[]>(
-        `/rest/v1/waiting_list_folder_share_invites?select=id,email,token&id=eq.${encodeURIComponent(inviteId)}&limit=1`,
+        `/rest/v1/trove_folder_share_invites?select=id,email,token&id=eq.${encodeURIComponent(inviteId)}&limit=1`,
         { method: "GET", serviceRole: true },
       );
       const invite = invites[0];

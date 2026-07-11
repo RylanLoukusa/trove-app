@@ -4,7 +4,7 @@ import type {
   CommentReactionDetail,
   CommentReactionType,
   CommentTargetType,
-  WaitingListComment,
+  TroveComment,
 } from "../types/models";
 
 type CommentRow = {
@@ -108,9 +108,9 @@ export const loadCommentThread = async (
     targetId: string;
     targetType: CommentTargetType;
   },
-): Promise<{ comments: WaitingListComment[]; error?: string }> => {
+): Promise<{ comments: TroveComment[]; error?: string }> => {
   const { data, error } = await supabase
-    .from("waiting_list_comments")
+    .from("trove_comments")
     .select("id, target_type, target_id, parent_comment_id, author_id, body, created_at, updated_at, deleted_at")
     .eq("target_type", input.targetType)
     .eq("target_id", input.targetId)
@@ -123,7 +123,7 @@ export const loadCommentThread = async (
 
   const reactionsResult = await (commentIds.length
       ? supabase
-          .from("waiting_list_comment_reactions")
+          .from("trove_comment_reactions")
           .select("comment_id, user_id, reaction")
           .in("comment_id", commentIds)
       : Promise.resolve({ data: [], error: null }));
@@ -185,9 +185,9 @@ export const createComment = async (
     targetId: string;
     targetType: CommentTargetType;
   },
-): Promise<{ comment?: WaitingListComment; error?: string }> => {
+): Promise<{ comment?: TroveComment; error?: string }> => {
   const { data, error } = await supabase
-    .from("waiting_list_comments")
+    .from("trove_comments")
     .insert({
       author_id: input.authorId,
       body: input.body.trim(),
@@ -224,7 +224,7 @@ export const softDeleteComment = async (
   commentId: string,
 ): Promise<{ error?: string }> => {
   const { error } = await supabase
-    .from("waiting_list_comments")
+    .from("trove_comments")
     .update({ body: "", deleted_at: new Date().toISOString() })
     .eq("id", commentId);
 
@@ -241,7 +241,7 @@ export const setCommentReaction = async (
   },
 ): Promise<{ error?: string }> => {
   if (input.shouldReact) {
-    const { error } = await supabase.from("waiting_list_comment_reactions").upsert(
+    const { error } = await supabase.from("trove_comment_reactions").upsert(
       {
         comment_id: input.commentId,
         reaction: input.reaction,
@@ -253,7 +253,7 @@ export const setCommentReaction = async (
   }
 
   const { error } = await supabase
-    .from("waiting_list_comment_reactions")
+    .from("trove_comment_reactions")
     .delete()
     .eq("comment_id", input.commentId)
     .eq("reaction", input.reaction)
@@ -271,14 +271,14 @@ export const subscribeToCommentThread = (
   },
 ): RealtimeChannel => {
   const channel = supabase
-    .channel(`waiting-list-comments:${input.targetType}:${input.targetId}`)
+    .channel(`trove-comments:${input.targetType}:${input.targetId}`)
     .on(
       "postgres_changes",
       {
         event: "*",
         filter: `target_id=eq.${input.targetId}`,
         schema: "public",
-        table: "waiting_list_comments",
+        table: "trove_comments",
       },
       (payload) => {
         const change = payload as {
@@ -296,7 +296,7 @@ export const subscribeToCommentThread = (
       {
         event: "*",
         schema: "public",
-        table: "waiting_list_comment_reactions",
+        table: "trove_comment_reactions",
       },
       () => input.onChange(),
     )

@@ -32,7 +32,7 @@ import {
 } from "../../collaboration/folderSharing";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
-import { useWaitingList } from "../../storage/storage";
+import { useTrove } from "../../storage/storage";
 import { colors } from "../../theme/theme";
 import { getFolderById, getFolderPathLabel } from "../../utils/folderTree";
 import { styles } from "./styles";
@@ -163,7 +163,7 @@ const ChoicePills = <T extends string,>({
 
 export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const { session } = useAuth();
-  const { folders, refreshFromRemote, syncFolderForSharing } = useWaitingList();
+  const { folders, refreshFromRemote, syncFolderForSharing } = useTrove();
   const folder = getFolderById(folders, route.params.folderId);
 
   const [email, setEmail] = useState("");

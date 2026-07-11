@@ -2,7 +2,7 @@ import Foundation
 
 @objc(SharedImportModule)
 class SharedImportModule: NSObject {
-  private let appGroupIdentifier = "group.com.rylanloukusa.thewaitinglist"
+  private let appGroupIdentifier = "group.com.rylanloukusa.trove"
   private let folderSnapshotFileName = "share-extension-folders.json"
   private let latestImportIdKey = "latestSharedImportId"
 
