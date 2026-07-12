@@ -1,4 +1,22 @@
-import { Folder, ItemType, SavedItem, TroveData } from "../types/models";
+import { Folder, ItemPriority, ItemStatus, ItemType, SavedItem, TroveData } from "../types/models";
+
+export type ItemChoiceOption = { label: string; detail: string; tone: string };
+
+export const itemStatuses: ItemStatus[] = ["waiting", "planned", "done", "skipped"];
+export const itemPriorities: ItemPriority[] = ["low", "medium", "high"];
+
+export const statusChoices: Record<ItemStatus, ItemChoiceOption> = {
+  waiting: { label: "Waiting", detail: "Saved for later", tone: "#DFAE73" },
+  planned: { label: "Planned", detail: "Chosen and queued up", tone: "#6F8FAF" },
+  done: { label: "Done", detail: "Finished or visited", tone: "#6E8F72" },
+  skipped: { label: "Skipped", detail: "Not for now", tone: "#B85B53" },
+};
+
+export const priorityChoices: Record<ItemPriority, ItemChoiceOption> = {
+  low: { label: "Low", detail: "Nice to have", tone: "#8AA8A1" },
+  medium: { label: "Medium", detail: "Worth keeping in rotation", tone: "#DFAE73" },
+  high: { label: "High", detail: "Top of the list", tone: "#B85B53" },
+};
 
 export const isMediaItemType = (type: ItemType): boolean => type === "media" || type === "image" || type === "video";
 

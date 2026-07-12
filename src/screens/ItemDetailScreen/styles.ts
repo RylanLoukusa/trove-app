@@ -91,11 +91,20 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
+  contentCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
   description: {
     color: colors.ink,
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: spacing.lg,
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+  },
+  descriptionSecondary: {
+    marginTop: spacing.sm,
   },
   listBlock: {
     backgroundColor: colors.surface,
@@ -185,20 +194,78 @@ export const styles = StyleSheet.create({
   pill: {
     backgroundColor: colors.surface,
     borderRadius: 999,
-    color: colors.muted,
-    fontWeight: "800",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  section: {
-    color: colors.ink,
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: spacing.lg,
+  pillPressed: {
+    opacity: 0.72,
+  },
+  pillText: {
+    color: colors.muted,
+    fontWeight: "800",
   },
   meta: {
     color: colors.muted,
     marginTop: spacing.xs,
+  },
+  createdAt: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: spacing.lg,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  sectionAction: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderRadius: 999,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  sectionActionPressed: {
+    opacity: 0.65,
+  },
+  addTagRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  addTagInput: {
+    backgroundColor: colors.background,
+    borderRadius: 999,
+    color: colors.ink,
+    flex: 1,
+    fontSize: 14,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  addTagButton: {
+    alignItems: "center",
+    backgroundColor: colors.accentDark,
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  addTagButtonDisabled: {
+    opacity: 0.4,
+  },
+  commentThread: {
+    marginTop: 0,
+  },
+  topBarAction: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xs,
+  },
+  topBarActionPressed: {
+    opacity: 0.55,
   },
   relatedCard: {
     backgroundColor: colors.surface,

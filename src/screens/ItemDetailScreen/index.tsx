@@ -1,19 +1,26 @@
-import React, { useCallback, useMemo, useRef } from "react";
-import { Alert, GestureResponderEvent, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AppButton } from "../../components/AppButton";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react-native";
+import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { CommentThread } from "../../components/CommentThread";
-import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
+import { MediaCollectionDisplay, resolveDisplayItems } from "../../components/MediaCollectionDisplay";
+import { MediaFullscreenViewer } from "../../components/MediaFullscreenViewer";
 import { MediaImage } from "../../components/MediaImage";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { Section } from "../../components/Section";
+import { TagChip } from "../../components/TagChip";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
+import { colors } from "../../theme/theme";
 import { useTrove } from "../../storage/storage";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
-import { getItemTypeLabel } from "../../utils/itemTypes";
+import { getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
@@ -42,8 +49,13 @@ const ItemDetailSkeleton = () => (
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useTrove();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
+  const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
+  const [isPrioritySheetOpen, setIsPrioritySheetOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTagText, setNewTagText] = useState("");
+  const newTagInputRef = useRef<TextInput>(null);
 
   const folderItems = useMemo(
     () => (item ? getItemsInFolder(items, item.folderId) : []),
@@ -56,6 +68,10 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     () => (item ? getRelatedItems(item, folderItems) : []),
     [folderItems, item],
   );
+  const mediaDisplayItems = useMemo(
+    () => (item ? resolveDisplayItems(item.media, item.mediaItems) : []),
+    [item],
+  );
 
   const openAdjacentItem = useCallback(
     (itemId?: string): void => {
@@ -65,26 +81,18 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     [navigation],
   );
 
-  const onTouchStart = useCallback((event: GestureResponderEvent): void => {
-    const { pageX, pageY } = event.nativeEvent;
-    swipeStartRef.current = { x: pageX, y: pageY };
-  }, []);
-
-  const onTouchEnd = useCallback(
-    (event: GestureResponderEvent): void => {
-      if (!swipeStartRef.current) return;
-      const { pageX, pageY } = event.nativeEvent;
-      const deltaX = pageX - swipeStartRef.current.x;
-      const deltaY = pageY - swipeStartRef.current.y;
-      swipeStartRef.current = null;
-
-      if (Math.abs(deltaX) < 70 || Math.abs(deltaY) > 45) return;
-      if (deltaX > 0) {
-        openAdjacentItem(previousItem?.id);
-      } else {
-        openAdjacentItem(nextItem?.id);
-      }
-    },
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-70, 70])
+        .failOffsetY([-45, 45])
+        .onEnd((event) => {
+          if (event.translationX > 0) {
+            runOnJS(openAdjacentItem)(previousItem?.id);
+          } else {
+            runOnJS(openAdjacentItem)(nextItem?.id);
+          }
+        }),
     [nextItem?.id, openAdjacentItem, previousItem?.id],
   );
 
@@ -125,6 +133,32 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const onPressOpenSourceUrl = useCallback(() => {
     if (item?.sourceUrl) void Linking.openURL(item.sourceUrl);
   }, [item?.sourceUrl]);
+
+  const onPressTag = useCallback(
+    (tag: string) => {
+      navigation.navigate("Search", { query: tag });
+    },
+    [navigation],
+  );
+
+  const onToggleAddTag = useCallback(() => {
+    setIsAddingTag((current) => !current);
+    setNewTagText("");
+  }, []);
+
+  const onSubmitNewTag = useCallback(() => {
+    if (!item) return;
+    const trimmed = newTagText.trim();
+    setNewTagText("");
+    if (!trimmed) return;
+
+    const alreadyExists = item.tags.some((tag) => tag.toLowerCase() === trimmed.toLowerCase());
+    if (!alreadyExists) {
+      updateItem(item.id, { tags: [...item.tags, trimmed] });
+    }
+
+    requestAnimationFrame(() => newTagInputRef.current?.focus());
+  }, [item, newTagText, updateItem]);
 
   const confirmDelete = useCallback((): void => {
     if (!item || !canEditCurrentItem) return;
@@ -172,158 +206,303 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
   const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
 
+  const tagsSection = (
+    <Section
+      title="Tags"
+      action={
+        canEditCurrentItem ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isAddingTag ? "Cancel adding tag" : "Add tag"}
+            hitSlop={8}
+            onPress={onToggleAddTag}
+            style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
+          >
+            {isAddingTag ? (
+              <X size={18} color={colors.accentDark} strokeWidth={2.6} />
+            ) : (
+              <Plus size={18} color={colors.accentDark} strokeWidth={2.6} />
+            )}
+          </Pressable>
+        ) : undefined
+      }
+    >
+      {item.tags.length ? (
+        <View style={styles.tagRow}>
+          {item.tags.map((tag) => (
+            <TagChip key={tag} label={tag} onPress={() => onPressTag(tag)} />
+          ))}
+        </View>
+      ) : (
+        !isAddingTag && <Text style={styles.meta}>No tags</Text>
+      )}
+      {isAddingTag && (
+        <View style={styles.addTagRow}>
+          <TextInput
+            ref={newTagInputRef}
+            autoFocus
+            blurOnSubmit={false}
+            onChangeText={setNewTagText}
+            onSubmitEditing={onSubmitNewTag}
+            placeholder="Add a tag"
+            placeholderTextColor={colors.muted}
+            returnKeyType="done"
+            style={styles.addTagInput}
+            value={newTagText}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add tag"
+            disabled={!newTagText.trim()}
+            onPress={onSubmitNewTag}
+            style={({ pressed }) => [
+              styles.addTagButton,
+              !newTagText.trim() && styles.addTagButtonDisabled,
+              pressed && !!newTagText.trim() && styles.sectionActionPressed,
+            ]}
+          >
+            <Plus size={16} color={colors.surface} strokeWidth={2.8} />
+          </Pressable>
+        </View>
+      )}
+    </Section>
+  );
+
+  const relatedSection = relatedItems.length > 0 && (
+    <Section title="Related Here">
+      {relatedItems.map((match) => (
+        <Pressable
+          key={match.item.id}
+          onPress={() => openAdjacentItem(match.item.id)}
+          style={({ pressed }) => [styles.relatedCard, pressed && styles.relatedCardPressed]}
+        >
+          <Text style={styles.relatedTitle}>{match.item.title}</Text>
+          <Text style={styles.relatedMeta}>{match.reasons.join(" · ")}</Text>
+        </Pressable>
+      ))}
+    </Section>
+  );
+
+  const commentsSection = (
+    <Section hideHeader>
+      <CommentThread targetType="item" targetId={item.id} style={styles.commentThread} />
+    </Section>
+  );
+
   return (
     <View style={styles.screen}>
-      <ScreenTopBar navigation={navigation} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        {folderItems.length > 1 && (
-          <View style={styles.itemNav}>
-            <Pressable
-              disabled={!previousItem}
-              onPress={() => openAdjacentItem(previousItem?.id)}
-              style={({ pressed }) => [
-                styles.itemNavButton,
-                !previousItem && styles.itemNavButtonDisabled,
-                pressed && previousItem && styles.itemNavButtonPressed,
-              ]}
-            >
-              <Text style={[styles.itemNavText, !previousItem && styles.itemNavTextDisabled]}>‹ Previous</Text>
-            </Pressable>
-            <Text style={styles.itemNavCount}>
-              {itemIndex + 1} / {folderItems.length}
-            </Text>
-            <Pressable
-              disabled={!nextItem}
-              onPress={() => openAdjacentItem(nextItem?.id)}
-              style={({ pressed }) => [
-                styles.itemNavButton,
-                !nextItem && styles.itemNavButtonDisabled,
-                pressed && nextItem && styles.itemNavButtonPressed,
-              ]}
-            >
-              <Text style={[styles.itemNavText, !nextItem && styles.itemNavTextDisabled]}>Next ›</Text>
-            </Pressable>
-          </View>
-        )}
-        <Text style={styles.type}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
-        {isSharedAccess(item) && (
-          <View style={styles.accessBadge}>
-            <Text style={styles.accessBadgeText}>Shared · {accessRoleLabel(item.accessRole)}</Text>
-          </View>
-        )}
-
-        {!!item.url && (
-          <View style={styles.preview}>
-            <Text style={styles.previewTitle}>Link preview</Text>
-            <Text style={styles.url} onPress={onPressOpenUrl}>
-              {item.url}
-            </Text>
-          </View>
-        )}
-
-        {!!item.sourceUrl && item.sourceUrl !== item.url && (
-          <View style={styles.preview}>
-            <Text style={styles.previewTitle}>
-              {item.sourcePlatform ? `Original on ${item.sourcePlatform}` : "Original source"}
-            </Text>
-            <Text style={styles.url} onPress={onPressOpenSourceUrl}>
-              {item.sourceUrl}
-            </Text>
-          </View>
-        )}
-
-        <MediaCollectionDisplay
-          media={item.media}
-          mediaItems={item.mediaItems}
-          itemHeight={400}
-          itemWidth={320}
-          style={styles.mediaPreview}
-        />
-
-        {!!item.description && <Text style={styles.description}>{item.description}</Text>}
-        {!!item.sharedText && <Text style={styles.description}>{item.sharedText}</Text>}
-
-        {item.type === "list" && !!item.listItems?.length && (
-          <View style={styles.listBlock}>
-            {item.listItems.map((listItem) => (
-              <View key={listItem.id} style={styles.listRow}>
-                {listItem.kind === "check" ? (
-                  <Pressable
-                    accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: !!listItem.checked }}
-                    onPress={() => onPressToggleChecklistItem(listItem.id)}
-                    style={({ pressed }) => [styles.listCheckbox, pressed && styles.listCheckboxPressed]}
-                  >
-                    <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={[styles.listMarker, styles.listBullet]}>•</Text>
-                )}
-                <Text style={[styles.listText, listItem.checked && styles.listTextDone]}>{listItem.text}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {shouldShowAttachments && (
-          <View style={styles.attachmentBlock}>
-            {item.attachments?.map((attachment) =>
-              attachment.mediaType === "image" ? (
-                <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
-              ) : (
-                <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.attachmentVideo} />
-              ),
-            )}
-          </View>
-        )}
-
-        <View style={styles.row}>
-          <Text style={styles.pill}>{item.status}</Text>
-          <Text style={styles.pill}>{item.priority} priority</Text>
-        </View>
-
-        <Text style={styles.section}>Tags</Text>
-        <Text style={styles.meta}>{item.tags.join(", ") || "No tags"}</Text>
-
-        <Text style={styles.section}>Created</Text>
-        <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
-
-        {relatedItems.length > 0 && (
-          <>
-            <Text style={styles.section}>Related Here</Text>
-            {relatedItems.map((match) => (
+      <ScreenTopBar
+        navigation={navigation}
+        rightActions={
+          canEditCurrentItem ? (
+            <>
               <Pressable
-                key={match.item.id}
-                onPress={() => openAdjacentItem(match.item.id)}
-                style={({ pressed }) => [styles.relatedCard, pressed && styles.relatedCardPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Mark as done"
+                hitSlop={8}
+                onPress={onPressMarkDone}
+                style={({ pressed }) => [styles.topBarAction, pressed && styles.topBarActionPressed]}
               >
-                <Text style={styles.relatedTitle}>{match.item.title}</Text>
-                <Text style={styles.relatedMeta}>{match.reasons.join(" · ")}</Text>
+                <Check size={22} color={colors.accentDark} strokeWidth={2.4} />
               </Pressable>
-            ))}
-          </>
-        )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Edit item"
+                hitSlop={8}
+                onPress={onPressEdit}
+                style={({ pressed }) => [styles.topBarAction, pressed && styles.topBarActionPressed]}
+              >
+                <Pencil size={22} color={colors.accentDark} strokeWidth={2.4} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete item"
+                hitSlop={8}
+                onPress={confirmDelete}
+                style={({ pressed }) => [styles.topBarAction, pressed && styles.topBarActionPressed]}
+              >
+                <Trash2 size={22} color={colors.danger} strokeWidth={2.4} />
+              </Pressable>
+            </>
+          ) : undefined
+        }
+      />
+      <GestureDetector gesture={panGesture}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {folderItems.length > 1 && (
+            <View style={styles.itemNav}>
+              <Pressable
+                disabled={!previousItem}
+                onPress={() => openAdjacentItem(previousItem?.id)}
+                style={({ pressed }) => [
+                  styles.itemNavButton,
+                  !previousItem && styles.itemNavButtonDisabled,
+                  pressed && previousItem && styles.itemNavButtonPressed,
+                ]}
+              >
+                <Text style={[styles.itemNavText, !previousItem && styles.itemNavTextDisabled]}>‹ Previous</Text>
+              </Pressable>
+              <Text style={styles.itemNavCount}>
+                {itemIndex + 1} / {folderItems.length}
+              </Text>
+              <Pressable
+                disabled={!nextItem}
+                onPress={() => openAdjacentItem(nextItem?.id)}
+                style={({ pressed }) => [
+                  styles.itemNavButton,
+                  !nextItem && styles.itemNavButtonDisabled,
+                  pressed && nextItem && styles.itemNavButtonPressed,
+                ]}
+              >
+                <Text style={[styles.itemNavText, !nextItem && styles.itemNavTextDisabled]}>Next ›</Text>
+              </Pressable>
+            </View>
+          )}
+          <Text style={styles.type}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
+          {isSharedAccess(item) && (
+            <View style={styles.accessBadge}>
+              <Text style={styles.accessBadgeText}>Shared · {accessRoleLabel(item.accessRole)}</Text>
+            </View>
+          )}
 
-        <CommentThread targetType="item" targetId={item.id} />
+          {!!item.url && (
+            <View style={styles.preview}>
+              <Text style={styles.previewTitle}>Link preview</Text>
+              <Text style={styles.url} onPress={onPressOpenUrl}>
+                {item.url}
+              </Text>
+            </View>
+          )}
 
-        {canEditCurrentItem ? (
-          <>
-            <AppButton label="Edit / Move" onPress={onPressEdit} style={styles.button} />
-            <AppButton label="Mark as done" variant="secondary" onPress={onPressMarkDone} style={styles.button} />
-            <AppButton label="Delete item" variant="danger" onPress={confirmDelete} style={styles.button} />
-          </>
-        ) : (
-          <Text style={styles.readOnlyNote}>You have view-only access to this item.</Text>
-        )}
-      </ScrollView>
+          {!!item.sourceUrl && item.sourceUrl !== item.url && (
+            <View style={styles.preview}>
+              <Text style={styles.previewTitle}>
+                {item.sourcePlatform ? `Original on ${item.sourcePlatform}` : "Original source"}
+              </Text>
+              <Text style={styles.url} onPress={onPressOpenSourceUrl}>
+                {item.sourceUrl}
+              </Text>
+            </View>
+          )}
+
+          <MediaCollectionDisplay
+            media={item.media}
+            mediaItems={item.mediaItems}
+            itemHeight={400}
+            itemWidth={320}
+            onPressItem={setViewerIndex}
+            style={styles.mediaPreview}
+          />
+
+          {(!!item.description || !!item.sharedText) && (
+            <View style={styles.contentCard}>
+              {!!item.description && <Text style={styles.description}>{item.description}</Text>}
+              {!!item.sharedText && (
+                <Text style={[styles.description, !!item.description && styles.descriptionSecondary]}>
+                  {item.sharedText}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {item.type === "list" && !!item.listItems?.length && (
+            <View style={styles.listBlock}>
+              {item.listItems.map((listItem) => (
+                <View key={listItem.id} style={styles.listRow}>
+                  {listItem.kind === "check" ? (
+                    <Pressable
+                      accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: !!listItem.checked }}
+                      onPress={() => onPressToggleChecklistItem(listItem.id)}
+                      style={({ pressed }) => [styles.listCheckbox, pressed && styles.listCheckboxPressed]}
+                    >
+                      <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.listMarker, styles.listBullet]}>•</Text>
+                  )}
+                  <Text style={[styles.listText, listItem.checked && styles.listTextDone]}>{listItem.text}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {shouldShowAttachments && (
+            <View style={styles.attachmentBlock}>
+              {item.attachments?.map((attachment) =>
+                attachment.mediaType === "image" ? (
+                  <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
+                ) : (
+                  <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.attachmentVideo} />
+                ),
+              )}
+            </View>
+          )}
+
+          <Text style={styles.createdAt}>{new Date(item.createdAt).toLocaleString()}</Text>
+
+          <View style={styles.row}>
+            <Pressable
+              disabled={!canEditCurrentItem}
+              onPress={() => setIsStatusSheetOpen(true)}
+              style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
+            >
+              <Text style={styles.pillText}>{statusChoices[item.status]?.label ?? item.status}</Text>
+            </Pressable>
+            <Pressable
+              disabled={!canEditCurrentItem}
+              onPress={() => setIsPrioritySheetOpen(true)}
+              style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
+            >
+              <Text style={styles.pillText}>{priorityChoices[item.priority]?.label ?? item.priority} priority</Text>
+            </Pressable>
+          </View>
+
+          {isSharedAccess(item) ? (
+            <>
+              {commentsSection}
+              {tagsSection}
+              {relatedSection}
+            </>
+          ) : (
+            <>
+              {tagsSection}
+              {relatedSection}
+              {commentsSection}
+            </>
+          )}
+
+          {!canEditCurrentItem && (
+            <Text style={styles.readOnlyNote}>You have view-only access to this item.</Text>
+          )}
+        </ScrollView>
+      </GestureDetector>
+
+      <ChoiceSheet
+        visible={isStatusSheetOpen}
+        title="Status"
+        options={itemStatuses.map((value) => ({ value, ...statusChoices[value] }))}
+        selectedValue={item.status}
+        onSelect={(value) => updateItem(item.id, { status: value })}
+        onClose={() => setIsStatusSheetOpen(false)}
+      />
+      <ChoiceSheet
+        visible={isPrioritySheetOpen}
+        title="Priority"
+        options={itemPriorities.map((value) => ({ value, ...priorityChoices[value] }))}
+        selectedValue={item.priority}
+        onSelect={(value) => updateItem(item.id, { priority: value })}
+        onClose={() => setIsPrioritySheetOpen(false)}
+      />
+      <MediaFullscreenViewer
+        visible={viewerIndex !== null}
+        items={mediaDisplayItems}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+      />
     </View>
   );
 };

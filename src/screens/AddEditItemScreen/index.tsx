@@ -12,14 +12,14 @@ import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supaba
 import { useTrove } from "../../storage/storage";
 import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
-import { isMediaItemType, normalizeItemType } from "../../utils/itemTypes";
+import { isMediaItemType, itemPriorities, itemStatuses, normalizeItemType, priorityChoices, statusChoices } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 
 const types = ["text", "list", "link", "media"] as const;
-const statuses: ItemStatus[] = ["waiting", "planned", "done", "skipped"];
-const priorities: ItemPriority[] = ["low", "medium", "high"];
+const statuses = itemStatuses;
+const priorities = itemPriorities;
 type SelectableItemType = (typeof types)[number];
 
 const typeChoices: Record<SelectableItemType, { label: string; detail: string; tone: string }> = {
@@ -27,19 +27,6 @@ const typeChoices: Record<SelectableItemType, { label: string; detail: string; t
   list: { label: "List", detail: "Checklist or bullet rows", tone: "#DFAE73" },
   link: { label: "Link", detail: "Articles, products, places", tone: "#6F8FAF" },
   media: { label: "Media", detail: "Photos, videos, and visual references", tone: "#B9856D" },
-};
-
-const statusChoices: Record<ItemStatus, { label: string; detail: string; tone: string }> = {
-  waiting: { label: "Waiting", detail: "Saved for later", tone: "#DFAE73" },
-  planned: { label: "Planned", detail: "Chosen and queued up", tone: "#6F8FAF" },
-  done: { label: "Done", detail: "Finished or visited", tone: "#6E8F72" },
-  skipped: { label: "Skipped", detail: "Not for now", tone: "#B85B53" },
-};
-
-const priorityChoices: Record<ItemPriority, { label: string; detail: string; tone: string }> = {
-  low: { label: "Low", detail: "Nice to have", tone: "#8AA8A1" },
-  medium: { label: "Medium", detail: "Worth keeping in rotation", tone: "#DFAE73" },
-  high: { label: "High", detail: "Top of the list", tone: "#B85B53" },
 };
 
 export const AddEditItemScreen = ({ navigation, route }: Props) => {

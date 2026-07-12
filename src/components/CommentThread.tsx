@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from "react-native";
 import { Maximize2, Minimize2, SmilePlus } from "lucide-react-native";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -18,6 +18,8 @@ import { MediaImage } from "./MediaImage";
 type Props = {
   targetId: string;
   targetType: CommentTargetType;
+  hideHeader?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
 type ComposerProps = {
@@ -486,7 +488,7 @@ const CommentRow = ({
   );
 };
 
-export const CommentThread = ({ targetId, targetType }: Props) => {
+export const CommentThread = ({ targetId, targetType, hideHeader = false, style }: Props) => {
   const { session } = useAuth();
   const [comments, setComments] = useState<TroveComment[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -615,11 +617,13 @@ export const CommentThread = ({ targetId, targetType }: Props) => {
   );
 
   return (
-    <View style={styles.thread}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Comments</Text>
-        <Text style={styles.count}>{comments.length}</Text>
-      </View>
+    <View style={[styles.thread, style]}>
+      {!hideHeader && (
+        <View style={styles.header}>
+          <Text style={styles.title}>Comments</Text>
+          <Text style={styles.count}>{comments.length}</Text>
+        </View>
+      )}
 
       {!supabase || !currentUserId ? (
         <Text style={styles.notice}>Sign in to view and join the discussion.</Text>
@@ -694,7 +698,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.ink,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
   },
   count: {

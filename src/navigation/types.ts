@@ -7,7 +7,7 @@ export type RootStackParamList = {
   AddEditFolder: { folderId?: string; parentFolderId?: string | null } | undefined;
   AddEditItem: { itemId?: string; folderId?: string; sharedImportId?: string } | undefined;
   ItemDetail: { itemId: string };
-  Search: undefined;
+  Search: { query?: string } | undefined;
   ShareFolder: { folderId: string };
   PickSomething: { folderId?: string } | undefined;
   Profile: undefined;

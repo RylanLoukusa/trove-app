@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet } from "react-native";
+import { Pressable, ScrollView, StyleSheet } from "react-native";
 import { MediaCollectionItem, MediaMetadata } from "../types/models";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
 import { SkeletonBlock } from "./Skeleton";
@@ -13,19 +13,19 @@ type Props = {
   itemHeight: number;
   itemWidth: number;
   nativeVideoControls?: boolean;
+  onPressItem?: (index: number) => void;
   style?: any;
 };
 
-type DisplayItem = MediaCollectionItem | (MediaMetadata & { id: string });
+export type DisplayItem = MediaCollectionItem | (MediaMetadata & { id: string });
 
-type StoredMediaTileProps = {
-  item: DisplayItem;
-  height: number;
-  nativeVideoControls: boolean;
-  width: number;
+export const resolveDisplayItems = (media?: MediaMetadata, mediaItems?: MediaCollectionItem[]): DisplayItem[] => {
+  if (mediaItems?.length) return mediaItems;
+  if (media?.storagePath) return [{ ...media, id: media.storagePath }];
+  return [];
 };
 
-const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMediaTileProps) => {
+export const useResolvedMediaUrl = (item: DisplayItem): { url: string | null; isLoading: boolean } => {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const localUri = "localUri" in item ? item.localUri : undefined;
@@ -39,7 +39,18 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMed
       .finally(() => setIsLoading(false));
   }, [item.storagePath]);
 
-  const displayUrl = localUri ?? signedUrl;
+  return { url: localUri ?? signedUrl, isLoading };
+};
+
+type StoredMediaTileProps = {
+  item: DisplayItem;
+  height: number;
+  nativeVideoControls: boolean;
+  width: number;
+};
+
+const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMediaTileProps) => {
+  const { url: displayUrl, isLoading } = useResolvedMediaUrl(item);
 
   if (displayUrl) {
     if (item.mediaType === "video") {
@@ -63,12 +74,8 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMed
   return null;
 };
 
-export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, nativeVideoControls = true, style }: Props) => {
-  const displayItems = useMemo<DisplayItem[]>(() => {
-    if (mediaItems?.length) return mediaItems;
-    if (media?.storagePath) return [{ ...media, id: media.storagePath }];
-    return [];
-  }, [media, mediaItems]);
+export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, nativeVideoControls = true, onPressItem, style }: Props) => {
+  const displayItems = useMemo<DisplayItem[]>(() => resolveDisplayItems(media, mediaItems), [media, mediaItems]);
 
   if (!displayItems.length) return null;
 
@@ -79,9 +86,19 @@ export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems
       showsHorizontalScrollIndicator={false}
       style={style}
     >
-      {displayItems.map((item) => (
-        <StoredMediaTile key={item.id} item={item} height={itemHeight} nativeVideoControls={nativeVideoControls} width={itemWidth} />
-      ))}
+      {displayItems.map((item, index) => {
+        const tile = (
+          <StoredMediaTile item={item} height={itemHeight} nativeVideoControls={nativeVideoControls} width={itemWidth} />
+        );
+
+        return onPressItem ? (
+          <Pressable key={item.id} onPress={() => onPressItem(index)}>
+            {tile}
+          </Pressable>
+        ) : (
+          <React.Fragment key={item.id}>{tile}</React.Fragment>
+        );
+      })}
     </ScrollView>
   );
 };

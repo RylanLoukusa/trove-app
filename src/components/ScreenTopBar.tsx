@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { NavigationProp } from "@react-navigation/native";
 import { ArrowLeftIcon, MenuIcon } from "lucide-react-native";
@@ -13,14 +13,16 @@ type Props = {
   /** When false, only top safe-area padding is applied (e.g. Home). */
   showBack?: boolean;
   onMenuPress?: () => void;
+  /** Extra actions rendered on the right side of the bar (e.g. edit/delete icon buttons). */
+  rightActions?: ReactNode;
 };
 
-export const ScreenTopBar = ({ navigation, showBack = true, onMenuPress }: Props) => {
+export const ScreenTopBar = ({ navigation, showBack = true, onMenuPress, rightActions }: Props) => {
   const insets = useSafeAreaInsets();
   const canGoBack = showBack && navigation.canGoBack();
 
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + spacing.xl }]}> 
+    <View style={[styles.bar, { paddingTop: insets.top + spacing.xl }]}>
       <View style={styles.leftActions}>
         {canGoBack ? (
           <Pressable
@@ -44,7 +46,9 @@ export const ScreenTopBar = ({ navigation, showBack = true, onMenuPress }: Props
           </Pressable>
         ) : null}
       </View>
-      {canGoBack && onMenuPress ? (
+      {rightActions ? (
+        <View style={styles.rightActions}>{rightActions}</View>
+      ) : canGoBack && onMenuPress ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open menu"
@@ -70,6 +74,11 @@ const styles = StyleSheet.create({
   leftActions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  rightActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
   },
   action: {
     alignItems: "center",

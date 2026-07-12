@@ -125,9 +125,9 @@ const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, onOp
   return <ItemCard item={item} folderPath={folderPath} onPress={onPress} />;
 });
 
-export const SearchScreen = ({ navigation }: Props) => {
+export const SearchScreen = ({ navigation, route }: Props) => {
   const { folders, isReady, items } = useTrove();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(route.params?.query ?? "");
   const [filter, setFilter] = useState<SearchFilter>("all");
   const [sort, setSort] = useState<SearchSort>("updated");
 
