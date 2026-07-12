@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -327,8 +327,9 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           ) : undefined
         }
       />
-      <GestureDetector gesture={panGesture}>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <GestureDetector gesture={panGesture}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
           {folderItems.length > 1 && (
             <View style={styles.itemNav}>
               <Pressable
@@ -478,8 +479,9 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           {!canEditCurrentItem && (
             <Text style={styles.readOnlyNote}>You have view-only access to this item.</Text>
           )}
-        </ScrollView>
-      </GestureDetector>
+          </ScrollView>
+        </GestureDetector>
+      </KeyboardAvoidingView>
 
       <ChoiceSheet
         visible={isStatusSheetOpen}

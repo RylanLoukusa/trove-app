@@ -9,6 +9,9 @@ export const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
+  keyboardAvoiding: {
+    flex: 1,
+  },
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,

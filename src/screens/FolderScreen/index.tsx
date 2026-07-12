@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -358,6 +358,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Breadcrumbs
           path={getFolderPath(folders, folder.id)}
@@ -475,6 +476,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
 
         <CommentThread targetType="folder" targetId={folder.id} />
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
