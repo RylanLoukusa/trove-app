@@ -4,6 +4,7 @@
     "slug": "trove-app",
     "scheme": "trove",
     "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.rylanloukusa.trove"
     }

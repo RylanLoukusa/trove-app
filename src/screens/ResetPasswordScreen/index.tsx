@@ -1,17 +1,20 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../../auth/AuthContext";
 import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ResetPassword">;
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export const ResetPasswordScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { updateRecoveredPassword, signOut } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

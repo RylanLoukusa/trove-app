@@ -1,7 +1,7 @@
 import "react-native-gesture-handler";
 import React from "react";
-import { ActivityIndicator, AppState, View } from "react-native";
-import { createNavigationContainerRef, LinkingOptions, NavigationContainer } from "@react-navigation/native";
+import { ActivityIndicator, AppState, useColorScheme, View } from "react-native";
+import { createNavigationContainerRef, DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { ThemeProvider, useThemeColors } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
 import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
@@ -159,16 +160,31 @@ function AppNavigator() {
     );
   }
 
+  const scheme = useColorScheme();
+  const themeColors = useThemeColors();
+  const navigationTheme = {
+    ...(scheme === "dark" ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(scheme === "dark" ? DarkTheme.colors : DefaultTheme.colors),
+      background: themeColors.background,
+      card: themeColors.surface,
+      border: themeColors.border,
+      text: themeColors.ink,
+      primary: themeColors.accentDark,
+    },
+  };
+
   return (
     <NavigationContainer
       ref={navigationRef}
       linking={linking}
+      theme={navigationTheme}
       onReady={() => {
         void openPendingSharedImport();
         void openPendingFolderInvite();
       }}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="auto" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isPasswordRecovery ? (
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
@@ -201,15 +217,17 @@ function AppNavigator() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <AuthProvider>
-            <TroveProvider>
-              <AppNavigator />
-            </TroveProvider>
-          </AuthProvider>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
+      <ThemeProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <SafeAreaProvider>
+            <AuthProvider>
+              <TroveProvider>
+                <AppNavigator />
+              </TroveProvider>
+            </AuthProvider>
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
