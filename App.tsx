@@ -30,7 +30,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ["trove://"],
+  prefixes: ["https://trovecollections.app", "trove://"],
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",

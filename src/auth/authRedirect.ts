@@ -1,1 +1,1 @@
-export const AUTH_CALLBACK_URL = "trove://auth/callback";
+export const AUTH_CALLBACK_URL = "https://trovecollections.app/auth/callback";

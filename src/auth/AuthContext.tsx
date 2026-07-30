@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) throw error;
-        setIsPasswordRecovery(isRecoveryLink);
+        if (isRecoveryLink) setIsPasswordRecovery(true);
         return;
       }
 
@@ -129,7 +129,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           refresh_token: refreshToken,
         });
         if (error) throw error;
-        setIsPasswordRecovery(isRecoveryLink);
+        if (isRecoveryLink) setIsPasswordRecovery(true);
         return;
       }
 

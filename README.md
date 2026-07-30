@@ -13,7 +13,7 @@ npm run start
 
 1. Create a project at [supabase.com](https://supabase.com) and apply the migrations in [`supabase/migrations`](supabase/migrations) (`supabase db push`, or paste each file into the SQL Editor in order).
 2. Enable **Email** auth under Authentication → Providers (adjust confirmations as you like for dev).
-3. Under Authentication → URL configuration, add your app redirect URLs (e.g. Expo dev: `exp://127.0.0.1:8081`, production build scheme from `app.json`: `trove://`).
+3. Under Authentication → URL configuration, add your app redirect URLs: Expo dev (`exp://127.0.0.1:8081`), the production Universal Link (`https://trovecollections.app/auth/callback`), and the `trove://` scheme as a fallback.
 4. Copy **Project URL** and **anon public** key into a root `.env` file (do not commit):
 
 ```bash

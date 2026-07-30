@@ -10,5 +10,9 @@
 	<array>
 		<string>group.com.rylanloukusa.trove</string>
 	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:trovecollections.app</string>
+	</array>
 </dict>
 </plist>

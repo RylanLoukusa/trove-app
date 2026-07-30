@@ -60,7 +60,7 @@
 		A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SharedImportModuleBridge.m; path = Trove/SharedImportModuleBridge.m; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Trove/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Trove/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Trove/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Trove/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Trove-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Trove-Bridging-Header.h"; path = "Trove/Trove-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -116,7 +116,6 @@
 				5369AB779FF23CE7A9F3DAE2 /* Pods-Trove.debug.xcconfig */,
 				41E2AD3279CCEC6B1C8C6A4F /* Pods-Trove.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -240,7 +239,6 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						DevelopmentTeam = 9YNCQGQ47P;
 						LastSwiftMigration = 1250;
 						ProvisioningStyle = Automatic;
 					};

@@ -139,7 +139,7 @@ type SavedCollaboratorRow = {
 const PENDING_INVITE_TOKEN_KEY = "trove:pendingFolderInviteToken";
 
 export const buildFolderInviteLink = (token: string): string =>
-  `trove://share-invite/${encodeURIComponent(token)}`;
+  `https://trovecollections.app/share-invite/${encodeURIComponent(token)}`;
 
 const mapShare = (row: ShareRow): FolderShare => ({
   id: row.id,
