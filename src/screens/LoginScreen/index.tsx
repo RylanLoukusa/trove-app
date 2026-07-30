@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ChevronLeft, Mail } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
@@ -207,6 +207,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       ) : (
         <ScreenTopBar navigation={navigation} />
       )}
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>Log in to Trove</Text>
         {session?.user ? (
@@ -318,6 +319,7 @@ export const LoginScreen = ({ navigation }: Props) => {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
