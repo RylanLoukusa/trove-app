@@ -66,37 +66,39 @@ export const styles = StyleSheet.create({
   authSection: {
     marginTop: 0,
   },
-  authOptionsRow: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.lg,
-    justifyContent: "center",
+  authButtonsStack: {
+    gap: spacing.sm,
   },
-  authOption: {
+  googleButton: {
     alignItems: "center",
-    gap: spacing.xs,
-    width: 78,
-  },
-  authOptionCircle: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 999,
+    alignSelf: "stretch",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#000000",
+    borderRadius: 8,
     borderWidth: 1,
-    height: 64,
+    flexDirection: "row",
+    gap: spacing.sm,
+    height: 48,
     justifyContent: "center",
-    width: 64,
+    width: "100%",
+  },
+  googleButtonText: {
+    color: "#000000",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  appleButton: {
+    height: 48,
+    width: "100%",
+  },
+  emailButton: {
+    borderColor: "#000000",
+    borderRadius: 8,
+    height: 48,
+    marginTop: 0,
   },
   authOptionDisabled: {
     opacity: 0.48,
-  },
-  authOptionLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  authOptionPressed: {
-    opacity: 0.72,
   },
   emailFlowTopBar: {
     alignItems: "flex-start",

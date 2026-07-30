@@ -11,6 +11,7 @@ const googleIosUrlScheme = googleIosClientId.endsWith(".apps.googleusercontent.c
 module.exports = {
   expo: {
     ...appJson.expo,
+    owner: "rylanloukusa",
     ios: {
       ...appJson.expo.ios,
       usesAppleSignIn: true,
@@ -40,7 +41,7 @@ module.exports = {
     ],
     extra: {
       eas: {
-        projectId: "1fc21b11-d445-439e-8ac1-87d440b50c21",
+        projectId: "0b047275-2fe0-4f20-9e87-0f64ad827790",
       },
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "",
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",

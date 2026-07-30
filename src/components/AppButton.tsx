@@ -10,9 +10,10 @@ type Props = {
   variant?: Variant;
   style?: ViewStyle;
   disabled?: boolean;
+  textColor?: string;
 };
 
-export const AppButton = ({ label, onPress, variant = "primary", style, disabled = false }: Props) => (
+export const AppButton = ({ label, onPress, variant = "primary", style, disabled = false, textColor }: Props) => (
   <Pressable
     onPress={onPress}
     disabled={disabled}
@@ -24,7 +25,14 @@ export const AppButton = ({ label, onPress, variant = "primary", style, disabled
       style,
     ]}
   >
-    <Text style={[styles.text, variant !== "primary" && styles.secondaryText, disabled && styles.disabledText]}>
+    <Text
+      style={[
+        styles.text,
+        variant !== "primary" && styles.secondaryText,
+        textColor ? { color: textColor } : null,
+        disabled && styles.disabledText,
+      ]}
+    >
       {label}
     </Text>
   </Pressable>

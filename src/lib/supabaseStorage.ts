@@ -1,19 +1,7 @@
 import { getSupabase } from "./supabase";
-import * as FileSystem from "expo-file-system/legacy";
 import type { SavedItem } from "../types/models";
 
 const STORAGE_BUCKET = "media";
-
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-
-  return bytes;
-}
 
 /**
  * Upload a file from the device to Supabase Storage.
@@ -46,17 +34,16 @@ export async function uploadMediaToSupabase(
       return { error: "You must be signed in to upload media" };
     }
 
-    // Read file as base64
-    const base64 = await FileSystem.readAsStringAsync(fileUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    // Read the file directly into an ArrayBuffer, avoiding a base64 round trip
+    const response = await fetch(fileUri);
+    const arrayBuffer = await response.arrayBuffer();
 
     // Determine file extension
     const ext = fileUri.split(".").pop() || (fileType === "video" ? "mp4" : "jpg");
     const fileName = `${user.id}/${itemId}/${Date.now()}.${ext}`;
 
     // Upload to Supabase Storage
-    const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, base64ToUint8Array(base64), {
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, arrayBuffer, {
       contentType: fileType === "video" ? "video/mp4" : "image/jpeg",
       upsert: false,
     });
