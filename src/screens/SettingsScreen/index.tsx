@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
@@ -10,11 +10,16 @@ import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
-const SettingsSkeleton = () => (
+const SettingsSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <ScreenSkeleton>
     <SkeletonBlock height={38} radius={16} width="46%" />
     <SkeletonText lineCount={3} lineWidths={["94%", "86%", "64%"]} style={styles.skeletonBody} />
@@ -25,9 +30,12 @@ const SettingsSkeleton = () => (
     <SkeletonBlock height={22} radius={11} width="28%" style={styles.skeletonSection} />
     <SkeletonBlock height={104} radius={16} />
   </ScreenSkeleton>
-);
+  );
+};
 
 export const SettingsScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();

@@ -6,7 +6,8 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import type { SyncConflictResolution, SyncFieldChoice } from "../../sync/syncConflictResolution";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SyncConflict">;
 
@@ -23,6 +24,8 @@ const formatUpdatedAt = (value?: string): string => {
 };
 
 export const SyncConflictScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const {
     folders,
     items,

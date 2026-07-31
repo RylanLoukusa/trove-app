@@ -11,7 +11,8 @@ import { useTrove } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import { searchFoldersAndItems } from "../../utils/itemFilters";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Search">;
 
@@ -71,7 +72,11 @@ const getRecentResults = (results: SearchResults): SearchResults => ({
   items: sortItems(results.items, "updated").slice(0, RECENT_ITEM_LIMIT),
 });
 
-const SearchSkeleton = () => (
+const SearchSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <ScreenSkeleton>
     <SkeletonBlock height={38} radius={16} width="42%" />
     <SkeletonBlock height={50} radius={25} />
@@ -95,7 +100,8 @@ const SearchSkeleton = () => (
       )}
     />
   </ScreenSkeleton>
-);
+  );
+};
 
 type SearchFolderRowProps = {
   count: number;
@@ -126,6 +132,8 @@ const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, onOp
 });
 
 export const SearchScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items } = useTrove();
   const [query, setQuery] = useState(route.params?.query ?? "");
   const [filter, setFilter] = useState<SearchFilter>("all");

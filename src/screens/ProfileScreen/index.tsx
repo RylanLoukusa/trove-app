@@ -13,8 +13,8 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
-import { colors } from "../../theme/theme";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Profile">;
 
@@ -28,7 +28,11 @@ const initialsFromProfile = (displayName?: string | null, email?: string | null)
   return (words[0]?.[0] ?? "T").concat(words[1]?.[0] ?? "").toUpperCase();
 };
 
-const ProfileSkeleton = () => (
+const ProfileSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <ScreenSkeleton>
     <View style={styles.header}>
       <SkeletonBlock height={88} radius={44} width={88} />
@@ -40,9 +44,12 @@ const ProfileSkeleton = () => (
     <SkeletonBlock height={54} radius={16} />
     <SkeletonBlock height={52} radius={26} style={styles.button} />
   </ScreenSkeleton>
-);
+  );
+};
 
 export const ProfileScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [displayName, setDisplayName] = useState("");

@@ -33,13 +33,17 @@ import {
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { colors } from "../../theme/theme";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { getFolderById, getFolderPathLabel } from "../../utils/folderTree";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ShareFolder">;
 
-const AccessListSkeleton = () => (
+const AccessListSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <SkeletonList
     count={5}
     renderItem={() => (
@@ -59,7 +63,8 @@ const AccessListSkeleton = () => (
       </View>
     )}
   />
-);
+  );
+};
 
 type PillOption<T extends string> = {
   detail?: string;
@@ -133,7 +138,11 @@ const ChoicePills = <T extends string,>({
   onSelect: (value: T) => void;
   options: Array<PillOption<T>>;
   selected: T;
-}) => (
+}) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <View style={styles.choiceRow}>
     {options.map((option) => {
       const isSelected = selected === option.value;
@@ -159,9 +168,12 @@ const ChoicePills = <T extends string,>({
       );
     })}
   </View>
-);
+  );
+};
 
 export const ShareFolderScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const { folders, refreshFromRemote, syncFolderForSharing } = useTrove();
   const folder = getFolderById(folders, route.params.folderId);

@@ -13,11 +13,16 @@ import { useTrove } from "../../storage/storage";
 import { SavedItem } from "../../types/models";
 import { getFolderHierarchyRows, getFolderPathLabel } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PickSomething">;
 
-const PickSomethingSkeleton = () => (
+const PickSomethingSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
   <ScreenSkeleton>
     <SkeletonBlock height={38} radius={16} width="64%" />
     <SkeletonText lineCount={2} lineWidths={["92%", "72%"]} />
@@ -43,7 +48,8 @@ const PickSomethingSkeleton = () => (
     />
     <SkeletonBlock height={52} radius={16} style={styles.button} />
   </ScreenSkeleton>
-);
+  );
+};
 
 const priorityFilterChoices = [
   { value: false, label: "Any priority", detail: "Pull from everything waiting", tone: "#6E8F72" },
@@ -67,6 +73,8 @@ const PickedItemRow = React.memo(function PickedItemRow({
 });
 
 export const PickSomethingScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items } = useTrove();
   const [folderId, setFolderId] = useState<string | undefined>(route.params?.folderId);
   const [highPriorityOnly, setHighPriorityOnly] = useState(false);
