@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   DimensionValue,
   StyleProp,
@@ -6,7 +6,8 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { colors, radius, spacing } from "../theme/theme";
+import { radius, spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 
 type SkeletonBlockProps = {
   height: DimensionValue;
@@ -22,22 +23,27 @@ export const SkeletonBlock = ({
   style,
   testID,
   width = "100%",
-}: SkeletonBlockProps) => (
-  <View
-    accessibilityElementsHidden
-    importantForAccessibility="no-hide-descendants"
-    testID={testID}
-    style={[
-      styles.block,
-      {
-        borderRadius,
-        height,
-        width,
-      },
-      style,
-    ]}
-  />
-);
+}: SkeletonBlockProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID={testID}
+      style={[
+        styles.block,
+        {
+          borderRadius,
+          height,
+          width,
+        },
+        style,
+      ]}
+    />
+  );
+};
 
 type SkeletonTextProps = {
   lineCount?: number;
@@ -51,22 +57,27 @@ export const SkeletonText = ({
   lineHeight = 14,
   lineWidths,
   style,
-}: SkeletonTextProps) => (
-  <View
-    accessibilityElementsHidden
-    importantForAccessibility="no-hide-descendants"
-    style={[styles.textGroup, style]}
-  >
-    {Array.from({ length: lineCount }).map((_, index) => (
-      <SkeletonBlock
-        key={index}
-        height={lineHeight}
-        radius={999}
-        width={lineWidths?.[index] ?? (index === lineCount - 1 ? "68%" : "100%")}
-      />
-    ))}
-  </View>
-);
+}: SkeletonTextProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.textGroup, style]}
+    >
+      {Array.from({ length: lineCount }).map((_, index) => (
+        <SkeletonBlock
+          key={index}
+          height={lineHeight}
+          radius={999}
+          width={lineWidths?.[index] ?? (index === lineCount - 1 ? "68%" : "100%")}
+        />
+      ))}
+    </View>
+  );
+};
 
 type SkeletonAvatarProps = {
   size?: number;
@@ -100,24 +111,30 @@ type ScreenSkeletonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export const ScreenSkeleton = ({ children, style }: ScreenSkeletonProps) => (
-  <View
-    accessibilityLabel="Loading content"
-    accessibilityRole="progressbar"
-    style={[styles.screen, style]}
-  >
-    {children}
-  </View>
-);
+export const ScreenSkeleton = ({ children, style }: ScreenSkeletonProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-const styles = StyleSheet.create({
-  block: {
-    backgroundColor: colors.skeleton,
-  },
-  screen: {
-    gap: spacing.md,
-  },
-  textGroup: {
-    gap: spacing.xs,
-  },
-});
+  return (
+    <View
+      accessibilityLabel="Loading content"
+      accessibilityRole="progressbar"
+      style={[styles.screen, style]}
+    >
+      {children}
+    </View>
+  );
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    block: {
+      backgroundColor: colors.skeleton,
+    },
+    screen: {
+      gap: spacing.md,
+    },
+    textGroup: {
+      gap: spacing.xs,
+    },
+  });

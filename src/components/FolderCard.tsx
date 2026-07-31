@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Folder } from "../types/models";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import { accessRoleLabel, isSharedAccess } from "../utils/access";
 
 type Props = {
@@ -10,26 +11,32 @@ type Props = {
   onPress: () => void;
 };
 
-export const FolderCard = ({ folder, count, onPress }: Props) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }: { pressed: boolean }) => [styles.card, pressed && styles.pressed]}
-  >
-    <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
-      <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
-    </View>
-    <View style={styles.content}>
-      <View style={styles.nameRow}>
-        <Text style={styles.name} numberOfLines={1}>{folder.name}</Text>
-        {isSharedAccess(folder) && <Text style={styles.sharedPill}>{accessRoleLabel(folder.accessRole)}</Text>}
-      </View>
-      <Text style={styles.meta}>{count ?? 0} saved here</Text>
-    </View>
-    <Text style={styles.chevron}>›</Text>
-  </Pressable>
-);
+export const FolderCard = ({ folder, count, onPress }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-const styles = StyleSheet.create({
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }: { pressed: boolean }) => [styles.card, pressed && styles.pressed]}
+    >
+      <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
+        <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
+      </View>
+      <View style={styles.content}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{folder.name}</Text>
+          {isSharedAccess(folder) && <Text style={styles.sharedPill}>{accessRoleLabel(folder.accessRole)}</Text>}
+        </View>
+        <Text style={styles.meta}>{count ?? 0} saved here</Text>
+      </View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   card: {
     alignItems: "center",
     backgroundColor: colors.surface,

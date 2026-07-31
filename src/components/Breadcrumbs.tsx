@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Folder } from "../types/models";
-import { colors, radius, spacing } from "../theme/theme";
+import { radius, spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 
 type Props = {
   path: Folder[];
@@ -9,23 +10,29 @@ type Props = {
   onFolder: (folderId: string) => void;
 };
 
-export const Breadcrumbs = ({ path, onHome, onFolder }: Props) => (
-  <View style={styles.row}>
-    <Pressable onPress={onHome} style={styles.crumbHit}>
-      <Text style={styles.crumb}>Home</Text>
-    </Pressable>
-    {path.map((folder) => (
-      <React.Fragment key={folder.id}>
-        <Text style={styles.sep}>›</Text>
-        <Pressable onPress={() => onFolder(folder.id)} style={styles.crumbHit}>
-          <Text style={styles.crumb}>{folder.name}</Text>
-        </Pressable>
-      </React.Fragment>
-    ))}
-  </View>
-);
+export const Breadcrumbs = ({ path, onHome, onFolder }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-const styles = StyleSheet.create({
+  return (
+    <View style={styles.row}>
+      <Pressable onPress={onHome} style={styles.crumbHit}>
+        <Text style={styles.crumb}>Home</Text>
+      </Pressable>
+      {path.map((folder) => (
+        <React.Fragment key={folder.id}>
+          <Text style={styles.sep}>›</Text>
+          <Pressable onPress={() => onFolder(folder.id)} style={styles.crumbHit}>
+            <Text style={styles.crumb}>{folder.name}</Text>
+          </Pressable>
+        </React.Fragment>
+      ))}
+    </View>
+  );
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     alignItems: "center",
     flexDirection: "row",

@@ -1,12 +1,13 @@
 import React, { Component, ReactNode } from "react";
 import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { AppButton } from "./AppButton";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; colors: ThemeColors };
 type State = { hasError: boolean };
 
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryBase extends Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(): State {
@@ -23,6 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (this.state.hasError) {
+      const styles = createStyles(this.props.colors);
       return (
         <SafeAreaView style={styles.screen}>
           <View style={styles.content}>
@@ -41,7 +43,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const styles = StyleSheet.create({
+export const ErrorBoundary = ({ children }: { children: ReactNode }) => {
+  const colors = useThemeColors();
+
+  return <ErrorBoundaryBase colors={colors}>{children}</ErrorBoundaryBase>;
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,

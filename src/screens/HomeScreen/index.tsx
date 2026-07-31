@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
@@ -9,15 +9,18 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useAuth } from "../../auth/AuthContext";
 import { Folder, SavedItem } from "../../types/models";
 import { getDescendantFolderIds, getFolderPathLabel, getVisibleRootFolders } from "../../utils/folderTree";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
-const HomeSkeleton = () => (
+type ScreenStyles = ReturnType<typeof createStyles>;
+
+const HomeSkeleton = ({ styles }: { styles: ScreenStyles }) => (
   <ScreenSkeleton>
     <SkeletonText lineCount={1} lineWidths={["72%"]} />
     <SkeletonBlock height={44} radius={14} width="46%" />
@@ -77,6 +80,8 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 });
 
 export const HomeScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, syncSnapshot, syncToRemote } = useTrove();
   const { session, signOut } = useAuth();
 
@@ -166,7 +171,7 @@ export const HomeScreen = ({ navigation }: Props) => {
       <ScreenTopBar navigation={navigation} showBack={false} onMenuPress={onOpenMenu} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {!isReady ? (
-          <HomeSkeleton />
+          <HomeSkeleton styles={styles} />
         ) : (
           <>
         <Text style={styles.kicker}>Save ideas now. Pick the perfect one later.</Text>

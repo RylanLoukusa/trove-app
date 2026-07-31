@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { useAuth } from "../../auth/AuthContext";
 import { AppButton } from "../../components/AppButton";
@@ -12,11 +12,14 @@ import {
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { styles } from "./styles";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AcceptFolderInvite">;
 
 export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const { refreshFromRemote } = useTrove();
   const token = route.params.token;

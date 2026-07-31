@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ItemType, SavedItem } from "../types/models";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import { normalizeItemType } from "../utils/itemTypes";
 import { MediaCollectionDisplay } from "./MediaCollectionDisplay";
 
@@ -21,6 +22,8 @@ type Props = {
 };
 
 export const ItemCard = ({ item, folderPath, onPress }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const mediaCount = item.mediaItems?.length ?? (item.media?.storagePath ? 1 : 0);
 
   return (
@@ -71,7 +74,8 @@ export const ItemCard = ({ item, folderPath, onPress }: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: 18,

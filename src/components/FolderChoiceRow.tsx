@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Folder } from "../types/models";
-import { colors, radius, spacing } from "../theme/theme";
+import { radius, spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 
 type Props = {
   folder: Folder;
@@ -12,37 +13,43 @@ type Props = {
   prefix?: string;
 };
 
-export const FolderChoiceRow = ({ folder, depth = 0, isSelected, onPress, detail, prefix }: Props) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }: { pressed: boolean }) => [
-      styles.row,
-      { marginLeft: Math.min(depth, 4) * spacing.lg },
-      depth > 0 && styles.childRow,
-      isSelected && styles.selected,
-      pressed && styles.pressed,
-    ]}
-  >
-    {depth > 0 && <View style={styles.branch} />}
-    <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
-      <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
-    </View>
-    <View style={styles.copy}>
-      <Text style={[styles.name, isSelected && styles.selectedName]} numberOfLines={1}>
-        {prefix ? `${prefix}: ` : ""}
-        {folder.name}
-      </Text>
-      {!!detail && (
-        <Text style={styles.detail} numberOfLines={1}>
-          {detail}
-        </Text>
-      )}
-    </View>
-    {isSelected && <Text style={styles.check}>✓</Text>}
-  </Pressable>
-);
+export const FolderChoiceRow = ({ folder, depth = 0, isSelected, onPress, detail, prefix }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-const styles = StyleSheet.create({
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }: { pressed: boolean }) => [
+        styles.row,
+        { marginLeft: Math.min(depth, 4) * spacing.lg },
+        depth > 0 && styles.childRow,
+        isSelected && styles.selected,
+        pressed && styles.pressed,
+      ]}
+    >
+      {depth > 0 && <View style={styles.branch} />}
+      <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
+        <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
+      </View>
+      <View style={styles.copy}>
+        <Text style={[styles.name, isSelected && styles.selectedName]} numberOfLines={1}>
+          {prefix ? `${prefix}: ` : ""}
+          {folder.name}
+        </Text>
+        {!!detail && (
+          <Text style={styles.detail} numberOfLines={1}>
+            {detail}
+          </Text>
+        )}
+      </View>
+      {isSelected && <Text style={styles.check}>✓</Text>}
+    </Pressable>
+  );
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     alignItems: "center",
     backgroundColor: colors.surface,

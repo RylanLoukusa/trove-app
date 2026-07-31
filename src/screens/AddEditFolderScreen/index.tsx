@@ -8,9 +8,10 @@ import { emojiCategories } from "../../data/emojiPalette";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { colors, spacing } from "../../theme/theme";
+import { spacing } from "../../theme/theme";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditFolder">;
 
@@ -52,6 +53,8 @@ const isSingleEmoji = (value: string): boolean => {
 const normalizeFolderIcon = (value: string): string => (isSingleEmoji(value) ? value.trim() : "📁");
 
 export const AddEditFolderScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, createFolder, updateFolder, canManageFolder } = useTrove();
   const editing = getFolderById(folders, route.params?.folderId);
 

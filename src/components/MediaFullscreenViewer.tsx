@@ -1,9 +1,10 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { X } from "lucide-react-native";
-import { colors } from "../theme/theme";
+import { ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import { DisplayItem, useResolvedMediaUrl } from "./MediaCollectionDisplay";
 import { SkeletonBlock } from "./Skeleton";
 import { VideoPreview } from "./VideoPreview";
@@ -18,6 +19,8 @@ type ZoomableImageProps = {
 };
 
 const ZoomableImage = ({ uri, width, height, onZoomChange }: ZoomableImageProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -121,6 +124,8 @@ type Props = {
 };
 
 export const MediaFullscreenViewer = ({ visible, items, initialIndex, onClose }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { width, height } = useWindowDimensions();
   const [isZoomed, setIsZoomed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -157,25 +162,26 @@ export const MediaFullscreenViewer = ({ visible, items, initialIndex, onClose }:
   );
 };
 
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "#000",
-    flex: 1,
-  },
-  zoomableContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  closeButton: {
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    borderRadius: 999,
-    height: 44,
-    justifyContent: "center",
-    position: "absolute",
-    right: 16,
-    top: 56,
-    width: 44,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    backdrop: {
+      backgroundColor: "#000",
+      flex: 1,
+    },
+    zoomableContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    closeButton: {
+      alignItems: "center",
+      backgroundColor: "rgba(0, 0, 0, 0.45)",
+      borderRadius: 999,
+      height: 44,
+      justifyContent: "center",
+      position: "absolute",
+      right: 16,
+      top: 56,
+      width: 44,
+    },
+  });

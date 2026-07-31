@@ -10,10 +10,11 @@ import { RootStackParamList } from "../../navigation/types";
 import { clearSharedImport, inferSourcePlatform, readSharedImport, titleFromSharedImport } from "../../share/sharedImport";
 import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useTrove } from "../../storage/storage";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
 import { isMediaItemType, itemPriorities, itemStatuses, normalizeItemType, priorityChoices, statusChoices } from "../../utils/itemTypes";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 
@@ -30,6 +31,8 @@ const typeChoices: Record<SelectableItemType, { label: string; detail: string; t
 };
 
 export const AddEditItemScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, items, createItem, updateItem, canEditFolderContent, canEditItem } = useTrove();
   const editing = items.find((item) => item.id === route.params?.itemId);
   const editableFolders = useMemo(

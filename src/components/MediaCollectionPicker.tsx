@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "./AppButton";
@@ -7,7 +7,8 @@ import { SkeletonBlock } from "./Skeleton";
 import { VideoPreview } from "./VideoPreview";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
 import { MediaCollectionItem } from "../types/models";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import { createId } from "../utils/id";
 
 type Props = {
@@ -22,6 +23,8 @@ type MediaThumbnailProps = {
 };
 
 const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const uri = item.localUri ?? signedUrl;
@@ -62,6 +65,8 @@ const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
 };
 
 export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isLoading, setIsLoading] = useState(false);
 
   const appendAssets = useCallback(
@@ -144,72 +149,73 @@ export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    flex: 1,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  loading: {
-    marginTop: spacing.sm,
-  },
-  removeButton: {
-    alignItems: "center",
-    backgroundColor: colors.ink,
-    borderRadius: 999,
-    height: 24,
-    justifyContent: "center",
-    position: "absolute",
-    right: 6,
-    top: 6,
-    width: 24,
-  },
-  removeButtonPressed: {
-    opacity: 0.72,
-  },
-  removeButtonText: {
-    color: colors.surface,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 21,
-  },
-  thumbnailFrame: {
-    borderRadius: 14,
-    height: 92,
-    overflow: "hidden",
-    width: 92,
-  },
-  thumbnailImage: {
-    height: "100%",
-    width: "100%",
-  },
-  thumbnailMedia: {
-    borderRadius: 14,
-    height: 92,
-    width: 92,
-  },
-  thumbnailRow: {
-    gap: spacing.sm,
-    paddingRight: spacing.lg,
-  },
-  thumbnailScroller: {
-    marginBottom: spacing.xs,
-  },
-  videoBadge: {
-    backgroundColor: "rgba(0,0,0,0.68)",
-    borderRadius: 999,
-    bottom: 6,
-    left: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    position: "absolute",
-  },
-  videoBadgeText: {
-    color: colors.surface,
-    fontSize: 11,
-    fontWeight: "900",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    button: {
+      flex: 1,
+    },
+    buttonRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    loading: {
+      marginTop: spacing.sm,
+    },
+    removeButton: {
+      alignItems: "center",
+      backgroundColor: colors.ink,
+      borderRadius: 999,
+      height: 24,
+      justifyContent: "center",
+      position: "absolute",
+      right: 6,
+      top: 6,
+      width: 24,
+    },
+    removeButtonPressed: {
+      opacity: 0.72,
+    },
+    removeButtonText: {
+      color: colors.surface,
+      fontSize: 18,
+      fontWeight: "900",
+      lineHeight: 21,
+    },
+    thumbnailFrame: {
+      borderRadius: 14,
+      height: 92,
+      overflow: "hidden",
+      width: 92,
+    },
+    thumbnailImage: {
+      height: "100%",
+      width: "100%",
+    },
+    thumbnailMedia: {
+      borderRadius: 14,
+      height: 92,
+      width: 92,
+    },
+    thumbnailRow: {
+      gap: spacing.sm,
+      paddingRight: spacing.lg,
+    },
+    thumbnailScroller: {
+      marginBottom: spacing.xs,
+    },
+    videoBadge: {
+      backgroundColor: "rgba(0,0,0,0.68)",
+      borderRadius: 999,
+      bottom: 6,
+      left: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      position: "absolute",
+    },
+    videoBadgeText: {
+      color: colors.surface,
+      fontSize: 11,
+      fontWeight: "900",
+    },
+  });

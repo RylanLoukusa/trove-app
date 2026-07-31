@@ -11,7 +11,8 @@ import {
 } from "../collaboration/comments";
 import { emojiCategories } from "../data/emojiPalette";
 import { getSupabase } from "../lib/supabase";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import type { CommentAuthor, CommentReactionType, CommentTargetType, TroveComment } from "../types/models";
 import { MediaImage } from "./MediaImage";
 
@@ -64,6 +65,8 @@ const CommentComposer = ({
   onSubmit,
   placeholder,
 }: ComposerProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [body, setBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const canSubmit = body.trim().length > 0 && !disabled && !isSubmitting;
@@ -150,6 +153,8 @@ const doubleTapWindowMs = 280;
 const heartReaction = "❤️";
 
 const EmojiReactionPicker = ({ comment, onSelectReaction }: EmojiReactionPickerProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasHydratedFullPicker, setHasHydratedFullPicker] = useState(false);
@@ -279,6 +284,8 @@ const EmojiReactionPicker = ({ comment, onSelectReaction }: EmojiReactionPickerP
 };
 
 const ReactionRosterSheet = ({ comment, onClose }: ReactionRosterSheetProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedFilter, setSelectedFilter] = useState<CommentReactionType | null>(null);
   const reactionCounts = comment.reactions.filter((reaction) => reaction.count > 0);
   const visibleDetails = selectedFilter
@@ -360,6 +367,8 @@ const CommentRow = ({
   onReply,
   onToggleReaction,
 }: CommentRowProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isOwnComment = comment.authorId === currentUserId;
   const isDeleted = !!comment.deletedAt;
   const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
@@ -489,6 +498,8 @@ const CommentRow = ({
 };
 
 export const CommentThread = ({ targetId, targetType, hideHeader = false, style }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const [comments, setComments] = useState<TroveComment[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -686,7 +697,8 @@ export const CommentThread = ({ targetId, targetType, hideHeader = false, style 
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   thread: {
     marginTop: spacing.lg,
   },

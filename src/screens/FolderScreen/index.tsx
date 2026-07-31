@@ -13,17 +13,20 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../..
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { Folder, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { getItemTypeLabel } from "../../utils/itemTypes";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
 
-const FolderSkeleton = () => (
+type ScreenStyles = ReturnType<typeof createStyles>;
+
+const FolderSkeleton = ({ styles }: { styles: ScreenStyles }) => (
   <ScreenSkeleton>
     <SkeletonBlock height={20} radius={10} width="58%" />
     <View style={styles.titleRow}>
@@ -80,9 +83,10 @@ type FolderItemRowProps = {
   item: SavedItem;
   onOpenItemDetail: (itemId: string) => void;
   onToggleChecklistItem: (itemId: string, listItemId: string) => void;
+  styles: ScreenStyles;
 };
 
-const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail, onToggleChecklistItem }: FolderItemRowProps) {
+const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail, onToggleChecklistItem, styles }: FolderItemRowProps) {
   const onPress = useCallback(() => {
     onOpenItemDetail(item.id);
   }, [item.id, onOpenItemDetail]);
@@ -170,6 +174,8 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 });
 
 export const FolderScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
@@ -338,7 +344,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <FolderSkeleton />
+          <FolderSkeleton styles={styles} />
         </ScrollView>
       </View>
     );
@@ -470,6 +476,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
               item={item}
               onOpenItemDetail={onOpenItemDetail}
               onToggleChecklistItem={onToggleChecklistItem}
+              styles={styles}
             />
           ))
         )}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ChevronLeft } from "lucide-react-native";
@@ -16,11 +16,13 @@ import { AppButton } from "../../components/AppButton";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
-import { colors, spacing } from "../../theme/theme";
-import { styles } from "./styles";
+import { spacing } from "../../theme/theme";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 type AuthMode = "chooser" | "signIn" | "signUp" | "reset";
+type ScreenStyles = ReturnType<typeof createStyles>;
 
 const GoogleLogo = () => (
   <Svg width={18} height={18} viewBox="0 0 18 18">
@@ -43,7 +45,15 @@ const GoogleLogo = () => (
   </Svg>
 );
 
-const GoogleSignInButton = ({ onPress, disabled }: { onPress: () => void; disabled?: boolean }) => (
+const GoogleSignInButton = ({
+  onPress,
+  disabled,
+  styles,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+  styles: ScreenStyles;
+}) => (
   <Pressable
     accessibilityLabel="Sign in with Google"
     accessibilityRole="button"
@@ -56,7 +66,15 @@ const GoogleSignInButton = ({ onPress, disabled }: { onPress: () => void; disabl
   </Pressable>
 );
 
-const LegalAgreement = ({ onPressTerms, onPressPrivacy }: { onPressTerms: () => void; onPressPrivacy: () => void }) => (
+const LegalAgreement = ({
+  onPressTerms,
+  onPressPrivacy,
+  styles,
+}: {
+  onPressTerms: () => void;
+  onPressPrivacy: () => void;
+  styles: ScreenStyles;
+}) => (
   <Text style={styles.legalText}>
     By continuing, you agree to Trove,{" "}
     <Text onPress={onPressTerms} style={styles.legalLink}>
@@ -71,6 +89,8 @@ const LegalAgreement = ({ onPressTerms, onPressPrivacy }: { onPressTerms: () => 
 );
 
 export const LoginScreen = ({ navigation }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session, signInWithPassword, signUpWithPassword, signInWithGoogle, signInWithApple, requestPasswordReset } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();
   const insets = useSafeAreaInsets();
@@ -211,7 +231,7 @@ export const LoginScreen = ({ navigation }: Props) => {
           <View style={styles.bottomAuthArea}>
             <View style={styles.authSection}>
               <View style={[styles.authButtonsStack, busy && styles.authOptionDisabled]}>
-                <GoogleSignInButton onPress={() => void onSignInWithGoogle()} disabled={busy} />
+                <GoogleSignInButton onPress={() => void onSignInWithGoogle()} disabled={busy} styles={styles} />
                 {isAppleAuthAvailable ? (
                   <AppleAuthenticationButton
                     buttonType={AppleAuthenticationButtonType.SIGN_IN}
@@ -239,6 +259,7 @@ export const LoginScreen = ({ navigation }: Props) => {
               <LegalAgreement
                 onPressTerms={() => void openLegalLink(TERMS_OF_USE_URL)}
                 onPressPrivacy={() => void openLegalLink(PRIVACY_POLICY_URL)}
+                styles={styles}
               />
             </View>
           </View>
@@ -315,6 +336,7 @@ export const LoginScreen = ({ navigation }: Props) => {
               <LegalAgreement
                 onPressTerms={() => void openLegalLink(TERMS_OF_USE_URL)}
                 onPressPrivacy={() => void openLegalLink(PRIVACY_POLICY_URL)}
+                styles={styles}
               />
             </View>
           </View>

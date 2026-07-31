@@ -15,17 +15,19 @@ import { Section } from "../../components/Section";
 import { TagChip } from "../../components/TagChip";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
-import { colors } from "../../theme/theme";
+import { useThemeColors } from "../../theme/ThemeContext";
 import { useTrove } from "../../storage/storage";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
 import { getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
-import { styles } from "./styles";
+import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
 
-const ItemDetailSkeleton = () => (
+type ScreenStyles = ReturnType<typeof createStyles>;
+
+const ItemDetailSkeleton = ({ styles }: { styles: ScreenStyles }) => (
   <ScreenSkeleton>
     <SkeletonBlock height={42} radius={21} />
     <SkeletonBlock height={14} radius={7} width="28%" />
@@ -47,6 +49,8 @@ const ItemDetailSkeleton = () => (
 );
 
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useTrove();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
@@ -186,7 +190,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <ItemDetailSkeleton />
+          <ItemDetailSkeleton styles={styles} />
         </ScrollView>
       </View>
     );

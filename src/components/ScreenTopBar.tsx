@@ -1,10 +1,11 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { NavigationProp } from "@react-navigation/native";
 import { ArrowLeftIcon, MenuIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootStackParamList } from "../navigation/types";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 
 type Navigation = NavigationProp<RootStackParamList>;
 
@@ -18,6 +19,8 @@ type Props = {
 };
 
 export const ScreenTopBar = ({ navigation, showBack = true, onMenuPress, rightActions }: Props) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const canGoBack = showBack && navigation.canGoBack();
 
@@ -63,31 +66,32 @@ export const ScreenTopBar = ({ navigation, showBack = true, onMenuPress, rightAc
   );
 };
 
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  leftActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rightActions: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  action: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 2,
-    paddingRight: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  backPressed: {
-    opacity: 0.55,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    bar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingBottom: spacing.md,
+      paddingHorizontal: spacing.lg,
+    },
+    leftActions: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    rightActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    action: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
+      paddingRight: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    backPressed: {
+      opacity: 0.55,
+    },
+  });

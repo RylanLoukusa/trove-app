@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import { OptionChoiceRow } from "./OptionChoiceRow";
 
 type ChoiceSheetOption<T extends string> = {
@@ -26,34 +27,40 @@ export const ChoiceSheet = <T extends string>({
   selectedValue,
   onSelect,
   onClose,
-}: Props<T>) => (
-  <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={onClose}>
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        <Pressable onPress={onClose}>
-          <Text style={styles.close}>Done</Text>
-        </Pressable>
-      </View>
+}: Props<T>) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-      {options.map((option) => (
-        <OptionChoiceRow
-          key={option.value}
-          label={option.label}
-          detail={option.detail}
-          tone={option.tone}
-          isSelected={selectedValue === option.value}
-          onPress={() => {
-            onSelect(option.value);
-            onClose();
-          }}
-        />
-      ))}
-    </ScrollView>
-  </Modal>
-);
+  return (
+    <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={onClose}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <Pressable onPress={onClose}>
+            <Text style={styles.close}>Done</Text>
+          </Pressable>
+        </View>
 
-const styles = StyleSheet.create({
+        {options.map((option) => (
+          <OptionChoiceRow
+            key={option.value}
+            label={option.label}
+            detail={option.detail}
+            tone={option.tone}
+            isSelected={selectedValue === option.value}
+            onPress={() => {
+              onSelect(option.value);
+              onClose();
+            }}
+          />
+        ))}
+      </ScrollView>
+    </Modal>
+  );
+};
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
   },

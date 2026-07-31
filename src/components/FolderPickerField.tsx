@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { colors, spacing } from "../theme/theme";
+import { spacing, ThemeColors } from "../theme/theme";
+import { useThemeColors } from "../theme/ThemeContext";
 import type { Folder } from "../types/models";
 import { getChildFolders, getFolderById, getFolderPath, getFolderPathLabel, getVisibleRootFolders } from "../utils/folderTree";
 import { FolderChoiceRow } from "./FolderChoiceRow";
@@ -15,6 +16,8 @@ export const FolderPickerField = ({ folders, selectedFolderId, onSelectFolder }:
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const selectedFolder = getFolderById(folders, selectedFolderId);
 
@@ -125,7 +128,8 @@ export const FolderPickerField = ({ folders, selectedFolderId, onSelectFolder }:
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   summary: {
     alignItems: "center",
     backgroundColor: colors.surface,
