@@ -1,6 +1,6 @@
 import "react-native-gesture-handler";
 import React from "react";
-import { ActivityIndicator, AppState, useColorScheme, View } from "react-native";
+import { ActivityIndicator, AppState, View } from "react-native";
 import { createNavigationContainerRef, DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
@@ -9,7 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
-import { ThemeProvider, useThemeColors } from "./src/theme/ThemeContext";
+import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
 import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
@@ -54,6 +54,8 @@ const linking: LinkingOptions<RootStackParamList> = {
 function AppNavigator() {
   const { session, isAuthReady, isPasswordRecovery } = useAuth();
   const { createItem, folders, isReady: isTroveReady } = useTrove();
+  const scheme = useThemeScheme();
+  const themeColors = useThemeColors();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
 
@@ -160,8 +162,6 @@ function AppNavigator() {
     );
   }
 
-  const scheme = useColorScheme();
-  const themeColors = useThemeColors();
   const navigationTheme = {
     ...(scheme === "dark" ? DarkTheme : DefaultTheme),
     colors: {
@@ -184,7 +184,7 @@ function AppNavigator() {
         void openPendingFolderInvite();
       }}
     >
-      <StatusBar style="auto" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isPasswordRecovery ? (
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />

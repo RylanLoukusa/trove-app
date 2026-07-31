@@ -10,10 +10,16 @@ import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { useThemeColors } from "../../theme/ThemeContext";
+import { ThemePreference, useThemeColors, useThemePreference } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
+
+const themeOptions: Array<{ label: string; value: ThemePreference }> = [
+  { label: "Light", value: "light" },
+  { label: "Dark", value: "dark" },
+  { label: "System", value: "system" },
+];
 
 const SettingsSkeleton = () => {
   const colors = useThemeColors();
@@ -36,6 +42,7 @@ const SettingsSkeleton = () => {
 export const SettingsScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
   const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();
@@ -120,6 +127,24 @@ export const SettingsScreen = ({ navigation }: Props) => {
         </Text>
         <Text style={styles.stat}>{folders.length} folders</Text>
         <Text style={styles.stat}>{items.length} saved items</Text>
+
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.themeRow}>
+          {themeOptions.map((option) => {
+            const selected = themePreference === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setThemePreference(option.value)}
+                style={[styles.themePill, selected && styles.themePillSelected]}
+              >
+                <Text style={[styles.themePillText, selected && styles.themePillTextSelected]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Text style={styles.sectionTitle}>Account</Text>
         {!supabaseConfigured ? (

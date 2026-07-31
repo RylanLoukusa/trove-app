@@ -112,4 +112,31 @@ export const createStyles = (colors: ThemeColors) =>
   skeletonSection: {
     marginTop: spacing.lg,
   },
+  themeRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  themePill: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+  },
+  themePillSelected: {
+    backgroundColor: colors.accentDark,
+    borderColor: colors.accentDark,
+  },
+  themePillText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  themePillTextSelected: {
+    color: colors.onAccent,
+  },
 });
