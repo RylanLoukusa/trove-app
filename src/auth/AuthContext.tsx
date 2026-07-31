@@ -5,6 +5,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import { Alert, Linking, Platform } from "react-native";
 import { upsertProfileForUser } from "../collaboration/profiles";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 import { AUTH_CALLBACK_URL } from "./authRedirect";
 
 type AuthContextValue = {
@@ -136,7 +137,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       Alert.alert("Authentication link failed", "This link is missing the information needed to sign you in.");
     } catch (error) {
       setIsPasswordRecovery(false);
-      Alert.alert("Authentication link failed", error instanceof Error ? error.message : "Unable to open this link.");
+      Alert.alert(
+        "Authentication link failed",
+        friendlyErrorMessage(error instanceof Error ? error.message : undefined, "Unable to open this link."),
+      );
     }
   }, []);
 
@@ -169,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     const trimmed = email.trim();
     const { error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyErrorMessage(error.message) };
     return {};
   }, []);
 
@@ -185,7 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       password,
       options: { emailRedirectTo: AUTH_CALLBACK_URL },
     });
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyErrorMessage(error.message) };
     return {};
   }, []);
 
@@ -205,7 +209,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           skipBrowserRedirect: true,
         },
       });
-      if (error) return { error: error.message };
+      if (error) return { error: friendlyErrorMessage(error.message) };
       if (!data.url) {
         return { error: "Missing Google sign-in URL" };
       }
@@ -213,7 +217,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await Linking.openURL(data.url);
       return {};
     } catch (error: unknown) {
-      return { error: error instanceof Error ? error.message : "Unable to sign in with Google" };
+      return {
+        error: friendlyErrorMessage(error instanceof Error ? error.message : undefined, "Unable to sign in with Google"),
+      };
     }
   }, []);
 
@@ -253,7 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token: credential.identityToken,
         nonce,
       });
-      if (error) return { error: error.message };
+      if (error) return { error: friendlyErrorMessage(error.message) };
 
       const fullName = credential.fullName
         ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ").trim()
@@ -274,7 +280,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (code === "ERR_REQUEST_CANCELED") {
         return { error: "Apple sign-in cancelled" };
       }
-      return { error: error instanceof Error ? error.message : "Unable to sign in with Apple" };
+      return {
+        error: friendlyErrorMessage(error instanceof Error ? error.message : undefined, "Unable to sign in with Apple"),
+      };
     }
   }, []);
 
@@ -289,11 +297,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
-    if (userError) return { error: userError.message };
+    if (userError) return { error: friendlyErrorMessage(userError.message) };
     if (!user) return { error: "You must be signed in to delete your account." };
 
     const { error } = await supabase.rpc("delete_current_user");
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyErrorMessage(error.message) };
 
     setIsPasswordRecovery(false);
     await supabase.auth.signOut();
@@ -314,7 +322,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(trimmed, { redirectTo: AUTH_CALLBACK_URL });
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyErrorMessage(error.message) };
     return {};
   }, []);
 
@@ -326,7 +334,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyErrorMessage(error.message) };
     setIsPasswordRecovery(false);
     return {};
   }, []);

@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import type { SavedItem } from "../types/models";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 
 const STORAGE_BUCKET = "media";
 
@@ -49,12 +50,12 @@ export async function uploadMediaToSupabase(
     });
 
     if (error) {
-      return { error: error.message };
+      return { error: friendlyErrorMessage(error.message) };
     }
 
     return { storagePath: fileName };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Upload failed" };
+    return { error: friendlyErrorMessage(err instanceof Error ? err.message : undefined, "Upload failed") };
   }
 }
 
@@ -131,7 +132,7 @@ export async function deleteStoredMediaForItems(items: SavedItem[]): Promise<{ o
 
   const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths);
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: friendlyErrorMessage(error.message) };
   }
 
   return { ok: true };

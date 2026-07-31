@@ -6,6 +6,7 @@ import type {
   CommentTargetType,
   TroveComment,
 } from "../types/models";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 
 type CommentRow = {
   author_id: string;
@@ -93,10 +94,10 @@ const reactionDetailsForComment = (
     });
 
 const errorMessage = (error: unknown, fallback: string): string => {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) return friendlyErrorMessage(error.message, fallback);
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === "string") return message;
+    if (typeof message === "string") return friendlyErrorMessage(message, fallback);
   }
   return fallback;
 };
@@ -116,7 +117,7 @@ export const loadCommentThread = async (
     .eq("target_id", input.targetId)
     .order("created_at", { ascending: true });
 
-  if (error) return { comments: [], error: error.message };
+  if (error) return { comments: [], error: friendlyErrorMessage(error.message) };
 
   const rows = (data ?? []) as CommentRow[];
   const commentIds = rows.map((comment) => comment.id);
@@ -129,7 +130,7 @@ export const loadCommentThread = async (
       : Promise.resolve({ data: [], error: null }));
 
   if (reactionsResult.error) {
-    return { comments: [], error: reactionsResult.error.message };
+    return { comments: [], error: friendlyErrorMessage(reactionsResult.error.message) };
   }
 
   const reactions = (reactionsResult.data ?? []) as ReactionRow[];
@@ -148,7 +149,7 @@ export const loadCommentThread = async (
     : { data: [], error: null };
 
   if (profilesResult.error) {
-    return { comments: [], error: profilesResult.error.message };
+    return { comments: [], error: friendlyErrorMessage(profilesResult.error.message) };
   }
 
   const authorsById = new Map(
@@ -198,7 +199,7 @@ export const createComment = async (
     .select("id, target_type, target_id, parent_comment_id, author_id, body, created_at, updated_at, deleted_at")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyErrorMessage(error.message) };
 
   const row = data as CommentRow;
   return {
@@ -228,7 +229,7 @@ export const softDeleteComment = async (
     .update({ body: "", deleted_at: new Date().toISOString() })
     .eq("id", commentId);
 
-  return error ? { error: error.message } : {};
+  return error ? { error: friendlyErrorMessage(error.message) } : {};
 };
 
 export const setCommentReaction = async (
@@ -249,7 +250,7 @@ export const setCommentReaction = async (
       },
       { onConflict: "comment_id,user_id,reaction" },
     );
-    return error ? { error: error.message } : {};
+    return error ? { error: friendlyErrorMessage(error.message) } : {};
   }
 
   const { error } = await supabase
@@ -259,7 +260,7 @@ export const setCommentReaction = async (
     .eq("reaction", input.reaction)
     .eq("user_id", input.userId);
 
-  return error ? { error: error.message } : {};
+  return error ? { error: friendlyErrorMessage(error.message) } : {};
 };
 
 export const subscribeToCommentThread = (

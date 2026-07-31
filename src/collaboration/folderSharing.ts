@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 
 export type FolderShareRole = "viewer" | "editor";
 export type FolderShareScope = "folder_only" | "folder_and_subfolders";
@@ -202,13 +203,13 @@ const mapInvite = (row: InviteRow): FolderShareInvite => ({
 
 const errorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error) {
-    return error.message;
+    return friendlyErrorMessage(error.message, fallback);
   }
 
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string") {
-      return message;
+      return friendlyErrorMessage(message, fallback);
     }
   }
 

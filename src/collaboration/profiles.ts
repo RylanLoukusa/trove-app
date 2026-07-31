@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 
 export type UserProfile = {
   avatarUrl: string | null;
@@ -42,7 +43,7 @@ export const loadCurrentProfile = async (
     .eq("id", userId)
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyErrorMessage(error.message) };
   if (!data) return {};
 
   return { profile: mapProfileRow(data as ProfileRow) };
@@ -67,7 +68,7 @@ export const updateCurrentProfile = async (
     .select("id, email, display_name, avatar_url, updated_at")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyErrorMessage(error.message) };
 
   return { profile: mapProfileRow(data as ProfileRow) };
 };

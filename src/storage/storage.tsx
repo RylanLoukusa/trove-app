@@ -36,6 +36,7 @@ import {
 import { seedData } from "../data/seedData";
 import { Folder, SavedItem, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
 import { normalizeTroveData } from "../utils/itemTypes";
@@ -312,7 +313,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           setSyncSnapshot((current) => {
             const nextSnapshot = failedSyncSnapshot(
               current,
-              error instanceof Error ? error.message : "Unable to sync Trove data.",
+              friendlyErrorMessage(error instanceof Error ? error.message : undefined, "Unable to sync Trove data."),
             );
             void saveSyncSnapshot(userId, nextSnapshot);
             return nextSnapshot;
@@ -572,7 +573,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
 
       return { ok: false, error: "Unable to refresh shared folders." };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Unable to refresh shared folders." };
+      return {
+        ok: false,
+        error: friendlyErrorMessage(error instanceof Error ? error.message : undefined, "Unable to refresh shared folders."),
+      };
     }
   }, [activeUserId, setAndPersistSyncSnapshot]);
 

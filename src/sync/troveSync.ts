@@ -10,6 +10,7 @@ import {
   SyncConflictSummary,
 } from "./syncBaseline";
 import { canEditFolderContentRecord, canManageFolderRecord } from "../utils/access";
+import { friendlyErrorMessage } from "../utils/errorMessages";
 import {
   normalizeItemType,
   normalizeSavedItem,
@@ -137,7 +138,7 @@ const folderSyncErrorMessage = (error: unknown): string => {
     return "This folder could not be synced as yours. Refresh your data, then try sharing it again.";
   }
 
-  return message;
+  return friendlyErrorMessage(message);
 };
 
 const readStoredRemoteUpdatedAt = async (
@@ -523,7 +524,7 @@ const deleteTroveItemForUser = async (
     };
   }
 
-  return { ok: false, error: errorMessage(error, "Unable to delete this item.") };
+  return { ok: false, error: friendlyErrorMessage(errorMessage(error, "Unable to delete this item.")) };
 };
 
 const fetchLegacyTroveDataForUser = async (
@@ -1035,7 +1036,7 @@ const replaceNormalizedTroveDataForUser = async (
     }
 
     console.warn("Failed to push normalized Trove data", error);
-    return { ok: false, error: errorMessage(error, "Failed to sync Trove data.") };
+    return { ok: false, error: friendlyErrorMessage(errorMessage(error, "Failed to sync Trove data.")) };
   }
 };
 
