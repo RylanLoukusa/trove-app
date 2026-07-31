@@ -546,6 +546,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
 
       if (result.kind === "applied") {
         skipNextRemotePushRef.current = true;
+        skipRemotePushRef.current = false;
         setData(result.data);
         remoteRowExistsRef.current = true;
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
@@ -555,6 +556,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       if (result.kind === "no_row" && options?.force) {
         remoteRowExistsRef.current = false;
         skipNextRemotePushRef.current = true;
+        skipRemotePushRef.current = false;
         setData((current) => ({
           folders: current.folders.filter((folder) => !folder.ownerId || folder.ownerId === userId),
           items: current.items.filter((item) => !item.ownerId || item.ownerId === userId),
@@ -564,6 +566,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (result.kind === "noop_up_to_date" || result.kind === "no_row" || result.kind === "noop_invalid") {
+        skipRemotePushRef.current = false;
         return { ok: true };
       }
 
