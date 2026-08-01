@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import { ShareFolderScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
 import {
   loadFolderSharing,
@@ -26,6 +27,10 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 jest.mock("../../collaboration/folderSharing", () => ({
   buildFolderInviteLink: jest.fn().mockReturnValue("https://trovecollections.app/share-invite/token"),
   loadFolderSharing: jest.fn(),
@@ -43,6 +48,7 @@ jest.mock("../../lib/supabase", () => ({
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 const mockLoadFolderSharing = loadFolderSharing as jest.Mock;
 const mockLoadSavedCollaborators = loadSavedCollaborators as jest.Mock;
 const mockShareFolderByEmail = shareFolderByEmail as jest.Mock;
@@ -72,6 +78,13 @@ const refreshFromRemote = jest.fn();
 const renderShareFolderScreen = async (folders: Folder[], folderId = "recipes") => {
   mockUseAuth.mockReturnValue({ session });
   mockUseTrove.mockReturnValue({ folders, refreshFromRemote, syncFolderForSharing });
+  mockUseEntitlement.mockReturnValue({
+    isPro: true,
+    isLoading: false,
+    presentPaywall: jest.fn(),
+    restorePurchases: jest.fn(),
+    setDevIsPro: jest.fn(),
+  });
   const route = { params: { folderId } } as unknown as NativeStackScreenProps<RootStackParamList, "ShareFolder">["route"];
   await renderScreen(<ShareFolderScreen navigation={navigation} route={route} />);
 };

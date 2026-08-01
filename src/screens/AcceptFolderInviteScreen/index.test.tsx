@@ -5,10 +5,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import { AcceptFolderInviteScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
 import {
   acceptFolderInvite,
   clearPendingFolderInviteToken,
+  getFolderInviteByToken,
   rememberPendingFolderInviteToken,
 } from "../../collaboration/folderSharing";
 import { getSupabase } from "../../lib/supabase";
@@ -23,9 +25,14 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 jest.mock("../../collaboration/folderSharing", () => ({
   acceptFolderInvite: jest.fn(),
   clearPendingFolderInviteToken: jest.fn(),
+  getFolderInviteByToken: jest.fn(),
   rememberPendingFolderInviteToken: jest.fn(),
 }));
 
@@ -35,7 +42,9 @@ jest.mock("../../lib/supabase", () => ({
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 const mockAcceptFolderInvite = acceptFolderInvite as jest.Mock;
+const mockGetFolderInviteByToken = getFolderInviteByToken as jest.Mock;
 const mockGetSupabase = getSupabase as jest.Mock;
 
 const navigation = {
@@ -50,6 +59,13 @@ const refreshFromRemote = jest.fn();
 const renderInviteScreen = async (currentSession: Session | null) => {
   mockUseAuth.mockReturnValue({ session: currentSession });
   mockUseTrove.mockReturnValue({ refreshFromRemote });
+  mockUseEntitlement.mockReturnValue({
+    isPro: false,
+    isLoading: false,
+    presentPaywall: jest.fn(),
+    restorePurchases: jest.fn(),
+    setDevIsPro: jest.fn(),
+  });
   const route = { params: { token: "invite-token" } } as unknown as NativeStackScreenProps<
     RootStackParamList,
     "AcceptFolderInvite"
@@ -63,6 +79,7 @@ describe("AcceptFolderInviteScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetSupabase.mockReturnValue({});
+    mockGetFolderInviteByToken.mockResolvedValue({});
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
 

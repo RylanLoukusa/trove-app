@@ -1,3 +1,5 @@
+import type { PaywallTrigger } from "../utils/limits";
+
 export type RootStackParamList = {
   Home: undefined;
   Login: undefined;
@@ -13,4 +15,5 @@ export type RootStackParamList = {
   Profile: undefined;
   SyncConflict: undefined;
   Settings: undefined;
+  Paywall: { trigger: PaywallTrigger };
 };

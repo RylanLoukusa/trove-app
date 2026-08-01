@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { X } from "lucide-react-native";
+import { Lock, X } from "lucide-react-native";
+import { AppButton } from "./AppButton";
+import { useEntitlement } from "../entitlements/EntitlementContext";
 import { ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import { DisplayItem, useResolvedMediaUrl } from "./MediaCollectionDisplay";
@@ -99,11 +101,25 @@ type MediaPageProps = {
   item: DisplayItem;
   width: number;
   height: number;
+  videoLocked: boolean;
   onZoomChange: (isZoomed: boolean) => void;
 };
 
-const MediaPage = ({ item, width, height, onZoomChange }: MediaPageProps) => {
+const MediaPage = ({ item, width, height, videoLocked, onZoomChange }: MediaPageProps) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { presentPaywall } = useEntitlement();
   const { url, isLoading } = useResolvedMediaUrl(item);
+
+  if (item.mediaType === "video" && videoLocked) {
+    return (
+      <View style={[styles.lockedPage, { width, height }]}>
+        <Lock color="#FFF" size={32} />
+        <Text style={styles.lockedTitle}>Video requires Pro</Text>
+        <AppButton label="Upgrade to Pro" onPress={() => presentPaywall("video_playback")} style={styles.lockedButton} />
+      </View>
+    );
+  }
 
   if (!url) {
     return isLoading ? <SkeletonBlock height={height} radius={0} width={width} /> : <View style={{ width, height }} />;
@@ -121,9 +137,11 @@ type Props = {
   items: DisplayItem[];
   initialIndex: number;
   onClose: () => void;
+  /** When true, video pages show a locked upgrade prompt instead of playing (non-Pro viewer of shared video). */
+  videoLocked?: boolean;
 };
 
-export const MediaFullscreenViewer = ({ visible, items, initialIndex, onClose }: Props) => {
+export const MediaFullscreenViewer = ({ visible, items, initialIndex, onClose, videoLocked = false }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width, height } = useWindowDimensions();
@@ -150,7 +168,14 @@ export const MediaFullscreenViewer = ({ visible, items, initialIndex, onClose }:
           showsHorizontalScrollIndicator={false}
         >
           {items.map((item) => (
-            <MediaPage key={item.id} item={item} width={width} height={height} onZoomChange={setIsZoomed} />
+            <MediaPage
+              key={item.id}
+              item={item}
+              width={width}
+              height={height}
+              videoLocked={videoLocked}
+              onZoomChange={setIsZoomed}
+            />
           ))}
         </ScrollView>
 
@@ -172,6 +197,20 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       overflow: "hidden",
+    },
+    lockedPage: {
+      alignItems: "center",
+      backgroundColor: "#000",
+      gap: 12,
+      justifyContent: "center",
+    },
+    lockedTitle: {
+      color: "#FFF",
+      fontSize: 17,
+      fontWeight: "800",
+    },
+    lockedButton: {
+      minWidth: 180,
     },
     closeButton: {
       alignItems: "center",

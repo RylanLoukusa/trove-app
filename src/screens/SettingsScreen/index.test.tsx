@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import { SettingsScreen } from "./index";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { ThemeProvider } from "../../theme/ThemeContext";
@@ -21,6 +22,10 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 jest.mock("../../lib/supabaseStorage", () => ({
   deleteStoredMediaForItems: jest.fn(),
 }));
@@ -28,6 +33,7 @@ jest.mock("../../lib/supabaseStorage", () => ({
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseIsSupabaseConfigured = useIsSupabaseConfigured as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 const mockDeleteStoredMediaForItems = deleteStoredMediaForItems as jest.Mock;
 
 const folders: Folder[] = [];
@@ -57,6 +63,13 @@ const setAuthState = (session: Session | null) => {
 
 const renderSettingsScreen = async () => {
   mockUseTrove.mockReturnValue({ folders, isReady: true, items, resetToSeed, clearLocalData });
+  mockUseEntitlement.mockReturnValue({
+    isPro: false,
+    isLoading: false,
+    presentPaywall: jest.fn(),
+    restorePurchases: jest.fn(),
+    setDevIsPro: jest.fn(),
+  });
   await renderScreen(
     <ThemeProvider>
       <SettingsScreen navigation={navigation} route={{} as never} />

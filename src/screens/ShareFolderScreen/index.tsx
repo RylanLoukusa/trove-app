@@ -15,6 +15,8 @@ import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { SkeletonAvatar, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
+import { requiresProForSharing } from "../../utils/limits";
 import {
   FolderAccess,
   FolderShareInvite,
@@ -175,6 +177,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
+  const { isPro, presentPaywall } = useEntitlement();
   const { folders, refreshFromRemote, syncFolderForSharing } = useTrove();
   const folder = getFolderById(folders, route.params.folderId);
 
@@ -262,6 +265,11 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const onSubmit = useCallback(async (): Promise<void> => {
     if (!folder) return;
 
+    if (requiresProForSharing(isPro)) {
+      presentPaywall("sharing");
+      return;
+    }
+
     const trimmedEmail = email.trim().toLowerCase();
     if (!emailLooksValid(trimmedEmail)) {
       setError("Enter a valid email address.");
@@ -321,11 +329,16 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
       successTitle,
       successMessage,
     );
-  }, [email, folder, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing]);
+  }, [email, folder, isPro, presentPaywall, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing]);
 
   const onShareCollaborator = useCallback(
     async (collaborator: SavedCollaborator): Promise<void> => {
       if (!folder) return;
+
+      if (requiresProForSharing(isPro)) {
+        presentPaywall("sharing");
+        return;
+      }
 
       const supabase = getSupabase();
       if (!supabase || !session?.user) {
@@ -368,7 +381,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
             }`,
       );
     },
-    [folder, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing],
+    [folder, isPro, presentPaywall, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing],
   );
 
   const onUpdateAccess = useCallback(

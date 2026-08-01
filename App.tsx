@@ -2,7 +2,7 @@ import "react-native-gesture-handler";
 import React from "react";
 import { ActivityIndicator, AppState, View } from "react-native";
 import * as Sentry from "@sentry/react-native";
-import { createNavigationContainerRef, DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,7 +10,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
+import { navigationRef } from "./src/navigation/navigationRef";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
@@ -21,6 +23,7 @@ import { FolderScreen } from "./src/screens/FolderScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { ItemDetailScreen } from "./src/screens/ItemDetailScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
+import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { PickSomethingScreen } from "./src/screens/PickSomethingScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
@@ -33,7 +36,6 @@ import { clearSharedImport, getLatestSharedImportId, inferSourcePlatform, markSh
 initSentry();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ["https://trovecollections.app", "trove://"],
@@ -206,6 +208,7 @@ function AppNavigator() {
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
+            <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
           </>
         ) : (
           <>
@@ -225,9 +228,11 @@ function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
             <AuthProvider>
-              <TroveProvider>
-                <AppNavigator />
-              </TroveProvider>
+              <EntitlementProvider>
+                <TroveProvider>
+                  <AppNavigator />
+                </TroveProvider>
+              </EntitlementProvider>
             </AuthProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>

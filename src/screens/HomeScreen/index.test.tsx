@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import { HomeScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
 import type { SyncSnapshot } from "../../sync/syncStatus";
 import type { Folder, SavedItem } from "../../types/models";
@@ -19,8 +20,13 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 
 const makeFolder = (overrides: Partial<Folder>): Folder => ({
   id: "folder-1",
@@ -65,6 +71,13 @@ const renderHomeScreen = async (
 ) => {
   mockUseAuth.mockReturnValue({ session, signOut });
   mockUseTrove.mockReturnValue({ folders, isReady: true, items, syncSnapshot, syncToRemote });
+  mockUseEntitlement.mockReturnValue({
+    isPro: false,
+    isLoading: false,
+    presentPaywall: jest.fn(),
+    restorePurchases: jest.fn(),
+    setDevIsPro: jest.fn(),
+  });
   await renderScreen(<HomeScreen navigation={navigation} route={{} as never} />);
 };
 

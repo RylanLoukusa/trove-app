@@ -2,7 +2,9 @@ import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "./AppButton";
+import { useEntitlement } from "../entitlements/EntitlementContext";
 import { ItemAttachment } from "../types/models";
+import { requiresProForVideoUpload } from "../utils/limits";
 import { createId } from "../utils/id";
 import { MediaImage } from "./MediaImage";
 import { VideoPreview } from "./VideoPreview";
@@ -17,6 +19,7 @@ interface MediaPickerProps {
 }
 
 export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initialUri, initialMediaType, attachments, onAttachmentsChange, style }) => {
+  const { isPro, presentPaywall } = useEntitlement();
   const [selectedUri, setSelectedUri] = useState<string | undefined>(initialUri);
   const [isLoading, setIsLoading] = useState(false);
   const [mediaType, setMediaType] = useState<"image" | "video" | undefined>(initialMediaType);
@@ -55,6 +58,11 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
   }, [addAttachment, isMulti, onMediaSelected]);
 
   const pickVideo = useCallback(async () => {
+    if (requiresProForVideoUpload(isPro)) {
+      presentPaywall("video_upload");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -77,7 +85,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
     } finally {
       setIsLoading(false);
     }
-  }, [addAttachment, isMulti, onMediaSelected]);
+  }, [addAttachment, isMulti, isPro, onMediaSelected, presentPaywall]);
 
   const clearMedia = useCallback(() => {
     setSelectedUri(undefined);

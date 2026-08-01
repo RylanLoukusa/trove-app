@@ -3,6 +3,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import type { AppStateStatus } from "react-native";
 import { Alert, AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
+import { useEntitlement } from "../entitlements/EntitlementContext";
 import { getSupabase } from "../lib/supabase";
 import { syncShareExtensionFolders } from "../share/sharedImport";
 import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
@@ -38,6 +39,7 @@ import { Folder, SavedItem, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
+import { requiresProForSync } from "../utils/limits";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
 import { normalizeTroveData } from "../utils/itemTypes";
 
@@ -105,6 +107,7 @@ export const saveTroveData = async (data: TroveData, userId?: string | null): Pr
 
 const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
+  const { isPro } = useEntitlement();
   const [data, setData] = useState<TroveData>(seedData);
   const [isReady, setIsReady] = useState(false);
   const [syncSnapshot, setSyncSnapshot] = useState<SyncSnapshot>({
@@ -266,7 +269,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           }
         } else if (result.kind === "no_row") {
           shouldAllowRemotePush = true;
-          if (hasTroveData(dataRef.current)) {
+          if (isPro && hasTroveData(dataRef.current)) {
             const ensured = await ensureRemoteRowForUser(supabase, userId, dataRef.current);
             remoteRowExistsRef.current = ensured.created;
           }
@@ -287,6 +290,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     if (!isReady || !isAuthReady) return;
     const userId = activeUserId;
     if (!userId) return;
+    // Free users can still receive folders shared with them (the pull effect above),
+    // but their own local data never gets pushed to the cloud without Pro.
+    if (requiresProForSync(isPro)) return;
     const supabase = getSupabase();
     if (!supabase) return;
     if (skipRemotePushRef.current) return;
@@ -330,7 +336,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         pendingRemotePushRef.current = false;
       }
     };
-  }, [activeUserId, applyPushResult, data, isReady, isAuthReady]);
+  }, [activeUserId, applyPushResult, data, isPro, isReady, isAuthReady]);
 
   const createFolder = useCallback<TroveContextValue["createFolder"]>((input) => {
     const parentFolder = dataRef.current.folders.find((folder) => folder.id === input.parentFolderId);
@@ -586,6 +592,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, error: "Sign in to sync folders before sharing." };
     }
 
+    if (requiresProForSync(isPro)) {
+      return { ok: false, error: "Cloud sync requires Trove Pro." };
+    }
+
     const supabase = getSupabase();
     if (!supabase) {
       return { ok: false, error: "Supabase not configured." };
@@ -597,12 +607,16 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     pendingRemotePushRef.current = false;
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
-  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
+  }, [activeUserId, applyPushResult, isPro, setAndPersistSyncSnapshot]);
 
   const syncFolderForSharing = useCallback<TroveContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
     if (!userId) {
       return { ok: false, error: "Sign in to sync folders before sharing." };
+    }
+
+    if (requiresProForSync(isPro)) {
+      return { ok: false, error: "Sharing folders requires Trove Pro." };
     }
 
     const supabase = getSupabase();
@@ -616,7 +630,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     pendingRemotePushRef.current = false;
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
-  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
+  }, [activeUserId, applyPushResult, isPro, setAndPersistSyncSnapshot]);
 
   const resolveSyncConflict = useCallback<TroveContextValue["resolveSyncConflict"]>(async (resolution) => {
     const userId = activeUserId;

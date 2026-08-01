@@ -1,12 +1,14 @@
 import React, { useCallback, useMemo } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Sparkles } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { ItemCard } from "../../components/ItemCard";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -84,6 +86,11 @@ export const HomeScreen = ({ navigation }: Props) => {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, syncSnapshot, syncToRemote } = useTrove();
   const { session, signOut } = useAuth();
+  const { isPro, isLoading: isEntitlementLoading, presentPaywall } = useEntitlement();
+
+  const onPressUpgrade = useCallback(() => {
+    presentPaywall("general");
+  }, [presentPaywall]);
 
   const onPressSearch = useCallback(() => {
     navigation.navigate("Search");
@@ -168,7 +175,24 @@ export const HomeScreen = ({ navigation }: Props) => {
 
   return (
     <View style={styles.screen}>
-      <ScreenTopBar navigation={navigation} showBack={false} onMenuPress={onOpenMenu} />
+      <ScreenTopBar
+        navigation={navigation}
+        showBack={false}
+        onMenuPress={onOpenMenu}
+        rightActions={
+          !isEntitlementLoading && !isPro ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Upgrade to Trove Pro"
+              onPress={onPressUpgrade}
+              style={({ pressed }) => [styles.upgradePill, pressed && styles.upgradePillPressed]}
+            >
+              <Sparkles size={13} color={colors.onAccent} />
+              <Text style={styles.upgradePillText}>Pro</Text>
+            </Pressable>
+          ) : undefined
+        }
+      />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {!isReady ? (
           <HomeSkeleton styles={styles} />

@@ -6,6 +6,7 @@ import { getSignedInLabel } from "../../auth/authDisplay";
 import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
@@ -45,9 +46,21 @@ export const SettingsScreen = ({ navigation }: Props) => {
   const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
   const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
+  const { isPro, presentPaywall, restorePurchases } = useEntitlement();
   const supabaseConfigured = useIsSupabaseConfigured();
 
   const [busy, setBusy] = useState(false);
+
+  const onEnableSync = useCallback((): void => {
+    presentPaywall("sync");
+  }, [presentPaywall]);
+
+  const onRestorePurchases = useCallback(async (): Promise<void> => {
+    const result = await restorePurchases();
+    if (!result.ok) {
+      Alert.alert("Restore purchases", result.error ?? "Unable to restore purchases.");
+    }
+  }, [restorePurchases]);
 
   const confirmReset = useCallback((): void => {
     Alert.alert(
@@ -156,6 +169,16 @@ export const SettingsScreen = ({ navigation }: Props) => {
         ) : session?.user ? (
           <>
             <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
+            {isPro ? (
+              <Text style={styles.body}>Cloud sync is on — your folders stay backed up across devices.</Text>
+            ) : (
+              <>
+                <Text style={styles.body}>
+                  Your data stays on this device. Upgrade to Trove Pro to sync it across devices and share folders.
+                </Text>
+                <AppButton label="Enable cloud sync" onPress={onEnableSync} style={styles.button} />
+              </>
+            )}
             <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
             <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.button} />
           </>
@@ -167,6 +190,17 @@ export const SettingsScreen = ({ navigation }: Props) => {
             <AppButton label="Go to login screen" variant="secondary" onPress={onPressLogin} style={styles.button} />
           </>
         )}
+
+        <Text style={styles.sectionTitle}>Purchases</Text>
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => void onRestorePurchases()}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>Restore purchases</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
 
         <Text style={styles.sectionTitle}>Legal</Text>
         <View style={styles.legalLinks}>

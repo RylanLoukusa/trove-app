@@ -4,6 +4,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ItemDetailScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
 import type { SavedItem } from "../../types/models";
 import type { RootStackParamList } from "../../navigation/types";
@@ -17,8 +18,13 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 
 const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   id: "item-1",
@@ -47,6 +53,13 @@ const canEditItem = jest.fn().mockReturnValue(true);
 const renderItemDetail = async (items: SavedItem[], itemId = "pasta") => {
   mockUseAuth.mockReturnValue({ session: null });
   mockUseTrove.mockReturnValue({ folders: [], isReady: true, items, updateItem, deleteItem, canEditItem });
+  mockUseEntitlement.mockReturnValue({
+    isPro: false,
+    isLoading: false,
+    presentPaywall: jest.fn(),
+    restorePurchases: jest.fn(),
+    setDevIsPro: jest.fn(),
+  });
   const route = { params: { itemId } } as unknown as NativeStackScreenProps<RootStackParamList, "ItemDetail">["route"];
   await renderScreen(<ItemDetailScreen navigation={navigation} route={route} />);
 };

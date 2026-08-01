@@ -7,12 +7,15 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import {
   acceptFolderInvite,
   clearPendingFolderInviteToken,
+  getFolderInviteByToken,
   rememberPendingFolderInviteToken,
 } from "../../collaboration/folderSharing";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { requiresProForEditorAccept } from "../../utils/limits";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AcceptFolderInvite">;
@@ -21,15 +24,27 @@ export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
+  const { isPro, presentPaywall } = useEntitlement();
   const { refreshFromRemote } = useTrove();
   const token = route.params.token;
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
   const [didAccept, setDidAccept] = useState(false);
+  const [inviteRole, setInviteRole] = useState<"viewer" | "editor" | null>(null);
 
   useEffect(() => {
     if (session?.user) return;
     void rememberPendingFolderInviteToken(token);
+  }, [session?.user, token]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    void getFolderInviteByToken(supabase, token).then((result) => {
+      if (result.invite) setInviteRole(result.invite.role);
+    });
   }, [session?.user, token]);
 
   const onAccept = useCallback(async (): Promise<void> => {
@@ -37,6 +52,11 @@ export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
     if (!supabase || !session?.user) {
       await rememberPendingFolderInviteToken(token);
       navigation.navigate("Login");
+      return;
+    }
+
+    if (inviteRole && requiresProForEditorAccept(isPro, inviteRole)) {
+      presentPaywall("editor_invite");
       return;
     }
 
@@ -59,7 +79,7 @@ export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
       return;
     }
     Alert.alert("Folder added", "You now have access to this shared folder.");
-  }, [navigation, refreshFromRemote, session?.user, token]);
+  }, [inviteRole, isPro, navigation, presentPaywall, refreshFromRemote, session?.user, token]);
 
   const onDone = useCallback((): void => {
     navigation.navigate("Home");
@@ -83,6 +103,12 @@ export const AcceptFolderInviteScreen = ({ navigation, route }: Props) => {
             ? "Accept this invite to add the shared folder to Trove."
             : "Sign in with the invited email address to accept this folder invite."}
         </Text>
+
+        {session?.user && inviteRole === "editor" && !isPro ? (
+          <Text style={styles.message}>
+            You've been invited as an editor. Contributing to a shared folder requires Trove Pro — viewing stays free.
+          </Text>
+        ) : null}
 
         {!!error && <Text style={styles.error}>{error}</Text>}
 

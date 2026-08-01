@@ -446,6 +446,28 @@ export const revokeFolderInvite = async (
   return error ? { error: errorMessage(error, "Unable to revoke invite.") } : {};
 };
 
+export const getFolderInviteByToken = async (
+  supabase: SupabaseClient,
+  token: string,
+): Promise<{ error?: string; invite?: Pick<FolderShareInvite, "role" | "scope" | "status"> }> => {
+  const { data, error } = await supabase
+    .from("trove_folder_share_invites")
+    .select("role, scope, status")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (error) {
+    return { error: errorMessage(error, "Unable to load this invite.") };
+  }
+
+  if (!data) {
+    return {};
+  }
+
+  const row = data as unknown as Pick<InviteRow, "role" | "scope" | "status">;
+  return { invite: { role: row.role, scope: row.scope, status: row.status } };
+};
+
 export const acceptFolderInvite = async (
   supabase: SupabaseClient,
   token: string,

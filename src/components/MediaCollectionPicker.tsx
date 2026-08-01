@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Lock } from "lucide-react-native";
 import { AppButton } from "./AppButton";
 import { MediaImage } from "./MediaImage";
 import { SkeletonBlock } from "./Skeleton";
 import { VideoPreview } from "./VideoPreview";
+import { useEntitlement } from "../entitlements/EntitlementContext";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
 import { MediaCollectionItem } from "../types/models";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import { createId } from "../utils/id";
+import { requiresProForVideoUpload } from "../utils/limits";
 
 type Props = {
   items: MediaCollectionItem[];
@@ -67,6 +70,7 @@ const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
 export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { isPro, presentPaywall } = useEntitlement();
   const [isLoading, setIsLoading] = useState(false);
 
   const appendAssets = useCallback(
@@ -100,6 +104,11 @@ export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
   }, [appendAssets]);
 
   const pickVideos = useCallback(async () => {
+    if (requiresProForVideoUpload(isPro)) {
+      presentPaywall("video_upload");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -115,7 +124,7 @@ export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
     } finally {
       setIsLoading(false);
     }
-  }, [appendAssets]);
+  }, [appendAssets, isPro, presentPaywall]);
 
   const removeItem = useCallback(
     (itemId: string): void => {
@@ -143,7 +152,14 @@ export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
 
       <View style={styles.buttonRow}>
         <AppButton label="Pick Image" onPress={pickImages} variant="secondary" style={styles.button} />
-        <AppButton label="Pick Video" onPress={pickVideos} variant="secondary" style={styles.button} />
+        <View style={styles.button}>
+          <AppButton label={isPro ? "Pick Video" : "Pick Video (Pro)"} onPress={pickVideos} variant="secondary" />
+          {!isPro && (
+            <View style={styles.videoLockBadge}>
+              <Lock size={11} color={colors.surface} />
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -181,6 +197,17 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 18,
       fontWeight: "900",
       lineHeight: 21,
+    },
+    videoLockBadge: {
+      alignItems: "center",
+      backgroundColor: colors.ink,
+      borderRadius: 999,
+      height: 20,
+      justifyContent: "center",
+      position: "absolute",
+      right: -6,
+      top: -6,
+      width: 20,
     },
     thumbnailFrame: {
       borderRadius: 14,

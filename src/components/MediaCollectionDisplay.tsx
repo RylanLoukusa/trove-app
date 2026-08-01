@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Lock } from "lucide-react-native";
 import { MediaCollectionItem, MediaMetadata } from "../types/models";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
 import { SkeletonBlock } from "./Skeleton";
@@ -14,6 +15,8 @@ type Props = {
   itemWidth: number;
   nativeVideoControls?: boolean;
   onPressItem?: (index: number) => void;
+  /** When true, video tiles show a locked placeholder instead of playing (non-Pro viewer of shared video). */
+  videoLocked?: boolean;
   style?: any;
 };
 
@@ -46,11 +49,21 @@ type StoredMediaTileProps = {
   item: DisplayItem;
   height: number;
   nativeVideoControls: boolean;
+  videoLocked: boolean;
   width: number;
 };
 
-const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMediaTileProps) => {
+const StoredMediaTile = ({ item, height, nativeVideoControls, videoLocked, width }: StoredMediaTileProps) => {
   const { url: displayUrl, isLoading } = useResolvedMediaUrl(item);
+
+  if (item.mediaType === "video" && videoLocked) {
+    return (
+      <View style={[styles.lockedTile, { height, width }]}>
+        <Lock color="#FFF" size={22} />
+        <Text style={styles.lockedText}>Pro required</Text>
+      </View>
+    );
+  }
 
   if (displayUrl) {
     if (item.mediaType === "video") {
@@ -74,7 +87,7 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, width }: StoredMed
   return null;
 };
 
-export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, nativeVideoControls = true, onPressItem, style }: Props) => {
+export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, nativeVideoControls = true, onPressItem, videoLocked = false, style }: Props) => {
   const displayItems = useMemo<DisplayItem[]>(() => resolveDisplayItems(media, mediaItems), [media, mediaItems]);
 
   if (!displayItems.length) return null;
@@ -88,7 +101,13 @@ export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems
     >
       {displayItems.map((item, index) => {
         const tile = (
-          <StoredMediaTile item={item} height={itemHeight} nativeVideoControls={nativeVideoControls} width={itemWidth} />
+          <StoredMediaTile
+            item={item}
+            height={itemHeight}
+            nativeVideoControls={nativeVideoControls}
+            videoLocked={videoLocked}
+            width={itemWidth}
+          />
         );
 
         return onPressItem ? (
@@ -106,6 +125,18 @@ export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems
 const styles = StyleSheet.create({
   image: {
     borderRadius: 8,
+  },
+  lockedTile: {
+    alignItems: "center",
+    backgroundColor: "#000",
+    borderRadius: 8,
+    gap: 6,
+    justifyContent: "center",
+  },
+  lockedText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   row: {
     gap: 10,

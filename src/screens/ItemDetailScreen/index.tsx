@@ -14,6 +14,7 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../..
 import { Section } from "../../components/Section";
 import { TagChip } from "../../components/TagChip";
 import { VideoPreview } from "../../components/VideoPreview";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { useTrove } from "../../storage/storage";
@@ -21,6 +22,7 @@ import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
 import { getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
+import { requiresProForVideoPlayback } from "../../utils/limits";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
@@ -52,8 +54,10 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useTrove();
+  const { isPro } = useEntitlement();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
+  const videoLocked = requiresProForVideoPlayback(isPro, item?.accessRole);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrioritySheetOpen, setIsPrioritySheetOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -398,6 +402,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
             itemHeight={400}
             itemWidth={320}
             onPressItem={setViewerIndex}
+            videoLocked={videoLocked}
             style={styles.mediaPreview}
           />
 
@@ -508,6 +513,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         items={mediaDisplayItems}
         initialIndex={viewerIndex ?? 0}
         onClose={() => setViewerIndex(null)}
+        videoLocked={videoLocked}
       />
     </View>
   );

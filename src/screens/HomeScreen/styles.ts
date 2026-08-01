@@ -27,6 +27,23 @@ export const createStyles = (colors: ThemeColors) =>
       letterSpacing: -1,
       marginBottom: spacing.md,
     },
+    upgradePill: {
+      alignItems: "center",
+      backgroundColor: colors.accentDark,
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    upgradePillPressed: {
+      opacity: 0.8,
+    },
+    upgradePillText: {
+      color: colors.onAccent,
+      fontSize: 12,
+      fontWeight: "800",
+    },
     syncPill: {
       alignSelf: "flex-start",
       backgroundColor: colors.surface,
