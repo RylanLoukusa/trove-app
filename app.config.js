@@ -25,7 +25,14 @@ module.exports = {
       },
     },
     plugins: [
-      "@sentry/react-native",
+      [
+        "@sentry/react-native/expo",
+        {
+          url: "https://sentry.io/",
+          organization: "nova-endeavor",
+          project: "react-native",
+        },
+      ],
       "expo-apple-authentication",
       "expo-video",
       googleIosUrlScheme
