@@ -1,6 +1,7 @@
 import "react-native-gesture-handler";
 import React from "react";
 import { ActivityIndicator, AppState, View } from "react-native";
+import * as Sentry from "@sentry/react-native";
 import { createNavigationContainerRef, DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
@@ -9,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { initSentry } from "./src/lib/sentry";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
@@ -27,6 +29,8 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
 import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
 import { clearSharedImport, getLatestSharedImportId, inferSourcePlatform, markSharedImportConsumed, readSharedImport, titleFromSharedImport } from "./src/share/sharedImport";
+
+initSentry();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -214,7 +218,7 @@ function AppNavigator() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -231,3 +235,5 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(App);

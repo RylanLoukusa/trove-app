@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from "react";
 import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { AppButton } from "./AppButton";
+import { captureException } from "../lib/sentry";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 
@@ -16,6 +17,7 @@ class ErrorBoundaryBase extends Component<Props, State> {
 
   componentDidCatch(error: unknown): void {
     console.error("Unhandled error caught by ErrorBoundary:", error);
+    captureException(error);
   }
 
   private handleRetry = (): void => {

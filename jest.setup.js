@@ -10,3 +10,11 @@ jest.mock("expo-video", () => ({
   }),
   VideoView: "VideoView",
 }));
+
+// Real module sets up native listeners/timers on import even when Sentry.init()
+// is never called (DSN unset in tests), leaving a worker process dangling.
+jest.mock("@sentry/react-native", () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  wrap: (component) => component,
+}));
