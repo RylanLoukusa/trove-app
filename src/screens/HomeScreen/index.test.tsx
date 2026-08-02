@@ -68,11 +68,12 @@ const syncedSnapshot: SyncSnapshot = { retryCount: 0, status: "synced" };
 const renderHomeScreen = async (
   session: Session | null,
   syncSnapshot: SyncSnapshot = syncedSnapshot,
+  isPro = false,
 ) => {
   mockUseAuth.mockReturnValue({ session, signOut });
   mockUseTrove.mockReturnValue({ folders, isReady: true, items, syncSnapshot, syncToRemote });
   mockUseEntitlement.mockReturnValue({
-    isPro: false,
+    isPro,
     isLoading: false,
     presentPaywall: jest.fn(),
     restorePurchases: jest.fn(),
@@ -93,54 +94,69 @@ describe("HomeScreen", () => {
     alertSpy.mockRestore();
   });
 
-  it("shows folders and recently added items", async () => {
+  it("shows folders", async () => {
     await renderHomeScreen(signedInSession);
 
     expect(screen.getAllByText("Recipes").length).toBeGreaterThan(0);
-    expect(screen.getByText("Pasta recipe")).toBeTruthy();
   });
 
-  it("shows empty states when there is no data", async () => {
+  it("shows an empty state when there are no folders", async () => {
     mockUseAuth.mockReturnValue({ session: signedInSession, signOut });
     mockUseTrove.mockReturnValue({ folders: [], isReady: true, items: [], syncSnapshot: syncedSnapshot, syncToRemote });
+    mockUseEntitlement.mockReturnValue({
+      isPro: false,
+      isLoading: false,
+      presentPaywall: jest.fn(),
+      restorePurchases: jest.fn(),
+      setDevIsPro: jest.fn(),
+    });
     await renderScreen(<HomeScreen navigation={navigation} route={{} as never} />);
 
     expect(screen.getByText("No folders yet.")).toBeTruthy();
-    expect(screen.getByText("No items here yet.")).toBeTruthy();
   });
 
-  it("navigates to Add Item, Pick Something, and New folder", async () => {
+  it("navigates to Add Item and New folder", async () => {
     await renderHomeScreen(signedInSession);
 
     await fireEvent.press(screen.getByText("Add Item"));
     expect(navigation.navigate).toHaveBeenCalledWith("AddEditItem");
 
-    await fireEvent.press(screen.getByText("Pick Something"));
-    expect(navigation.navigate).toHaveBeenCalledWith("PickSomething");
-
     await fireEvent.press(screen.getByText("New folder"));
     expect(navigation.navigate).toHaveBeenCalledWith("AddEditFolder", { parentFolderId: null });
   });
 
-  it("navigates into a folder and an item when pressed", async () => {
+  it("navigates into a folder when pressed", async () => {
     await renderHomeScreen(signedInSession);
 
     await fireEvent.press(screen.getAllByText("Recipes")[0]);
     expect(navigation.navigate).toHaveBeenCalledWith("Folder", { folderId: "recipes" });
+  });
 
-    await fireEvent.press(screen.getByText("Pasta recipe"));
-    expect(navigation.navigate).toHaveBeenCalledWith("ItemDetail", { itemId: "pasta" });
+  it("opens the folder browser and navigates to the selected folder", async () => {
+    await renderHomeScreen(signedInSession);
+
+    await fireEvent.press(screen.getByText("Browse all"));
+    expect(screen.getByText("All folders")).toBeTruthy();
+
+    await fireEvent.press(screen.getAllByText("Recipes")[screen.getAllByText("Recipes").length - 1]);
+    expect(navigation.navigate).toHaveBeenCalledWith("Folder", { folderId: "recipes" });
   });
 
   it("does not show a sync pill when signed out", async () => {
-    await renderHomeScreen(null);
+    await renderHomeScreen(null, syncedSnapshot, true);
+
+    expect(screen.queryByText("Saved")).toBeNull();
+  });
+
+  it("does not show a sync pill for non-Pro users", async () => {
+    await renderHomeScreen(signedInSession, syncedSnapshot, false);
 
     expect(screen.queryByText("Saved")).toBeNull();
   });
 
   it("shows the sync status and retries a failed sync on press", async () => {
     syncToRemote.mockResolvedValue({ ok: true });
-    await renderHomeScreen(signedInSession, { retryCount: 1, status: "failed", lastError: "Something broke" });
+    await renderHomeScreen(signedInSession, { retryCount: 1, status: "failed", lastError: "Something broke" }, true);
 
     const pill = screen.getByText("Sync failed");
     await fireEvent.press(pill);
@@ -150,7 +166,7 @@ describe("HomeScreen", () => {
 
   it("alerts when retrying a failed sync fails again", async () => {
     syncToRemote.mockResolvedValue({ ok: false, error: "Still offline" });
-    await renderHomeScreen(signedInSession, { retryCount: 2, status: "failed" });
+    await renderHomeScreen(signedInSession, { retryCount: 2, status: "failed" }, true);
 
     await fireEvent.press(screen.getByText("Sync failed"));
 
@@ -158,7 +174,7 @@ describe("HomeScreen", () => {
   });
 
   it("navigates to the conflict screen instead of retrying when conflicted", async () => {
-    await renderHomeScreen(signedInSession, { retryCount: 0, status: "conflicted" });
+    await renderHomeScreen(signedInSession, { retryCount: 0, status: "conflicted" }, true);
 
     await fireEvent.press(screen.getByText("Sync conflict"));
 

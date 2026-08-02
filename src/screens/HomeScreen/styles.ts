@@ -87,6 +87,10 @@ export const createStyles = (colors: ThemeColors) =>
       justifyContent: "space-between",
       marginTop: spacing.lg,
     },
+    rowHeaderActions: {
+      flexDirection: "row",
+      gap: spacing.md,
+    },
     section: {
       color: colors.ink,
       fontSize: 20,
@@ -97,9 +101,6 @@ export const createStyles = (colors: ThemeColors) =>
     link: {
       color: colors.accentDark,
       fontWeight: "900",
-    },
-    settings: {
-      marginTop: spacing.lg,
     },
     skeletonCard: {
       backgroundColor: colors.surface,

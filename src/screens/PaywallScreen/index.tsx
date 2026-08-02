@@ -84,8 +84,6 @@ export const PaywallScreen = ({ navigation, route }: Props) => {
           ))}
         </View>
 
-        <Text style={styles.price}>Trove Pro</Text>
-
         <AppButton label="Upgrade to Pro" onPress={onUpgrade} style={styles.button} />
         <AppButton label="Not now" variant="secondary" onPress={() => navigation.goBack()} style={styles.button} />
 

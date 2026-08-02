@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Sparkles } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
-import { ItemCard } from "../../components/ItemCard";
+import { FolderTreeBrowserModal } from "../../components/FolderTreeBrowserModal";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
@@ -14,8 +14,8 @@ import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useAuth } from "../../auth/AuthContext";
-import { Folder, SavedItem } from "../../types/models";
-import { getDescendantFolderIds, getFolderPathLabel, getVisibleRootFolders } from "../../utils/folderTree";
+import { Folder } from "../../types/models";
+import { getDescendantFolderIds, getVisibleRootFolders } from "../../utils/folderTree";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -41,15 +41,6 @@ const HomeSkeleton = ({ styles }: { styles: ScreenStyles }) => (
         </View>
       )}
     />
-    <SkeletonBlock height={24} radius={12} width="52%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={5}
-      renderItem={() => (
-        <View style={styles.skeletonCard}>
-          <SkeletonText lineCount={3} lineWidths={["80%", "54%", "32%"]} />
-        </View>
-      )}
-    />
   </ScreenSkeleton>
 );
 
@@ -67,26 +58,29 @@ const FolderListItem = React.memo(function FolderListItem({ folder, count, onOpe
   return <FolderCard folder={folder} count={count} onPress={onPress} />;
 });
 
-type RecentItemRowProps = {
-  item: SavedItem;
-  folderPath: string;
-  onOpenItemDetail: (itemId: string) => void;
-};
-
-const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOpenItemDetail }: RecentItemRowProps) {
-  const onPress = useCallback(() => {
-    onOpenItemDetail(item.id);
-  }, [item.id, onOpenItemDetail]);
-
-  return <ItemCard item={item} folderPath={folderPath} onPress={onPress} />;
-});
-
 export const HomeScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, syncSnapshot, syncToRemote } = useTrove();
   const { session, signOut } = useAuth();
   const { isPro, isLoading: isEntitlementLoading, presentPaywall } = useEntitlement();
+  const [isFolderBrowserOpen, setIsFolderBrowserOpen] = useState(false);
+
+  const onOpenFolderBrowser = useCallback(() => {
+    setIsFolderBrowserOpen(true);
+  }, []);
+
+  const onCloseFolderBrowser = useCallback(() => {
+    setIsFolderBrowserOpen(false);
+  }, []);
+
+  const onSelectFolderFromBrowser = useCallback(
+    (folderId: string) => {
+      setIsFolderBrowserOpen(false);
+      navigation.navigate("Folder", { folderId });
+    },
+    [navigation],
+  );
 
   const onPressUpgrade = useCallback(() => {
     presentPaywall("general");
@@ -100,10 +94,6 @@ export const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("AddEditItem");
   }, [navigation]);
 
-  const onPressPickSomething = useCallback(() => {
-    navigation.navigate("PickSomething");
-  }, [navigation]);
-
   const onPressNewFolder = useCallback(() => {
     navigation.navigate("AddEditFolder", { parentFolderId: null });
   }, [navigation]);
@@ -111,13 +101,6 @@ export const HomeScreen = ({ navigation }: Props) => {
   const onOpenFolder = useCallback(
     (folderId: string) => {
       navigation.navigate("Folder", { folderId });
-    },
-    [navigation],
-  );
-
-  const onOpenItemDetail = useCallback(
-    (itemId: string) => {
-      navigation.navigate("ItemDetail", { itemId });
     },
     [navigation],
   );
@@ -164,9 +147,6 @@ export const HomeScreen = ({ navigation }: Props) => {
   }, [navigation, syncSnapshot.status, syncToRemote]);
 
   const topFolders = getVisibleRootFolders(folders);
-  const recentItems = [...items]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 5);
 
   const countForFolder = (folderId: string) => {
     const ids = [folderId, ...getDescendantFolderIds(folders, folderId)];
@@ -198,10 +178,10 @@ export const HomeScreen = ({ navigation }: Props) => {
           <HomeSkeleton styles={styles} />
         ) : (
           <>
-        <Text style={styles.kicker}>Save ideas now. Pick the perfect one later.</Text>
+        <Text style={styles.kicker}>Save plans, ideas, and links in one place.</Text>
         <Text style={styles.title}>Trove</Text>
 
-        {session?.user ? (
+        {session?.user && isPro ? (
           <Pressable
             accessibilityRole={
               syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted"
@@ -234,19 +214,20 @@ export const HomeScreen = ({ navigation }: Props) => {
 
         <View style={styles.actions}>
           <AppButton label="Add Item" onPress={onPressAddItem} style={styles.action} />
-          <AppButton
-            label="Pick Something"
-            variant="secondary"
-            onPress={onPressPickSomething}
-            style={styles.action}
-          />
         </View>
 
         <View style={styles.rowHeader}>
           <Text style={styles.section}>Folders</Text>
-          <Pressable onPress={onPressNewFolder}>
-            <Text style={styles.link}>New folder</Text>
-          </Pressable>
+          <View style={styles.rowHeaderActions}>
+            {folders.length > 0 && (
+              <Pressable onPress={onOpenFolderBrowser}>
+                <Text style={styles.link}>Browse all</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={onPressNewFolder}>
+              <Text style={styles.link}>New folder</Text>
+            </Pressable>
+          </View>
         </View>
 
         {topFolders.length === 0 ? (
@@ -264,33 +245,15 @@ export const HomeScreen = ({ navigation }: Props) => {
             />
           ))
         )}
-
-        <Text style={styles.section}>Recently added</Text>
-        {recentItems.length === 0 ? (
-          <EmptyState
-            title="No items here yet."
-            message="Add a note, list, link, or media item to Trove."
-          />
-        ) : (
-          recentItems.map((item) => (
-            <RecentItemRow
-              key={item.id}
-              item={item}
-              folderPath={getFolderPathLabel(folders, item.folderId)}
-              onOpenItemDetail={onOpenItemDetail}
-            />
-          ))
-        )}
-
-        <AppButton
-          label="Settings"
-          variant="secondary"
-          onPress={onPressSettings}
-          style={styles.settings}
-        />
           </>
         )}
       </ScrollView>
+      <FolderTreeBrowserModal
+        visible={isFolderBrowserOpen}
+        folders={folders}
+        onClose={onCloseFolderBrowser}
+        onSelectFolder={onSelectFolderFromBrowser}
+      />
     </View>
   );
 };

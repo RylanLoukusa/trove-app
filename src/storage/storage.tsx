@@ -137,13 +137,13 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const markLocalChangePending = useCallback(() => {
-    if (!activeUserId) return;
+    if (!activeUserId || requiresProForSync(isPro)) return;
     setSyncSnapshot((current) => {
       const nextSnapshot = queuedSyncSnapshot(current);
       void saveSyncSnapshot(activeUserId, nextSnapshot);
       return nextSnapshot;
     });
-  }, [activeUserId]);
+  }, [activeUserId, isPro]);
 
   const applyPushResult = useCallback(
     (result: PushTroveResult, fallbackError: string): { ok: boolean; error?: string } => {
