@@ -14,12 +14,13 @@ import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { spacing } from "../../theme/theme";
 import { Folder, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
-import { getItemTypeLabel } from "../../utils/itemTypes";
+import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
@@ -129,7 +130,10 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
         {item.type === "list" && !!item.listItems?.length && (
           <View style={styles.fullItemList}>
             {item.listItems.map((listItem) => (
-              <View key={listItem.id} style={styles.fullItemListRow}>
+              <View
+                key={listItem.id}
+                style={[styles.fullItemListRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * spacing.lg }]}
+              >
                 {listItem.kind === "check" ? (
                   <Pressable
                     accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
@@ -141,7 +145,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
                     <Text style={styles.fullItemMarker}>{listItem.checked ? "☑" : "☐"}</Text>
                   </Pressable>
                 ) : (
-                  <Text style={[styles.fullItemMarker, styles.fullItemBullet]}>•</Text>
+                  <Text style={[styles.fullItemMarker, styles.fullItemBullet]}>{bulletGlyphForIndent(listItem.indentLevel)}</Text>
                 )}
                 <Text style={[styles.fullItemListText, listItem.checked && styles.fullItemListTextDone]}>{listItem.text}</Text>
               </View>

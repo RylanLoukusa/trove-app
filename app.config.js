@@ -16,6 +16,9 @@ module.exports = {
       ...appJson.expo.ios,
       usesAppleSignIn: true,
       associatedDomains: ["applinks:trovecollections.app"],
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       package: "com.rylanloukusa.trove",

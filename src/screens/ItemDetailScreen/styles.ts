@@ -124,10 +124,10 @@ export const createStyles = (colors: ThemeColors) =>
     },
     listCheckbox: {
       alignItems: "center",
-      borderRadius: 8,
-      minHeight: 34,
+      borderRadius: 10,
+      minHeight: 44,
       justifyContent: "center",
-      width: 34,
+      width: 44,
     },
     listCheckboxPressed: {
       backgroundColor: colors.background,
@@ -135,11 +135,12 @@ export const createStyles = (colors: ThemeColors) =>
     },
     listMarker: {
       color: colors.accentDark,
-      fontSize: 18,
+      fontSize: 24,
       fontWeight: "900",
-      width: 24,
+      width: 30,
     },
     listBullet: {
+      fontSize: 16,
       textAlign: "center",
     },
     listText: {

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ItemType, SavedItem } from "../types/models";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import { normalizeItemType } from "../utils/itemTypes";
+import { bulletGlyphForIndent, normalizeItemType } from "../utils/itemTypes";
 import { MediaCollectionDisplay } from "./MediaCollectionDisplay";
 
 const typeIcon: Record<ItemType, string> = {
@@ -43,8 +43,13 @@ export const ItemCard = ({ item, folderPath, onPress }: Props) => {
         {item.type === "list" && !!item.listItems?.length && (
           <View style={styles.previewBlock}>
             {item.listItems.slice(0, 3).map((listItem) => (
-              <Text key={listItem.id} numberOfLines={1} style={styles.previewLine}>
-                {listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : "•"} {listItem.text || "Untitled row"}
+              <Text
+                key={listItem.id}
+                numberOfLines={1}
+                style={[styles.previewLine, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * spacing.md }]}
+              >
+                {listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : bulletGlyphForIndent(listItem.indentLevel)}{" "}
+                {listItem.text || "Untitled row"}
               </Text>
             ))}
           </View>

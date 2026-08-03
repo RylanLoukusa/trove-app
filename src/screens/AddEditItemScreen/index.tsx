@@ -1,22 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { FolderPickerField } from "../../components/FolderPickerField";
 import { MediaCollectionPicker } from "../../components/MediaCollectionPicker";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { ListItemRow, LIST_ROW_HEIGHT } from "./ListItemRow";
 import { RootStackParamList } from "../../navigation/types";
 import { clearSharedImport, inferSourcePlatform, readSharedImport, titleFromSharedImport } from "../../share/sharedImport";
 import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { spacing } from "../../theme/theme";
 import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
 import { isMediaItemType, itemPriorities, itemStatuses, normalizeItemType, priorityChoices, statusChoices } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
+
+const MAX_LIST_INDENT_LEVEL = 3;
 
 const types = ["text", "list", "link", "media"] as const;
 const statuses = itemStatuses;
@@ -41,6 +45,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   );
   const scrollViewRef = useRef<ScrollView>(null);
   const titleInputRef = useRef<TextInput>(null);
+  const listInputRefs = useRef<Map<string, TextInput>>(new Map());
 
   const [title, setTitle] = useState(editing?.title ?? "");
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -48,7 +53,9 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [linkText, setLinkText] = useState(editing?.type === "link" ? editing.url ?? "" : "");
   const [sourceUrl, setSourceUrl] = useState(editing?.sourceUrl ?? "");
   const [sharedText, setSharedText] = useState(editing?.sharedText ?? "");
-  const [type, setType] = useState<ItemType>(normalizeItemType(editing?.type ?? "text"));
+  const [type, setType] = useState<ItemType | null>(editing ? normalizeItemType(editing.type) : null);
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [isTypePickerOpen, setIsTypePickerOpen] = useState(!editing);
   const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? editableFolders[0]?.id ?? "");
   const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
   const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
@@ -124,12 +131,15 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
 
         if (nextMediaItems.length > 0) {
           setType("media");
+          setIsTypePickerOpen(false);
         } else if (nextSourceUrl) {
           setType("link");
           setLinkText(nextSourceUrl);
+          setIsTypePickerOpen(false);
         } else if (nextSharedText) {
           setType("text");
           setNoteText(nextSharedText);
+          setIsTypePickerOpen(false);
         }
       })
       .catch(() => {
@@ -145,12 +155,94 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     setListItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
   }, []);
 
-  const addListItem = useCallback((kind: ListItemKind): void => {
-    setListItems((current) => [...current, { id: createId("list-item"), kind, text: "", checked: false }]);
+  const listKind: ListItemKind = listItems[0]?.kind ?? "check";
+  const isListEmpty = listItems.length === 1 && !listItems[0].text.trim();
+
+  const setListKind = useCallback((kind: ListItemKind): void => {
+    setListItems((current) => current.map((item) => ({ ...item, kind, checked: false })));
+  }, []);
+
+  const addListItem = useCallback((): void => {
+    setListItems((current) => [...current, { id: createId("list-item"), kind: listKind, text: "", checked: false, indentLevel: 0 }]);
+  }, [listKind]);
+
+  const insertListItemAfter = useCallback(
+    (itemId: string): string => {
+      const newId = createId("list-item");
+      setListItems((current) => {
+        const index = current.findIndex((item) => item.id === itemId);
+        const reference = current[index];
+        const newItem: SavedListItem = {
+          id: newId,
+          kind: reference?.kind ?? listKind,
+          text: "",
+          checked: false,
+          indentLevel: reference?.indentLevel ?? 0,
+        };
+        if (index === -1) return [...current, newItem];
+        return [...current.slice(0, index + 1), newItem, ...current.slice(index + 1)];
+      });
+      return newId;
+    },
+    [listKind],
+  );
+
+  const indentListItem = useCallback((itemId: string): void => {
+    setListItems((current) =>
+      current.map((item) =>
+        item.id === itemId ? { ...item, indentLevel: Math.min((item.indentLevel ?? 0) + 1, MAX_LIST_INDENT_LEVEL) } : item,
+      ),
+    );
+  }, []);
+
+  const outdentListItem = useCallback((itemId: string): void => {
+    setListItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, indentLevel: Math.max((item.indentLevel ?? 0) - 1, 0) } : item)),
+    );
   }, []);
 
   const removeListItem = useCallback((itemId: string): void => {
     setListItems((current) => (current.length > 1 ? current.filter((item) => item.id !== itemId) : current));
+  }, []);
+
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndexState] = useState(0);
+  const dragOverIndexRef = useRef(0);
+  const draggingIndex = draggingItemId ? listItems.findIndex((item) => item.id === draggingItemId) : -1;
+
+  const setDragOverIndex = useCallback((nextIndex: number): void => {
+    dragOverIndexRef.current = nextIndex;
+    setDragOverIndexState((current) => (current === nextIndex ? current : nextIndex));
+  }, []);
+
+  const startListItemDrag = useCallback(
+    (itemId: string, startIndex: number): void => {
+      setDragOverIndex(startIndex);
+      setDraggingItemId(itemId);
+    },
+    [setDragOverIndex],
+  );
+
+  const updateListItemDrag = useCallback(
+    (startIndex: number, translationY: number): void => {
+      const rawOffset = Math.round(translationY / LIST_ROW_HEIGHT);
+      const nextIndex = Math.min(Math.max(startIndex + rawOffset, 0), listItems.length - 1);
+      setDragOverIndex(nextIndex);
+    },
+    [listItems.length, setDragOverIndex],
+  );
+
+  const endListItemDrag = useCallback((startIndex: number): void => {
+    const targetIndex = dragOverIndexRef.current;
+    if (startIndex !== targetIndex) {
+      setListItems((current) => {
+        const next = [...current];
+        const [moved] = next.splice(startIndex, 1);
+        next.splice(targetIndex, 0, moved);
+        return next;
+      });
+    }
+    setDraggingItemId(null);
   }, []);
 
   const updateTitle = useCallback(
@@ -169,6 +261,13 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
       setTitleError("Title is required.");
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       requestAnimationFrame(() => titleInputRef.current?.focus());
+      return;
+    }
+
+    if (!type) {
+      setTypeError("Choose a type.");
+      setIsTypePickerOpen(true);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
@@ -282,6 +381,8 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     }
   }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, priority, sharedImportId, sharedText, sourceUrl, status, tags, title, type, updateItem]);
 
+  const selectedTypeOption = type ? typeChoices[normalizeItemType(type) as SelectableItemType] : null;
+
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
@@ -302,19 +403,34 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         {titleError && <Text style={styles.errorText}>{titleError}</Text>}
 
         <Text style={styles.section}>Type</Text>
-        {types.map((choice) => {
-          const option = typeChoices[choice];
-          return (
-            <OptionChoiceRow
-              key={choice}
-              label={option.label}
-              detail={option.detail}
-              tone={option.tone}
-              isSelected={type === choice}
-              onPress={() => setType(choice)}
-            />
-          );
-        })}
+        {isTypePickerOpen || !selectedTypeOption ? (
+          types.map((choice) => {
+            const option = typeChoices[choice];
+            return (
+              <OptionChoiceRow
+                key={choice}
+                label={option.label}
+                detail={option.detail}
+                tone={option.tone}
+                isSelected={type === choice}
+                onPress={() => {
+                  setType(choice);
+                  setIsTypePickerOpen(false);
+                  setTypeError(null);
+                }}
+              />
+            );
+          })
+        ) : (
+          <OptionChoiceRow
+            label={selectedTypeOption.label}
+            detail={`${selectedTypeOption.detail} · Tap to change`}
+            tone={selectedTypeOption.tone}
+            isSelected
+            onPress={() => setIsTypePickerOpen(true)}
+          />
+        )}
+        {typeError && <Text style={styles.errorText}>{typeError}</Text>}
 
         {type === "text" && (
           <>
@@ -349,41 +465,72 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
 
         {type === "list" && (
           <View style={styles.listEditor}>
-            {listItems.map((listItem) => (
-              <View key={listItem.id} style={styles.listRow}>
-                <Pressable
-                  onPress={() =>
-                    updateListItem(
-                      listItem.id,
-                      listItem.kind === "check" ? { checked: !listItem.checked } : { kind: "check", checked: false },
-                    )
-                  }
-                  style={styles.listMarker}
-                >
-                  <Text style={styles.listMarkerText}>{listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : "•"}</Text>
-                </Pressable>
-                <TextInput
-                  style={styles.listInput}
-                  value={listItem.text}
-                  onChangeText={(text) => updateListItem(listItem.id, { text })}
-                  placeholder={listItem.kind === "check" ? "Checklist item" : "Bullet item"}
+            {isListEmpty && (
+              <View style={styles.listKindPicker}>
+                <OptionChoiceRow
+                  label="Checklist"
+                  detail="Rows with checkboxes"
+                  tone="#8A9A5B"
+                  isSelected={listKind === "check"}
+                  onPress={() => setListKind("check")}
                 />
-                <Pressable onPress={() => updateListItem(listItem.id, { kind: listItem.kind === "check" ? "bullet" : "check", checked: false })}>
-                  <Text style={styles.listAction}>{listItem.kind === "check" ? "Bullet" : "Check"}</Text>
-                </Pressable>
-                <Pressable onPress={() => removeListItem(listItem.id)}>
-                  <Text style={styles.listRemove}>Remove</Text>
-                </Pressable>
+                <OptionChoiceRow
+                  label="Bulleted list"
+                  detail="Rows with bullet points"
+                  tone="#DFAE73"
+                  isSelected={listKind === "bullet"}
+                  onPress={() => setListKind("bullet")}
+                />
               </View>
-            ))}
+            )}
+            {listItems.map((listItem, index) => {
+              let shiftDirection: -1 | 0 | 1 = 0;
+              if (draggingItemId && listItem.id !== draggingItemId) {
+                if (draggingIndex < dragOverIndex && index > draggingIndex && index <= dragOverIndex) {
+                  shiftDirection = -1;
+                } else if (draggingIndex > dragOverIndex && index >= dragOverIndex && index < draggingIndex) {
+                  shiftDirection = 1;
+                }
+              }
+
+              return (
+                <ListItemRow
+                  key={listItem.id}
+                  listItem={listItem}
+                  indentMarginLeft={Math.min(listItem.indentLevel ?? 0, MAX_LIST_INDENT_LEVEL) * spacing.lg}
+                  isDragging={draggingItemId === listItem.id}
+                  isDragActive={draggingItemId !== null}
+                  shiftDirection={shiftDirection}
+                  canIndent={index > 0 && (listItem.indentLevel ?? 0) < MAX_LIST_INDENT_LEVEL}
+                  canOutdent={(listItem.indentLevel ?? 0) > 0}
+                  colors={colors}
+                  styles={styles}
+                  registerInputRef={(el) => {
+                    if (el) listInputRefs.current.set(listItem.id, el);
+                    else listInputRefs.current.delete(listItem.id);
+                  }}
+                  onChangeText={(text) => updateListItem(listItem.id, { text })}
+                  onToggleChecked={() => updateListItem(listItem.id, { checked: !listItem.checked })}
+                  onSubmitEditing={() => {
+                    const newId = insertListItemAfter(listItem.id);
+                    requestAnimationFrame(() => listInputRefs.current.get(newId)?.focus());
+                  }}
+                  onIndent={() => indentListItem(listItem.id)}
+                  onOutdent={() => outdentListItem(listItem.id)}
+                  onRemove={() => removeListItem(listItem.id)}
+                  onDragStart={() => startListItemDrag(listItem.id, index)}
+                  onDragUpdate={(translationY) => updateListItemDrag(index, translationY)}
+                  onDragEnd={() => endListItemDrag(index)}
+                />
+              );
+            })}
             <View style={styles.listButtons}>
-              <AppButton label="Add checklist row" variant="secondary" onPress={() => addListItem("check")} style={styles.listButton} />
-              <AppButton label="Add bullet row" variant="secondary" onPress={() => addListItem("bullet")} style={styles.listButton} />
+              <AppButton label="Add row" variant="secondary" onPress={addListItem} style={styles.listButton} />
             </View>
           </View>
         )}
 
-        {isMediaItemType(type) && (
+        {!!type && isMediaItemType(type) && (
           <MediaCollectionPicker
             items={mediaItems}
             onChange={setMediaItems}
@@ -391,7 +538,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           />
         )}
 
-        {(isMediaItemType(type) || sourceUrl.trim().length > 0) && (
+        {((!!type && isMediaItemType(type)) || sourceUrl.trim().length > 0) && (
           <>
             <Text style={styles.label}>Source URL</Text>
             <TextInput
@@ -406,7 +553,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        {isMediaItemType(type) && sharedText.trim().length > 0 && (
+        {!!type && isMediaItemType(type) && sharedText.trim().length > 0 && (
           <>
             <Text style={styles.label}>Shared text</Text>
             <TextInput

@@ -17,11 +17,12 @@ import { VideoPreview } from "../../components/VideoPreview";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { spacing } from "../../theme/theme";
 import { useTrove } from "../../storage/storage";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
-import { getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
+import { bulletGlyphForIndent, getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
 import { requiresProForVideoPlayback } from "../../utils/limits";
 import { createStyles } from "./styles";
 
@@ -420,7 +421,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           {item.type === "list" && !!item.listItems?.length && (
             <View style={styles.listBlock}>
               {item.listItems.map((listItem) => (
-                <View key={listItem.id} style={styles.listRow}>
+                <View key={listItem.id} style={[styles.listRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * spacing.lg }]}>
                   {listItem.kind === "check" ? (
                     <Pressable
                       accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
@@ -432,7 +433,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
                       <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
                     </Pressable>
                   ) : (
-                    <Text style={[styles.listMarker, styles.listBullet]}>•</Text>
+                    <Text style={[styles.listMarker, styles.listBullet]}>{bulletGlyphForIndent(listItem.indentLevel)}</Text>
                   )}
                   <Text style={[styles.listText, listItem.checked && styles.listTextDone]}>{listItem.text}</Text>
                 </View>

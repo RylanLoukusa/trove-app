@@ -237,10 +237,10 @@ export const createStyles = (colors: ThemeColors) =>
     },
     fullItemCheckbox: {
       alignItems: "center",
-      borderRadius: 8,
-      minHeight: 34,
+      borderRadius: 10,
+      minHeight: 44,
       justifyContent: "center",
-      width: 34,
+      width: 44,
     },
     fullItemCheckboxPressed: {
       backgroundColor: colors.surface,
@@ -248,11 +248,12 @@ export const createStyles = (colors: ThemeColors) =>
     },
     fullItemMarker: {
       color: colors.accentDark,
-      fontSize: 18,
+      fontSize: 24,
       fontWeight: "900",
-      width: 24,
+      width: 30,
     },
     fullItemBullet: {
+      fontSize: 16,
       textAlign: "center",
     },
     fullItemListText: {

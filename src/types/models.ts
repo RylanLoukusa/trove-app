@@ -40,6 +40,7 @@ export type SavedListItem = {
   kind: ListItemKind;
   text: string;
   checked?: boolean;
+  indentLevel?: number;
 };
 
 export type ItemAttachment = {

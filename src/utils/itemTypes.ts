@@ -18,6 +18,12 @@ export const priorityChoices: Record<ItemPriority, ItemChoiceOption> = {
   high: { label: "High", detail: "Top of the list", tone: "#B85B53" },
 };
 
+// The trailing U+FE0E forces text (not emoji) presentation for the square glyph on iOS,
+// so it renders as a plain colored character instead of a fixed-size black emoji.
+const BULLET_GLYPHS = ["●", "○", "▪︎"];
+
+export const bulletGlyphForIndent = (indentLevel = 0): string => BULLET_GLYPHS[indentLevel % BULLET_GLYPHS.length];
+
 export const isMediaItemType = (type: ItemType): boolean => type === "media" || type === "image" || type === "video";
 
 export const normalizeItemType = (type: ItemType): ItemType => (isMediaItemType(type) ? "media" : type);

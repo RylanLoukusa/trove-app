@@ -92,12 +92,23 @@ describe("AddEditItemScreen", () => {
     await renderNewItem();
 
     await fireEvent.changeText(screen.getByPlaceholderText("What are you saving?"), "Grocery list idea");
+    await fireEvent.press(screen.getByText("Note"));
     await fireEvent.press(screen.getByText("Save item"));
 
     expect(createItem).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Grocery list idea", type: "text", folderId: "recipes" }),
     );
     expect(navigation.replace).toHaveBeenCalledWith("ItemDetail", { itemId: "new-item" });
+  });
+
+  it("requires a type before saving", async () => {
+    await renderNewItem();
+
+    await fireEvent.changeText(screen.getByPlaceholderText("What are you saving?"), "Grocery list idea");
+    await fireEvent.press(screen.getByText("Save item"));
+
+    expect(screen.getByText("Choose a type.")).toBeTruthy();
+    expect(createItem).not.toHaveBeenCalled();
   });
 
   it("saves a link item with the entered URL", async () => {
@@ -119,6 +130,7 @@ describe("AddEditItemScreen", () => {
     await renderNewItem();
 
     await fireEvent.changeText(screen.getByPlaceholderText("What are you saving?"), "Grocery list idea");
+    await fireEvent.press(screen.getByText("Note"));
     await fireEvent.press(screen.getByText("Save item"));
 
     expect(createItem).not.toHaveBeenCalled();

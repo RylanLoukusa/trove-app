@@ -64,23 +64,43 @@ export const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.xs,
       padding: spacing.md,
     },
+    listKindPicker: {
+      marginBottom: spacing.sm,
+    },
     listRow: {
       alignItems: "center",
+      backgroundColor: colors.surface,
       flexDirection: "row",
       gap: spacing.sm,
       marginBottom: spacing.sm,
     },
+    listDragHandle: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing.xs,
+    },
+    listRowContent: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
     listMarker: {
       alignItems: "center",
       backgroundColor: colors.background,
-      borderRadius: 10,
-      height: 34,
+      borderRadius: 12,
+      height: 44,
       justifyContent: "center",
-      width: 34,
+      width: 44,
     },
     listMarkerText: {
       color: colors.accentDark,
-      fontSize: 18,
+      fontSize: 24,
+      fontWeight: "900",
+    },
+    listBulletText: {
+      color: colors.accentDark,
+      fontSize: 16,
       fontWeight: "900",
     },
     listInput: {
@@ -90,15 +110,10 @@ export const createStyles = (colors: ThemeColors) =>
       flex: 1,
       padding: spacing.sm,
     },
-    listAction: {
-      color: colors.accentDark,
-      fontSize: 12,
-      fontWeight: "900",
-    },
-    listRemove: {
-      color: colors.danger,
-      fontSize: 12,
-      fontWeight: "900",
+    listIndentButton: {
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.xs,
     },
     listButtons: {
       flexDirection: "row",
