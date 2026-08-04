@@ -104,6 +104,7 @@ export const FolderPickerField = ({ folders, selectedFolderId, onSelectFolder }:
             autoCorrect={false}
             onChangeText={setQuery}
             placeholder="Search folders..."
+            placeholderTextColor={colors.muted}
             style={styles.search}
             value={query}
           />

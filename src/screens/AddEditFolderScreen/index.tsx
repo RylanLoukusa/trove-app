@@ -213,13 +213,20 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         <Text style={styles.title}>{editing ? "Edit folder" : "New folder"}</Text>
 
         <Text style={styles.label}>Name</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Weekend Ideas" />
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="Weekend Ideas"
+          placeholderTextColor={colors.muted}
+        />
 
         <Text style={styles.label}>Purpose</Text>
         <TextInput
           multiline
           onChangeText={setPurpose}
           placeholder="Things that belong together here..."
+          placeholderTextColor={colors.muted}
           style={[styles.input, styles.purposeInput]}
           textAlignVertical="top"
           value={purpose}
@@ -382,6 +389,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             autoCorrect={false}
             onChangeText={setParentSearch}
             placeholder="Search folders..."
+            placeholderTextColor={colors.muted}
             style={styles.input}
             value={parentSearch}
           />

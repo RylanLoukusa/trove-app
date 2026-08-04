@@ -276,6 +276,7 @@ export const LoginScreen = ({ navigation }: Props) => {
                 autoCorrect={false}
                 keyboardType="email-address"
                 placeholder="you@example.com"
+                placeholderTextColor={colors.muted}
               />
               {authError ? <Text style={styles.error}>{authError}</Text> : null}
               <AppButton label="Send reset link" onPress={onRequestPasswordReset} disabled={busy} style={styles.button} />
@@ -298,6 +299,7 @@ export const LoginScreen = ({ navigation }: Props) => {
                 autoCorrect={false}
                 keyboardType="email-address"
                 placeholder="you@example.com"
+                placeholderTextColor={colors.muted}
               />
               <View style={styles.labelRow}>
                 <Text style={[styles.label, styles.labelInline]}>Password</Text>
@@ -313,6 +315,7 @@ export const LoginScreen = ({ navigation }: Props) => {
                 onChangeText={setPassword}
                 secureTextEntry
                 placeholder="••••••••"
+                placeholderTextColor={colors.muted}
               />
               {authError ? <Text style={styles.error}>{authError}</Text> : null}
               <AppButton

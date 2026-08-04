@@ -65,6 +65,7 @@ export const ResetPasswordScreen = ({ navigation }: Props) => {
           autoCorrect={false}
           onChangeText={setPassword}
           placeholder="At least 8 characters"
+          placeholderTextColor={colors.muted}
           secureTextEntry
           style={styles.input}
           value={password}
@@ -76,6 +77,7 @@ export const ResetPasswordScreen = ({ navigation }: Props) => {
           autoCorrect={false}
           onChangeText={setConfirmPassword}
           placeholder="Re-enter new password"
+          placeholderTextColor={colors.muted}
           secureTextEntry
           style={styles.input}
           value={confirmPassword}

@@ -71,6 +71,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
           style={styles.input}
           multiline
           placeholder="Try the new ramen place downtown"
+          placeholderTextColor={colors.muted}
           value={content}
           onChangeText={setContent}
           autoFocus

@@ -262,6 +262,7 @@ export const SearchScreen = ({ navigation, route }: Props) => {
               value={query}
               onChangeText={setQuery}
               placeholder="Folders, titles, tags, URLs..."
+              placeholderTextColor={colors.muted}
               autoFocus
             />
             {hasQuery && (

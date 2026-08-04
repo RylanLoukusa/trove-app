@@ -77,6 +77,7 @@ const TagOptionRow = React.memo(function TagOptionRow({
         value={option.name}
         onChangeText={onChangeName}
         placeholder="Option name"
+        placeholderTextColor={colors.muted}
       />
       <View style={styles.reorderColumn}>
         <Pressable
@@ -319,6 +320,7 @@ export const AddEditTagGroupScreen = ({ navigation, route }: Props) => {
               if (nameError && value.trim()) setNameError(null);
             }}
             placeholder="Group name"
+            placeholderTextColor={colors.muted}
           />
           {nameError && <Text style={styles.errorText}>{nameError}</Text>}
 

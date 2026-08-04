@@ -111,6 +111,7 @@ export const ListItemRow = ({
           value={listItem.text}
           onChangeText={onChangeText}
           placeholder={listItem.kind === "check" ? "Checklist item" : "Bullet item"}
+          placeholderTextColor={colors.muted}
           returnKeyType="next"
           blurOnSubmit={false}
           onSubmitEditing={onSubmitEditing}

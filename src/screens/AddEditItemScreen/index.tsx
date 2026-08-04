@@ -423,6 +423,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           value={title}
           onChangeText={updateTitle}
           placeholder="What are you saving?"
+          placeholderTextColor={colors.muted}
           returnKeyType="done"
         />
         {titleError && <Text style={styles.errorText}>{titleError}</Text>}
@@ -466,6 +467,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
               value={noteText}
               onChangeText={setNoteText}
               placeholder="Write the thought, reminder, or context..."
+              placeholderTextColor={colors.muted}
               textAlignVertical="top"
             />
           </>
@@ -483,6 +485,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
               autoCorrect={false}
               keyboardType="url"
               placeholder="https://example.com"
+              placeholderTextColor={colors.muted}
               textAlignVertical="top"
             />
           </>
@@ -574,6 +577,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
               autoCorrect={false}
               keyboardType="url"
               placeholder="Original post URL"
+              placeholderTextColor={colors.muted}
             />
           </>
         )}
@@ -587,6 +591,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
               value={sharedText}
               onChangeText={setSharedText}
               placeholder="Caption or shared text"
+              placeholderTextColor={colors.muted}
               textAlignVertical="top"
             />
           </>

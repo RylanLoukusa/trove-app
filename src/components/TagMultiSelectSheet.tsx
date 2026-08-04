@@ -64,6 +64,7 @@ export const TagMultiSelectSheet = ({
           onChangeText={setQuery}
           onSubmitEditing={canCreate ? submitCreate : undefined}
           placeholder={`Search ${title.toLowerCase()}...`}
+          placeholderTextColor={colors.muted}
           style={styles.search}
           value={query}
         />
