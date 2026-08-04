@@ -11,7 +11,6 @@ export type RootStackParamList = {
   ItemDetail: { itemId: string };
   Search: { query?: string } | undefined;
   ShareFolder: { folderId: string };
-  PickSomething: { folderId?: string } | undefined;
   Profile: undefined;
   SyncConflict: undefined;
   Settings: undefined;

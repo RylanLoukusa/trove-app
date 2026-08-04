@@ -24,7 +24,6 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { ItemDetailScreen } from "./src/screens/ItemDetailScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
-import { PickSomethingScreen } from "./src/screens/PickSomethingScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
@@ -48,7 +47,6 @@ const linking: LinkingOptions<RootStackParamList> = {
       Home: "home",
       ItemDetail: "item/:itemId",
       Login: "login",
-      PickSomething: "pick-something",
       Profile: "profile",
       Search: "search",
       Settings: "settings",
@@ -203,7 +201,6 @@ function AppNavigator() {
             <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
             <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
             <Stack.Screen name="Search" component={SearchScreen} />
-            <Stack.Screen name="PickSomething" component={PickSomethingScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />

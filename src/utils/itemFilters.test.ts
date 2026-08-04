@@ -1,4 +1,4 @@
-import { filterWaitingItems, pickRandomWaitingItem, searchFoldersAndItems } from "./itemFilters";
+import { searchFoldersAndItems } from "./itemFilters";
 import type { Folder, SavedItem } from "../types/models";
 
 const now = "2026-01-01T00:00:00.000Z";
@@ -64,50 +64,5 @@ describe("searchFoldersAndItems", () => {
   it("returns empty results when nothing matches", () => {
     const result = searchFoldersAndItems("xyz-no-match", folders, items);
     expect(result).toEqual({ folders: [], items: [] });
-  });
-});
-
-describe("filterWaitingItems", () => {
-  const items: SavedItem[] = [
-    item({ id: "waiting-food", folderId: "food", status: "waiting" }),
-    item({ id: "waiting-cooking", folderId: "cooking", status: "waiting", priority: "high" }),
-    item({ id: "done-food", folderId: "food", status: "done" }),
-    item({ id: "waiting-other", folderId: "other-folder", status: "waiting" }),
-  ];
-
-  it("only includes items with status 'waiting'", () => {
-    const result = filterWaitingItems(items, folders);
-    expect(result.map((i) => i.id).sort()).toEqual(["waiting-cooking", "waiting-food", "waiting-other"].sort());
-  });
-
-  it("scopes to a folder and its descendants when folderId is given", () => {
-    const result = filterWaitingItems(items, folders, "food");
-    expect(result.map((i) => i.id).sort()).toEqual(["waiting-cooking", "waiting-food"].sort());
-  });
-
-  it("filters to high priority only when requested", () => {
-    const result = filterWaitingItems(items, folders, undefined, true);
-    expect(result.map((i) => i.id)).toEqual(["waiting-cooking"]);
-  });
-});
-
-describe("pickRandomWaitingItem", () => {
-  it("returns undefined when there is nothing waiting", () => {
-    const items: SavedItem[] = [item({ id: "done-1", folderId: "food", status: "done" })];
-    expect(pickRandomWaitingItem(items, folders)).toBeUndefined();
-  });
-
-  it("picks an item from the waiting pool", () => {
-    const items: SavedItem[] = [
-      item({ id: "a", folderId: "food", status: "waiting" }),
-      item({ id: "b", folderId: "food", status: "waiting" }),
-    ];
-
-    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
-    try {
-      expect(pickRandomWaitingItem(items, folders)?.id).toBe("a");
-    } finally {
-      randomSpy.mockRestore();
-    }
   });
 });

@@ -1,17 +1,5 @@
 import { Folder, SavedItem } from "../types/models";
-import { getDescendantFolderIds, getFolderPathLabel } from "./folderTree";
-
-export const filterWaitingItems = (items: SavedItem[], folders: Folder[], folderId?: string, highPriorityOnly = false): SavedItem[] => {
-  const allowedFolders = folderId ? [folderId, ...getDescendantFolderIds(folders, folderId)] : undefined;
-  return items.filter((item) => item.status === "waiting" && (!allowedFolders || allowedFolders.includes(item.folderId)) && (!highPriorityOnly || item.priority === "high"));
-};
-
-// Simple MVP picker: choose from waiting items, optionally scoped by folder, and optionally only high priority.
-export const pickRandomWaitingItem = (items: SavedItem[], folders: Folder[], folderId?: string, highPriorityOnly = false): SavedItem | undefined => {
-  const pool = filterWaitingItems(items, folders, folderId, highPriorityOnly);
-  if (pool.length === 0) return undefined;
-  return pool[Math.floor(Math.random() * pool.length)];
-};
+import { getFolderPathLabel } from "./folderTree";
 
 const searchableText = (parts: Array<string | undefined>): string =>
   parts

@@ -19,7 +19,6 @@ import { Folder, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
-import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
@@ -267,16 +266,6 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
   }, [canManageCurrentFolder, canNestMore, folder, navigation]);
 
-  const onPressPickSomething = useCallback(() => {
-    if (!folder) return;
-    const picked = pickRandomWaitingItem(items, folders, folder.id);
-    if (!picked) {
-      Alert.alert("Nothing waiting here", "This folder does not have any waiting items to pick from.");
-      return;
-    }
-    navigation.navigate("ItemDetail", { itemId: picked.id });
-  }, [folder, folders, items, navigation]);
-
   const onPressManageAccess = useCallback(() => {
     if (!folder) return;
     navigation.navigate("ShareFolder", { folderId: folder.id });
@@ -330,14 +319,13 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             { text: "Manage access", onPress: onPressManageAccess },
           ]
         : [{ text: "View access", onPress: onPressManageAccess }]),
-      { text: "Pick Something", onPress: onPressPickSomething },
       { text: "Share summary", onPress: () => void onPressShare() },
       ...(canManageCurrentFolder
         ? [{ text: "Delete folder", style: "destructive" as const, onPress: confirmDelete }]
         : []),
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [canManageCurrentFolder, confirmDelete, folder, onPressEditFolder, onPressManageAccess, onPressPickSomething, onPressShare]);
+  }, [canManageCurrentFolder, confirmDelete, folder, onPressEditFolder, onPressManageAccess, onPressShare]);
 
   const onPressPattern = useCallback((patternId: string): void => {
     setSelectedPatternId((current) => (current === patternId ? null : patternId));
