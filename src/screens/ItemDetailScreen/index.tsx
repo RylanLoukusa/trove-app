@@ -1,9 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pencil, Plus, Trash2, X } from "lucide-react-native";
+import { Pencil, Plus, Trash2 } from "lucide-react-native";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay, resolveDisplayItems } from "../../components/MediaCollectionDisplay";
@@ -13,12 +13,14 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { Section } from "../../components/Section";
 import { TagChip } from "../../components/TagChip";
+import { TagMultiSelectSheet } from "../../components/TagMultiSelectSheet";
 import { VideoPreview } from "../../components/VideoPreview";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { spacing } from "../../theme/theme";
 import { useTrove } from "../../storage/storage";
+import type { TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
@@ -59,27 +61,18 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
   const videoLocked = requiresProForVideoPlayback(isPro, item?.accessRole);
-  const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
-  const [isPrioritySheetOpen, setIsPrioritySheetOpen] = useState(false);
+  const [openSingleSelectGroupId, setOpenSingleSelectGroupId] = useState<string | null>(null);
+  const [openMultiSelectGroupId, setOpenMultiSelectGroupId] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [isAddingTag, setIsAddingTag] = useState(false);
-  const [newTagText, setNewTagText] = useState("");
-  const newTagInputRef = useRef<TextInput>(null);
 
-  const statusGroup = tagGroups.find((group) => group.name === "Status");
-  const priorityGroup = tagGroups.find((group) => group.name === "Priority");
-  const tagsGroup = tagGroups.find((group) => group.name === "Tags");
-  const statusOptions = useMemo(
-    () => tagOptions.filter((option) => option.groupId === statusGroup?.id),
-    [tagOptions, statusGroup],
+  const sortedTagGroups = useMemo(() => [...tagGroups].sort((a, b) => a.sortOrder - b.sortOrder), [tagGroups]);
+  const singleSelectGroups = useMemo(
+    () => sortedTagGroups.filter((group) => group.selectionMode === "single"),
+    [sortedTagGroups],
   );
-  const priorityOptions = useMemo(
-    () => tagOptions.filter((option) => option.groupId === priorityGroup?.id),
-    [tagOptions, priorityGroup],
-  );
-  const tagsGroupOptions = useMemo(
-    () => tagOptions.filter((option) => option.groupId === tagsGroup?.id),
-    [tagOptions, tagsGroup],
+  const multiSelectGroups = useMemo(
+    () => sortedTagGroups.filter((group) => group.selectionMode === "multi"),
+    [sortedTagGroups],
   );
 
   const folderItems = useMemo(
@@ -156,25 +149,25 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     [navigation],
   );
 
-  const onToggleAddTag = useCallback(() => {
-    setIsAddingTag((current) => !current);
-    setNewTagText("");
-  }, []);
+  const toggleTagOption = useCallback(
+    (optionId: string): void => {
+      if (!item) return;
+      const nextIds = item.tagOptionIds.includes(optionId)
+        ? item.tagOptionIds.filter((id) => id !== optionId)
+        : [...item.tagOptionIds, optionId];
+      updateItem(item.id, { tagOptionIds: nextIds });
+    },
+    [item, updateItem],
+  );
 
-  const onSubmitNewTag = useCallback(() => {
-    if (!item || !tagsGroup) return;
-    const trimmed = newTagText.trim();
-    setNewTagText("");
-    if (!trimmed) return;
-
-    const existing = tagsGroupOptions.find((option) => option.name.toLowerCase() === trimmed.toLowerCase());
-    const optionId = existing?.id ?? createTagOption({ groupId: tagsGroup.id, name: trimmed }).id;
-    if (!item.tagOptionIds.includes(optionId)) {
-      updateItem(item.id, { tagOptionIds: [...item.tagOptionIds, optionId] });
-    }
-
-    requestAnimationFrame(() => newTagInputRef.current?.focus());
-  }, [createTagOption, item, newTagText, tagsGroup, tagsGroupOptions, updateItem]);
+  const createAndToggleTagOption = useCallback(
+    (groupId: string, name: string): void => {
+      if (!item) return;
+      const option = createTagOption({ groupId, name });
+      updateItem(item.id, { tagOptionIds: [...item.tagOptionIds, option.id] });
+    },
+    [createTagOption, item, updateItem],
+  );
 
   const confirmDelete = useCallback((): void => {
     if (!item || !canEditCurrentItem) return;
@@ -219,84 +212,63 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     );
   }
 
-  const assignedTags = item.tagOptionIds
-    .map((tagOptionId) => tagsGroupOptions.find((option) => option.id === tagOptionId))
-    .filter((option): option is (typeof tagsGroupOptions)[number] => !!option);
-  const selectedStatusOptionId = item.tagOptionIds.find((id) => statusOptions.some((option) => option.id === id)) ?? "";
-  const selectedPriorityOptionId = item.tagOptionIds.find((id) => priorityOptions.some((option) => option.id === id)) ?? "";
-  const selectedStatusOption = statusOptions.find((option) => option.id === selectedStatusOptionId);
-  const selectedPriorityOption = priorityOptions.find((option) => option.id === selectedPriorityOptionId);
+  const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
+  const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
 
-  const selectSingleTagOption = (groupOptions: typeof statusOptions, optionId: string): void => {
+  const selectSingleTagOption = (groupOptions: TagOption[], optionId: string): void => {
     updateItem(item.id, {
       tagOptionIds: [...item.tagOptionIds.filter((id) => !groupOptions.some((option) => option.id === id)), optionId],
     });
   };
 
-  const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
-  const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
+  const openSingleSelectGroup = singleSelectGroups.find((group) => group.id === openSingleSelectGroupId);
+  const openSingleSelectGroupOptions = openSingleSelectGroup
+    ? tagOptions.filter((option) => option.groupId === openSingleSelectGroup.id)
+    : [];
+  const openSingleSelectSelectedId =
+    item.tagOptionIds.find((id) => openSingleSelectGroupOptions.some((option) => option.id === id)) ?? "";
 
-  const tagsSection = (
-    <Section
-      title="Tags"
-      action={
-        canEditCurrentItem ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isAddingTag ? "Cancel adding tag" : "Add tag"}
-            hitSlop={8}
-            onPress={onToggleAddTag}
-            style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
-          >
-            {isAddingTag ? (
-              <X size={18} color={colors.accentDark} strokeWidth={2.6} />
-            ) : (
+  const openMultiSelectGroup = multiSelectGroups.find((group) => group.id === openMultiSelectGroupId);
+  const openMultiSelectGroupOptions = openMultiSelectGroup
+    ? tagOptions.filter((option) => option.groupId === openMultiSelectGroup.id)
+    : [];
+
+  const multiSelectSections = multiSelectGroups.map((group) => {
+    const groupOptions = tagOptions.filter((option) => option.groupId === group.id).sort((a, b) => a.sortOrder - b.sortOrder);
+    const assignedOptions = item.tagOptionIds
+      .map((id) => groupOptions.find((option) => option.id === id))
+      .filter((option): option is TagOption => !!option);
+
+    return (
+      <Section
+        key={group.id}
+        title={group.name}
+        action={
+          canEditCurrentItem ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${group.name.toLowerCase()}`}
+              hitSlop={8}
+              onPress={() => setOpenMultiSelectGroupId(group.id)}
+              style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
+            >
               <Plus size={18} color={colors.accentDark} strokeWidth={2.6} />
-            )}
-          </Pressable>
-        ) : undefined
-      }
-    >
-      {assignedTags.length ? (
-        <View style={styles.tagRow}>
-          {assignedTags.map((tag) => (
-            <TagChip key={tag.id} label={tag.name} color={tag.color} onPress={() => onPressTag(tag.name)} />
-          ))}
-        </View>
-      ) : (
-        !isAddingTag && <Text style={styles.meta}>No tags</Text>
-      )}
-      {isAddingTag && (
-        <View style={styles.addTagRow}>
-          <TextInput
-            ref={newTagInputRef}
-            autoFocus
-            blurOnSubmit={false}
-            onChangeText={setNewTagText}
-            onSubmitEditing={onSubmitNewTag}
-            placeholder="Add a tag"
-            placeholderTextColor={colors.muted}
-            returnKeyType="done"
-            style={styles.addTagInput}
-            value={newTagText}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add tag"
-            disabled={!newTagText.trim()}
-            onPress={onSubmitNewTag}
-            style={({ pressed }) => [
-              styles.addTagButton,
-              !newTagText.trim() && styles.addTagButtonDisabled,
-              pressed && !!newTagText.trim() && styles.sectionActionPressed,
-            ]}
-          >
-            <Plus size={16} color={colors.surface} strokeWidth={2.8} />
-          </Pressable>
-        </View>
-      )}
-    </Section>
-  );
+            </Pressable>
+          ) : undefined
+        }
+      >
+        {assignedOptions.length ? (
+          <View style={styles.tagRow}>
+            {assignedOptions.map((option) => (
+              <TagChip key={option.id} label={option.name} color={option.color} onPress={() => onPressTag(option.name)} />
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.meta}>No {group.name.toLowerCase()}</Text>
+        )}
+      </Section>
+    );
+  });
 
   const relatedSection = relatedItems.length > 0 && (
     <Section title="Related Here">
@@ -468,35 +440,32 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           <Text style={styles.createdAt}>{new Date(item.createdAt).toLocaleString()}</Text>
 
           <View style={styles.row}>
-            {statusOptions.length > 0 && (
-              <Pressable
-                disabled={!canEditCurrentItem}
-                onPress={() => setIsStatusSheetOpen(true)}
-                style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
-              >
-                <Text style={styles.pillText}>{selectedStatusOption?.name ?? "Status"}</Text>
-              </Pressable>
-            )}
-            {priorityOptions.length > 0 && (
-              <Pressable
-                disabled={!canEditCurrentItem}
-                onPress={() => setIsPrioritySheetOpen(true)}
-                style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
-              >
-                <Text style={styles.pillText}>{selectedPriorityOption?.name ?? "Priority"}</Text>
-              </Pressable>
-            )}
+            {singleSelectGroups.map((group) => {
+              const groupOptions = tagOptions.filter((option) => option.groupId === group.id);
+              if (groupOptions.length === 0) return null;
+              const selectedOption = groupOptions.find((option) => item.tagOptionIds.includes(option.id));
+              return (
+                <Pressable
+                  key={group.id}
+                  disabled={!canEditCurrentItem}
+                  onPress={() => setOpenSingleSelectGroupId(group.id)}
+                  style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
+                >
+                  <Text style={styles.pillText}>{selectedOption?.name ?? group.name}</Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           {isSharedAccess(item) ? (
             <>
               {commentsSection}
-              {tagsSection}
+              {multiSelectSections}
               {relatedSection}
             </>
           ) : (
             <>
-              {tagsSection}
+              {multiSelectSections}
               {relatedSection}
               {commentsSection}
             </>
@@ -510,20 +479,24 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
       </KeyboardAvoidingView>
 
       <ChoiceSheet
-        visible={isStatusSheetOpen}
-        title="Status"
-        options={statusOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
-        selectedValue={selectedStatusOptionId}
-        onSelect={(value) => selectSingleTagOption(statusOptions, value)}
-        onClose={() => setIsStatusSheetOpen(false)}
+        visible={openSingleSelectGroupId !== null}
+        title={openSingleSelectGroup?.name ?? ""}
+        options={openSingleSelectGroupOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
+        selectedValue={openSingleSelectSelectedId}
+        onSelect={(value) => selectSingleTagOption(openSingleSelectGroupOptions, value)}
+        onClose={() => setOpenSingleSelectGroupId(null)}
       />
-      <ChoiceSheet
-        visible={isPrioritySheetOpen}
-        title="Priority"
-        options={priorityOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
-        selectedValue={selectedPriorityOptionId}
-        onSelect={(value) => selectSingleTagOption(priorityOptions, value)}
-        onClose={() => setIsPrioritySheetOpen(false)}
+      <TagMultiSelectSheet
+        visible={openMultiSelectGroupId !== null}
+        title={openMultiSelectGroup?.name ?? ""}
+        options={openMultiSelectGroupOptions}
+        selectedOptionIds={item.tagOptionIds}
+        allowInlineCreate={openMultiSelectGroup?.allowInlineCreate ?? false}
+        onToggleOption={toggleTagOption}
+        onCreateOption={(name) => {
+          if (openMultiSelectGroup) createAndToggleTagOption(openMultiSelectGroup.id, name);
+        }}
+        onClose={() => setOpenMultiSelectGroupId(null)}
       />
       <MediaFullscreenViewer
         visible={viewerIndex !== null}

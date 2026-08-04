@@ -235,32 +235,6 @@ export const createStyles = (colors: ThemeColors) =>
     sectionActionPressed: {
       opacity: 0.65,
     },
-    addTagRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.xs,
-      marginTop: spacing.sm,
-    },
-    addTagInput: {
-      backgroundColor: colors.background,
-      borderRadius: 999,
-      color: colors.ink,
-      flex: 1,
-      fontSize: 14,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-    },
-    addTagButton: {
-      alignItems: "center",
-      backgroundColor: colors.accentDark,
-      borderRadius: 999,
-      height: 36,
-      justifyContent: "center",
-      width: 36,
-    },
-    addTagButtonDisabled: {
-      opacity: 0.4,
-    },
     commentThread: {
       marginTop: 0,
     },

@@ -37,6 +37,8 @@ const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   ...overrides,
 });
 
+const now = "2026-01-01T00:00:00.000Z";
+
 const tagsGroup: TagGroup = {
   id: "tags-group",
   name: "Tags",
@@ -44,17 +46,28 @@ const tagsGroup: TagGroup = {
   allowInlineCreate: true,
   isSystem: true,
   sortOrder: 0,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
+  createdAt: now,
+  updatedAt: now,
 };
 
-const makeTagOption = (id: string, name: string): TagOption => ({
+const roomGroup: TagGroup = {
+  id: "room-group",
+  name: "Room",
+  selectionMode: "single",
+  allowInlineCreate: false,
+  isSystem: false,
+  sortOrder: 1,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const makeTagOption = (id: string, name: string, groupId: string = tagsGroup.id): TagOption => ({
   id,
-  groupId: tagsGroup.id,
+  groupId,
   name,
   sortOrder: 0,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
+  createdAt: now,
+  updatedAt: now,
 });
 
 const navigation = {
@@ -175,7 +188,7 @@ describe("ItemDetailScreen", () => {
     );
   });
 
-  it("adds a new tag, creating a tag option in the Tags group", async () => {
+  it("adds a new tag via the picker, creating a tag option in the Tags group", async () => {
     const dinnerOption = makeTagOption("tag-dinner", "dinner");
     await renderItemDetail(
       [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [dinnerOption.id] })],
@@ -183,12 +196,26 @@ describe("ItemDetailScreen", () => {
       { tagGroups: [tagsGroup], tagOptions: [dinnerOption] },
     );
 
-    await fireEvent.press(screen.getByLabelText("Add tag"));
-    await fireEvent.changeText(screen.getByPlaceholderText("Add a tag"), "quick");
-    await fireEvent(screen.getByPlaceholderText("Add a tag"), "submitEditing");
+    await fireEvent.press(screen.getByLabelText("Add tags"));
+    await fireEvent.changeText(screen.getByPlaceholderText("Search tags..."), "quick");
+    await fireEvent.press(screen.getByText("Create “quick”"));
 
     expect(createTagOption).toHaveBeenCalledWith({ groupId: tagsGroup.id, name: "quick" });
     expect(updateItem).toHaveBeenCalledWith("pasta", { tagOptionIds: [dinnerOption.id, "new-quick"] });
+  });
+
+  it("removes a tag by toggling it off in the picker", async () => {
+    const dinnerOption = makeTagOption("tag-dinner", "dinner");
+    await renderItemDetail(
+      [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [dinnerOption.id] })],
+      "pasta",
+      { tagGroups: [tagsGroup], tagOptions: [dinnerOption] },
+    );
+
+    await fireEvent.press(screen.getByLabelText("Add tags"));
+    await fireEvent.press(screen.getAllByText("dinner").at(-1)!);
+
+    expect(updateItem).toHaveBeenCalledWith("pasta", { tagOptionIds: [] });
   });
 
   it("navigates to search when a tag is pressed", async () => {
@@ -202,5 +229,49 @@ describe("ItemDetailScreen", () => {
     await fireEvent.press(screen.getByText("dinner"));
 
     expect(navigation.navigate).toHaveBeenCalledWith("Search", { query: "dinner" });
+  });
+
+  it("shows a pill for a custom single-select group and lets you change it via the sheet", async () => {
+    const kitchenOption = makeTagOption("room-kitchen", "Kitchen", roomGroup.id);
+    const gardenOption = makeTagOption("room-garden", "Garden", roomGroup.id);
+    await renderItemDetail(
+      [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [kitchenOption.id] })],
+      "pasta",
+      { tagGroups: [roomGroup], tagOptions: [kitchenOption, gardenOption] },
+    );
+
+    expect(screen.getByText("Kitchen")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Kitchen"));
+    await fireEvent.press(screen.getByText("Garden"));
+
+    expect(updateItem).toHaveBeenCalledWith("pasta", { tagOptionIds: ["room-garden"] });
+  });
+
+  it("shows a section for a custom multi-select group and lets you create an option", async () => {
+    const projectsGroup: TagGroup = {
+      id: "projects-group",
+      name: "Projects",
+      selectionMode: "multi",
+      allowInlineCreate: true,
+      isSystem: false,
+      sortOrder: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await renderItemDetail(
+      [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [] })],
+      "pasta",
+      { tagGroups: [projectsGroup], tagOptions: [] },
+    );
+
+    expect(screen.getByText("Projects")).toBeTruthy();
+    expect(screen.getByText("No projects")).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("Add projects"));
+    await fireEvent.changeText(screen.getByPlaceholderText("Search projects..."), "Website");
+    await fireEvent.press(screen.getByText("Create “Website”"));
+
+    expect(createTagOption).toHaveBeenCalledWith({ groupId: "projects-group", name: "Website" });
   });
 });

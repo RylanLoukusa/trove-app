@@ -126,4 +126,16 @@ export const createStyles = (colors: ThemeColors) =>
     button: {
       marginTop: spacing.lg,
     },
+    tagChipRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    tagAddButton: {
+      minHeight: 0,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+    },
   });

@@ -4,7 +4,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AddEditItemScreen } from "./index";
 import { useTrove } from "../../storage/storage";
-import type { Folder, SavedItem } from "../../types/models";
+import type { Folder, SavedItem, TagGroup, TagOption } from "../../types/models";
 import type { RootStackParamList } from "../../navigation/types";
 import { renderScreen } from "../../test-utils/renderScreen";
 
@@ -177,5 +177,68 @@ describe("AddEditItemScreen", () => {
 
     expect(updateItem).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith("Cannot edit item", "You do not have permission to edit this item.");
+  });
+
+  it("shows and saves selections for custom single-select and multi-select groups", async () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const roomGroup: TagGroup = {
+      id: "room-group",
+      name: "Room",
+      selectionMode: "single",
+      allowInlineCreate: false,
+      isSystem: false,
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const kitchenOption: TagOption = { id: "room-kitchen", groupId: "room-group", name: "Kitchen", sortOrder: 0, createdAt: now, updatedAt: now };
+    const projectsGroup: TagGroup = {
+      id: "projects-group",
+      name: "Projects",
+      selectionMode: "multi",
+      allowInlineCreate: true,
+      isSystem: false,
+      sortOrder: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    createTagOption.mockReturnValue({
+      id: "projects-website",
+      groupId: "projects-group",
+      name: "Website",
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    createItem.mockReturnValue(makeItem({ id: "new-item", title: "New item" }));
+
+    mockUseTrove.mockReturnValue({
+      folders,
+      items: [],
+      tagGroups: [roomGroup, projectsGroup],
+      tagOptions: [kitchenOption],
+      createItem,
+      updateItem,
+      createTagOption,
+      canEditFolderContent,
+      canEditItem,
+    });
+    const route = { params: undefined } as unknown as NativeStackScreenProps<RootStackParamList, "AddEditItem">["route"];
+    await renderScreen(<AddEditItemScreen navigation={navigation} route={route} />);
+
+    await fireEvent.changeText(screen.getByPlaceholderText("What are you saving?"), "New item");
+    await fireEvent.press(screen.getByText("Note"));
+    await fireEvent.press(screen.getByText("Kitchen"));
+
+    await fireEvent.press(screen.getByText("+ Add"));
+    await fireEvent.changeText(screen.getByPlaceholderText("Search projects..."), "Website");
+    await fireEvent.press(screen.getByText("Create “Website”"));
+
+    await fireEvent.press(screen.getByText("Save item"));
+
+    expect(createTagOption).toHaveBeenCalledWith({ groupId: "projects-group", name: "Website" });
+    expect(createItem).toHaveBeenCalledWith(
+      expect.objectContaining({ tagOptionIds: expect.arrayContaining(["room-kitchen", "projects-website"]) }),
+    );
   });
 });
