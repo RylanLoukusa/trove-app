@@ -1,4 +1,4 @@
-import { Folder, FolderSuggestion, ItemType, SavedItem } from "../types/models";
+import { Folder, FolderSuggestion, ItemType, SavedItem, TagOption } from "../types/models";
 import { getFolderPathLabel } from "./folderTree";
 
 const keywordRules = [
@@ -49,9 +49,15 @@ export const suggestTags = (content: string): string[] => {
 };
 
 // Keyword-based fallback scorer: compares pasted content with folder names, ancestor names, existing item titles, and tags.
-export const suggestFolders = (content: string, folders: Folder[], items: SavedItem[]): FolderSuggestion[] => {
+export const suggestFolders = (
+  content: string,
+  folders: Folder[],
+  items: SavedItem[],
+  tagOptions: TagOption[] = [],
+): FolderSuggestion[] => {
   const text = content.toLowerCase();
   const scores = new Map<string, FolderSuggestion>();
+  const tagOptionsById = new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption]));
 
   const addScore = (folder: Folder, amount: number, reason: string): void => {
     const current = scores.get(folder.id) ?? { folder, score: 0, reasons: [] };
@@ -82,7 +88,11 @@ export const suggestFolders = (content: string, folders: Folder[], items: SavedI
   });
 
   items.forEach((item) => {
-    const itemText = `${item.title} ${item.description ?? ""} ${item.tags.join(" ")}`.toLowerCase();
+    const tagNames = item.tagOptionIds
+      .map((tagOptionId) => tagOptionsById.get(tagOptionId)?.name)
+      .filter((name): name is string => !!name)
+      .join(" ");
+    const itemText = `${item.title} ${item.description ?? ""} ${tagNames}`.toLowerCase();
     const overlap = text.split(/\W+/).filter((word) => word.length > 3 && itemText.includes(word)).length;
     const folder = folders.find((candidate) => candidate.id === item.folderId);
     if (folder && overlap > 0) addScore(folder, Math.min(8, overlap * 2), "Similar saved item");

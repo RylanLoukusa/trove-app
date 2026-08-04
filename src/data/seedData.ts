@@ -33,36 +33,29 @@ export const seedFolders: Folder[] = [
   folder("weekend-ideas", "Weekend Ideas", null, "☀️", "#E4C45E", "Low-pressure options for free Saturdays, loose plans, and local wandering."),
 ];
 
-const item = (
-  id: string,
-  folderId: string,
-  title: string,
-  description: string,
-  tags: string[],
-  priority: SavedItem["priority"] = "medium",
-): SavedItem => ({
+const item = (id: string, folderId: string, title: string, description: string): SavedItem => ({
   id,
   folderId,
   title,
   description,
   type: "text",
-  tags,
-  status: "waiting",
-  priority,
+  tagOptionIds: [],
   createdAt: now,
   updatedAt: now,
 });
 
 export const seedItems: SavedItem[] = [
-  item("item-ramen", "food-sit-down", "Try the new ramen place downtown", "Look for a cozy dinner spot with good broth.", ["ramen", "restaurant", "dinner"], "high"),
-  item("item-pizza", "food-cooking", "Make homemade pizza", "Try a slow-fermented dough and a cast iron pan.", ["recipe", "cooking", "weekend"]),
-  item("item-atomic-habits", "books-to-be-read", "Read Atomic Habits", "Add to the next nonfiction reading batch.", ["book", "habits", "reading"], "high"),
-  item("item-interstellar", "movies-to-watch", "Watch Interstellar", "Save for a night with time for a long movie.", ["movie", "sci-fi", "watch"]),
-  item("item-lake", "places-local", "Visit a nearby lake", "Pack snacks and make it a low-key afternoon trip.", ["local", "nature", "weekend"]),
-  item("item-backpack", "things-to-buy", "Buy a new backpack", "Find a durable everyday backpack with a laptop sleeve.", ["buy", "gear", "shopping"], "low"),
+  item("item-ramen", "food-sit-down", "Try the new ramen place downtown", "Look for a cozy dinner spot with good broth."),
+  item("item-pizza", "food-cooking", "Make homemade pizza", "Try a slow-fermented dough and a cast iron pan."),
+  item("item-atomic-habits", "books-to-be-read", "Read Atomic Habits", "Add to the next nonfiction reading batch."),
+  item("item-interstellar", "movies-to-watch", "Watch Interstellar", "Save for a night with time for a long movie."),
+  item("item-lake", "places-local", "Visit a nearby lake", "Pack snacks and make it a low-key afternoon trip."),
+  item("item-backpack", "things-to-buy", "Buy a new backpack", "Find a durable everyday backpack with a laptop sleeve."),
 ];
 
 export const seedData: TroveData = {
   folders: seedFolders,
   items: seedItems,
+  tagGroups: [],
+  tagOptions: [],
 };

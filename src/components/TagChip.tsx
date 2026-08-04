@@ -5,10 +5,11 @@ import { useThemeColors } from "../theme/ThemeContext";
 
 type Props = {
   label: string;
+  color?: string;
   onPress?: () => void;
 };
 
-export const TagChip = ({ label, onPress }: Props) => {
+export const TagChip = ({ label, color, onPress }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -16,9 +17,9 @@ export const TagChip = ({ label, onPress }: Props) => {
     <Pressable
       disabled={!onPress}
       onPress={onPress}
-      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.chip, color ? { borderColor: color } : undefined, pressed && styles.pressed]}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, color ? { color } : undefined]}>{label}</Text>
     </Pressable>
   );
 };

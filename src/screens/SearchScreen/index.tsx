@@ -8,7 +8,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { Folder, SavedItem } from "../../types/models";
+import { Folder, SavedItem, TagOption } from "../../types/models";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import { searchFoldersAndItems } from "../../utils/itemFilters";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -120,21 +120,22 @@ const SearchFolderRow = React.memo(function SearchFolderRow({ count, folder, onO
 type SearchItemRowProps = {
   item: SavedItem;
   folderPath: string;
+  tagOptions: TagOption[];
   onOpenItemDetail: (itemId: string) => void;
 };
 
-const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, onOpenItemDetail }: SearchItemRowProps) {
+const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, tagOptions, onOpenItemDetail }: SearchItemRowProps) {
   const onPress = useCallback(() => {
     onOpenItemDetail(item.id);
   }, [item.id, onOpenItemDetail]);
 
-  return <ItemCard item={item} folderPath={folderPath} onPress={onPress} />;
+  return <ItemCard item={item} folderPath={folderPath} tagOptions={tagOptions} onPress={onPress} />;
 });
 
 export const SearchScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items } = useTrove();
+  const { folders, isReady, items, tagOptions } = useTrove();
   const [query, setQuery] = useState(route.params?.query ?? "");
   const [filter, setFilter] = useState<SearchFilter>("all");
   const [sort, setSort] = useState<SearchSort>("updated");
@@ -142,8 +143,8 @@ export const SearchScreen = ({ navigation, route }: Props) => {
   const hasQuery = query.trim().length > 0;
 
   const matchedResults = useMemo<SearchResults>(
-    () => (hasQuery ? searchFoldersAndItems(query, folders, items) : { folders, items }),
-    [folders, hasQuery, items, query],
+    () => (hasQuery ? searchFoldersAndItems(query, folders, items, tagOptions) : { folders, items }),
+    [folders, hasQuery, items, query, tagOptions],
   );
 
   const sortedResults = useMemo<SearchResults>(
@@ -373,6 +374,7 @@ export const SearchScreen = ({ navigation, route }: Props) => {
                       key={item.id}
                       item={item}
                       folderPath={getFolderPathLabel(folders, item.folderId)}
+                      tagOptions={tagOptions}
                       onOpenItemDetail={onOpenItemDetail}
                     />
                   ))

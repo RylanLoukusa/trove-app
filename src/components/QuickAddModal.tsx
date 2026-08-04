@@ -16,13 +16,17 @@ type Props = {
 export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, items, createItem, canEditFolderContent } = useTrove();
+  const { folders, items, tagGroups, tagOptions, createItem, createTagOption, canEditFolderContent } = useTrove();
   const [content, setContent] = useState("");
   const editableFolders = useMemo(
     () => folders.filter((folder) => canEditFolderContent(folder.id)),
     [canEditFolderContent, folders],
   );
-  const suggestions = useMemo(() => suggestFolders(content, editableFolders, items), [content, editableFolders, items]);
+  const tagsGroup = tagGroups.find((group) => group.name === "Tags");
+  const suggestions = useMemo(
+    () => suggestFolders(content, editableFolders, items, tagOptions),
+    [content, editableFolders, items, tagOptions],
+  );
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(currentFolderId);
   const targetFolderId = selectedFolderId ?? suggestions[0]?.folder.id ?? currentFolderId ?? editableFolders[0]?.id;
 
@@ -38,6 +42,16 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
 
   const save = (): void => {
     if (!targetFolderId || content.trim().length === 0 || !canEditFolderContent(targetFolderId)) return;
+
+    const existingByName = new Map(
+      tagsGroup
+        ? tagOptions.filter((option) => option.groupId === tagsGroup.id).map((option) => [option.name.toLowerCase(), option.id])
+        : [],
+    );
+    const tagOptionIds = tagsGroup
+      ? preview.tags.map((name) => existingByName.get(name.toLowerCase()) ?? createTagOption({ groupId: tagsGroup.id, name }).id)
+      : [];
+
     const item = createItem({
       folderId: targetFolderId,
       title: preview.title,
@@ -45,9 +59,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
       type: preview.type,
       url: preview.type === "link" ? content.trim() : undefined,
       mediaUri: preview.type === "media" ? content.trim() : undefined,
-      tags: preview.tags,
-      status: "waiting",
-      priority: "medium",
+      tagOptionIds,
     });
     if (!item) return;
     setContent("");

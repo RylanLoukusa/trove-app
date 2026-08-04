@@ -3,7 +3,7 @@ import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react-native";
+import { Pencil, Plus, Trash2, X } from "lucide-react-native";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay, resolveDisplayItems } from "../../components/MediaCollectionDisplay";
@@ -22,7 +22,7 @@ import { useTrove } from "../../storage/storage";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
-import { bulletGlyphForIndent, getItemTypeLabel, itemPriorities, itemStatuses, priorityChoices, statusChoices } from "../../utils/itemTypes";
+import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
 import { requiresProForVideoPlayback } from "../../utils/limits";
 import { createStyles } from "./styles";
 
@@ -54,7 +54,7 @@ const ItemDetailSkeleton = ({ styles }: { styles: ScreenStyles }) => (
 export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, updateItem, deleteItem, canEditItem } = useTrove();
+  const { folders, isReady, items, tagGroups, tagOptions, updateItem, createTagOption, deleteItem, canEditItem } = useTrove();
   const { isPro } = useEntitlement();
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
@@ -66,6 +66,22 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const [newTagText, setNewTagText] = useState("");
   const newTagInputRef = useRef<TextInput>(null);
 
+  const statusGroup = tagGroups.find((group) => group.name === "Status");
+  const priorityGroup = tagGroups.find((group) => group.name === "Priority");
+  const tagsGroup = tagGroups.find((group) => group.name === "Tags");
+  const statusOptions = useMemo(
+    () => tagOptions.filter((option) => option.groupId === statusGroup?.id),
+    [tagOptions, statusGroup],
+  );
+  const priorityOptions = useMemo(
+    () => tagOptions.filter((option) => option.groupId === priorityGroup?.id),
+    [tagOptions, priorityGroup],
+  );
+  const tagsGroupOptions = useMemo(
+    () => tagOptions.filter((option) => option.groupId === tagsGroup?.id),
+    [tagOptions, tagsGroup],
+  );
+
   const folderItems = useMemo(
     () => (item ? getItemsInFolder(items, item.folderId) : []),
     [item, items],
@@ -74,8 +90,8 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const previousItem = itemIndex > 0 ? folderItems[itemIndex - 1] : undefined;
   const nextItem = itemIndex >= 0 && itemIndex < folderItems.length - 1 ? folderItems[itemIndex + 1] : undefined;
   const relatedItems = useMemo(
-    () => (item ? getRelatedItems(item, folderItems) : []),
-    [folderItems, item],
+    () => (item ? getRelatedItems(item, folderItems, tagOptions) : []),
+    [folderItems, item, tagOptions],
   );
   const mediaDisplayItems = useMemo(
     () => (item ? resolveDisplayItems(item.media, item.mediaItems) : []),
@@ -110,11 +126,6 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     navigation.navigate("AddEditItem", { itemId: item.id });
   }, [canEditCurrentItem, item, navigation]);
 
-  const onPressMarkDone = useCallback(() => {
-    if (!item || !canEditCurrentItem) return;
-    updateItem(item.id, { status: "done" });
-  }, [canEditCurrentItem, item, updateItem]);
-
   const onPressToggleChecklistItem = useCallback(
     (listItemId: string): void => {
       if (!item?.listItems || !canEditCurrentItem) return;
@@ -124,13 +135,8 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           ? { ...listItem, checked: !listItem.checked }
           : listItem,
       );
-      const checklistItems = listItems.filter((listItem) => listItem.kind === "check");
-      const isChecklistComplete = checklistItems.length > 0 && checklistItems.every((listItem) => listItem.checked);
 
-      updateItem(item.id, {
-        listItems,
-        status: isChecklistComplete ? "done" : item.status === "done" ? "waiting" : item.status,
-      });
+      updateItem(item.id, { listItems });
     },
     [canEditCurrentItem, item, updateItem],
   );
@@ -156,18 +162,19 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   }, []);
 
   const onSubmitNewTag = useCallback(() => {
-    if (!item) return;
+    if (!item || !tagsGroup) return;
     const trimmed = newTagText.trim();
     setNewTagText("");
     if (!trimmed) return;
 
-    const alreadyExists = item.tags.some((tag) => tag.toLowerCase() === trimmed.toLowerCase());
-    if (!alreadyExists) {
-      updateItem(item.id, { tags: [...item.tags, trimmed] });
+    const existing = tagsGroupOptions.find((option) => option.name.toLowerCase() === trimmed.toLowerCase());
+    const optionId = existing?.id ?? createTagOption({ groupId: tagsGroup.id, name: trimmed }).id;
+    if (!item.tagOptionIds.includes(optionId)) {
+      updateItem(item.id, { tagOptionIds: [...item.tagOptionIds, optionId] });
     }
 
     requestAnimationFrame(() => newTagInputRef.current?.focus());
-  }, [item, newTagText, updateItem]);
+  }, [createTagOption, item, newTagText, tagsGroup, tagsGroupOptions, updateItem]);
 
   const confirmDelete = useCallback((): void => {
     if (!item || !canEditCurrentItem) return;
@@ -212,6 +219,20 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     );
   }
 
+  const assignedTags = item.tagOptionIds
+    .map((tagOptionId) => tagsGroupOptions.find((option) => option.id === tagOptionId))
+    .filter((option): option is (typeof tagsGroupOptions)[number] => !!option);
+  const selectedStatusOptionId = item.tagOptionIds.find((id) => statusOptions.some((option) => option.id === id)) ?? "";
+  const selectedPriorityOptionId = item.tagOptionIds.find((id) => priorityOptions.some((option) => option.id === id)) ?? "";
+  const selectedStatusOption = statusOptions.find((option) => option.id === selectedStatusOptionId);
+  const selectedPriorityOption = priorityOptions.find((option) => option.id === selectedPriorityOptionId);
+
+  const selectSingleTagOption = (groupOptions: typeof statusOptions, optionId: string): void => {
+    updateItem(item.id, {
+      tagOptionIds: [...item.tagOptionIds.filter((id) => !groupOptions.some((option) => option.id === id)), optionId],
+    });
+  };
+
   const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
   const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
 
@@ -236,10 +257,10 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         ) : undefined
       }
     >
-      {item.tags.length ? (
+      {assignedTags.length ? (
         <View style={styles.tagRow}>
-          {item.tags.map((tag) => (
-            <TagChip key={tag} label={tag} onPress={() => onPressTag(tag)} />
+          {assignedTags.map((tag) => (
+            <TagChip key={tag.id} label={tag.name} color={tag.color} onPress={() => onPressTag(tag.name)} />
           ))}
         </View>
       ) : (
@@ -305,15 +326,6 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         rightActions={
           canEditCurrentItem ? (
             <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Mark as done"
-                hitSlop={8}
-                onPress={onPressMarkDone}
-                style={({ pressed }) => [styles.topBarAction, pressed && styles.topBarActionPressed]}
-              >
-                <Check size={22} color={colors.accentDark} strokeWidth={2.4} />
-              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit item"
@@ -456,20 +468,24 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           <Text style={styles.createdAt}>{new Date(item.createdAt).toLocaleString()}</Text>
 
           <View style={styles.row}>
-            <Pressable
-              disabled={!canEditCurrentItem}
-              onPress={() => setIsStatusSheetOpen(true)}
-              style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
-            >
-              <Text style={styles.pillText}>{statusChoices[item.status]?.label ?? item.status}</Text>
-            </Pressable>
-            <Pressable
-              disabled={!canEditCurrentItem}
-              onPress={() => setIsPrioritySheetOpen(true)}
-              style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
-            >
-              <Text style={styles.pillText}>{priorityChoices[item.priority]?.label ?? item.priority} priority</Text>
-            </Pressable>
+            {statusOptions.length > 0 && (
+              <Pressable
+                disabled={!canEditCurrentItem}
+                onPress={() => setIsStatusSheetOpen(true)}
+                style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
+              >
+                <Text style={styles.pillText}>{selectedStatusOption?.name ?? "Status"}</Text>
+              </Pressable>
+            )}
+            {priorityOptions.length > 0 && (
+              <Pressable
+                disabled={!canEditCurrentItem}
+                onPress={() => setIsPrioritySheetOpen(true)}
+                style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
+              >
+                <Text style={styles.pillText}>{selectedPriorityOption?.name ?? "Priority"}</Text>
+              </Pressable>
+            )}
           </View>
 
           {isSharedAccess(item) ? (
@@ -496,17 +512,17 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
       <ChoiceSheet
         visible={isStatusSheetOpen}
         title="Status"
-        options={itemStatuses.map((value) => ({ value, ...statusChoices[value] }))}
-        selectedValue={item.status}
-        onSelect={(value) => updateItem(item.id, { status: value })}
+        options={statusOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
+        selectedValue={selectedStatusOptionId}
+        onSelect={(value) => selectSingleTagOption(statusOptions, value)}
         onClose={() => setIsStatusSheetOpen(false)}
       />
       <ChoiceSheet
         visible={isPrioritySheetOpen}
         title="Priority"
-        options={itemPriorities.map((value) => ({ value, ...priorityChoices[value] }))}
-        selectedValue={item.priority}
-        onSelect={(value) => updateItem(item.id, { priority: value })}
+        options={priorityOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
+        selectedValue={selectedPriorityOptionId}
+        onSelect={(value) => selectSingleTagOption(priorityOptions, value)}
         onClose={() => setIsPrioritySheetOpen(false)}
       />
       <MediaFullscreenViewer

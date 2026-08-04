@@ -1,4 +1,4 @@
-import type { Folder, SavedItem, TroveData } from "../types/models";
+import type { Folder, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import type { SyncConflictSummary } from "./syncBaseline";
 
 export type SyncFieldChoice = "local" | "remote";
@@ -44,6 +44,34 @@ export const mergeConflictFields = (
           ...applyRemoteFieldChoices(folder as unknown as Record<string, unknown>, conflict, fieldChoices),
           updatedAt,
         } as Folder;
+      }),
+    };
+  }
+
+  if (conflict.entityKind === "tagGroups") {
+    return {
+      ...troveData,
+      tagGroups: troveData.tagGroups.map((tagGroup) => {
+        if (tagGroup.id !== conflict.entityId) return tagGroup;
+
+        return {
+          ...applyRemoteFieldChoices(tagGroup as unknown as Record<string, unknown>, conflict, fieldChoices),
+          updatedAt,
+        } as TagGroup;
+      }),
+    };
+  }
+
+  if (conflict.entityKind === "tagOptions") {
+    return {
+      ...troveData,
+      tagOptions: troveData.tagOptions.map((tagOption) => {
+        if (tagOption.id !== conflict.entityId) return tagOption;
+
+        return {
+          ...applyRemoteFieldChoices(tagOption as unknown as Record<string, unknown>, conflict, fieldChoices),
+          updatedAt,
+        } as TagOption;
       }),
     };
   }

@@ -1,4 +1,4 @@
-import { Folder, SavedItem } from "../types/models";
+import { Folder, SavedItem, TagOption } from "../types/models";
 import { getFolderPathLabel } from "./folderTree";
 
 const searchableText = (parts: Array<string | undefined>): string =>
@@ -11,11 +11,14 @@ export const searchFoldersAndItems = (
   query: string,
   folders: Folder[],
   items: SavedItem[],
+  tagOptions: TagOption[] = [],
 ): { folders: Folder[]; items: SavedItem[] } => {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
     return { folders: [], items: [] };
   }
+
+  const tagOptionsById = new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption]));
 
   return {
     folders: folders.filter((folder) =>
@@ -32,7 +35,10 @@ export const searchFoldersAndItems = (
         item.sharedText,
         item.notes,
         item.richText,
-        item.tags.join(" "),
+        item.tagOptionIds
+          .map((tagOptionId) => tagOptionsById.get(tagOptionId)?.name)
+          .filter((name): name is string => !!name)
+          .join(" "),
         item.listItems?.map((listItem) => listItem.text).join(" "),
       ]).includes(normalized),
     ),

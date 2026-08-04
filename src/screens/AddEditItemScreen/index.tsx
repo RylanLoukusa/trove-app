@@ -13,9 +13,9 @@ import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supaba
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { spacing } from "../../theme/theme";
-import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
+import { MediaCollectionItem, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
-import { isMediaItemType, itemPriorities, itemStatuses, normalizeItemType, priorityChoices, statusChoices } from "../../utils/itemTypes";
+import { isMediaItemType, normalizeItemType } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
@@ -23,8 +23,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 const MAX_LIST_INDENT_LEVEL = 3;
 
 const types = ["text", "list", "link", "media"] as const;
-const statuses = itemStatuses;
-const priorities = itemPriorities;
 type SelectableItemType = (typeof types)[number];
 
 const typeChoices: Record<SelectableItemType, { label: string; detail: string; tone: string }> = {
@@ -37,8 +35,23 @@ const typeChoices: Record<SelectableItemType, { label: string; detail: string; t
 export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, items, createItem, updateItem, canEditFolderContent, canEditItem } = useTrove();
+  const { folders, items, tagGroups, tagOptions, createItem, updateItem, createTagOption, canEditFolderContent, canEditItem } = useTrove();
   const editing = items.find((item) => item.id === route.params?.itemId);
+  const statusGroup = tagGroups.find((group) => group.name === "Status");
+  const priorityGroup = tagGroups.find((group) => group.name === "Priority");
+  const tagsGroup = tagGroups.find((group) => group.name === "Tags");
+  const statusOptions = useMemo(
+    () => tagOptions.filter((option) => option.groupId === statusGroup?.id),
+    [tagOptions, statusGroup],
+  );
+  const priorityOptions = useMemo(
+    () => tagOptions.filter((option) => option.groupId === priorityGroup?.id),
+    [tagOptions, priorityGroup],
+  );
+  const tagsGroupOptionIds = useMemo(
+    () => new Set(tagOptions.filter((option) => option.groupId === tagsGroup?.id).map((option) => option.id)),
+    [tagOptions, tagsGroup],
+  );
   const editableFolders = useMemo(
     () => folders.filter((folder) => canEditFolderContent(folder.id)),
     [canEditFolderContent, folders],
@@ -57,9 +70,19 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [typeError, setTypeError] = useState<string | null>(null);
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(!editing);
   const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? editableFolders[0]?.id ?? "");
-  const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
-  const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
-  const [priority, setPriority] = useState<ItemPriority>(editing?.priority ?? "medium");
+  const [tagOptionIds, setTagOptionIds] = useState<string[]>(() =>
+    editing ? editing.tagOptionIds.filter((id) => !tagsGroupOptionIds.has(id)) : [],
+  );
+  const [tagsText, setTagsText] = useState<string>(() => {
+    if (!editing) return "";
+    const namesById = new Map(
+      tagOptions.filter((option) => tagsGroupOptionIds.has(option.id)).map((option) => [option.id, option.name]),
+    );
+    return editing.tagOptionIds
+      .map((id) => namesById.get(id))
+      .filter((name): name is string => !!name)
+      .join(", ");
+  });
   const [listItems, setListItems] = useState<SavedListItem[]>(
     editing?.listItems?.length ? editing.listItems : [{ id: createId("list-item"), kind: "check", text: "", checked: false }],
   );
@@ -245,6 +268,10 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     setDraggingItemId(null);
   }, []);
 
+  const selectSingleOption = useCallback((groupOptionIds: string[], optionId: string): void => {
+    setTagOptionIds((current) => [...current.filter((id) => !groupOptionIds.includes(id)), optionId]);
+  }, []);
+
   const updateTitle = useCallback(
     (nextTitle: string): void => {
       setTitle(nextTitle);
@@ -254,6 +281,31 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     },
     [titleError],
   );
+
+  const resolveTagsGroupOptionIds = useCallback((): string[] => {
+    if (!tagsGroup) return [];
+
+    const names = tagsText
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const existingByName = new Map(
+      tagOptions
+        .filter((option) => option.groupId === tagsGroup.id)
+        .map((option) => [option.name.trim().toLowerCase(), option.id]),
+    );
+
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const name of names) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const existingId = existingByName.get(key);
+      ids.push(existingId ?? createTagOption({ groupId: tagsGroup.id, name }).id);
+    }
+    return ids;
+  }, [createTagOption, tagOptions, tagsGroup, tagsText]);
 
   const save = useCallback(async (): Promise<void> => {
     const trimmedTitle = title.trim();
@@ -354,12 +406,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
                 .filter((item) => item.text.length > 0)
             : undefined,
         richText: type === "text" ? trimmedNote || undefined : undefined,
-        tags: tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        status,
-        priority,
+        tagOptionIds: [...tagOptionIds, ...resolveTagsGroupOptionIds()],
       };
 
       if (editing) {
@@ -379,7 +426,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     } finally {
       setIsSaving(false);
     }
-  }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, priority, sharedImportId, sharedText, sourceUrl, status, tags, title, type, updateItem]);
+  }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, resolveTagsGroupOptionIds, sharedImportId, sharedText, sourceUrl, tagOptionIds, title, type, updateItem]);
 
   const selectedTypeOption = type ? typeChoices[normalizeItemType(type) as SelectableItemType] : null;
 
@@ -573,40 +620,40 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         <Text style={styles.label}>Tags</Text>
         <TextInput
           style={styles.input}
-          value={tags}
-          onChangeText={setTags}
+          value={tagsText}
+          onChangeText={setTagsText}
           placeholder="ramen, restaurant, dinner"
         />
 
-        <Text style={styles.section}>Status</Text>
-        {statuses.map((choice) => {
-          const option = statusChoices[choice];
-          return (
-            <OptionChoiceRow
-              key={choice}
-              label={option.label}
-              detail={option.detail}
-              tone={option.tone}
-              isSelected={status === choice}
-              onPress={() => setStatus(choice)}
-            />
-          );
-        })}
+        {statusOptions.length > 0 && (
+          <>
+            <Text style={styles.section}>Status</Text>
+            {statusOptions.map((option) => (
+              <OptionChoiceRow
+                key={option.id}
+                label={option.name}
+                tone={option.color}
+                isSelected={tagOptionIds.includes(option.id)}
+                onPress={() => selectSingleOption(statusOptions.map((o) => o.id), option.id)}
+              />
+            ))}
+          </>
+        )}
 
-        <Text style={styles.section}>Priority</Text>
-        {priorities.map((choice) => {
-          const option = priorityChoices[choice];
-          return (
-            <OptionChoiceRow
-              key={choice}
-              label={option.label}
-              detail={option.detail}
-              tone={option.tone}
-              isSelected={priority === choice}
-              onPress={() => setPriority(choice)}
-            />
-          );
-        })}
+        {priorityOptions.length > 0 && (
+          <>
+            <Text style={styles.section}>Priority</Text>
+            {priorityOptions.map((option) => (
+              <OptionChoiceRow
+                key={option.id}
+                label={option.name}
+                tone={option.color}
+                isSelected={tagOptionIds.includes(option.id)}
+                onPress={() => selectSingleOption(priorityOptions.map((o) => o.id), option.id)}
+              />
+            ))}
+          </>
+        )}
 
         <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
         {isSaving && <ActivityIndicator size="large" style={styles.button} />}

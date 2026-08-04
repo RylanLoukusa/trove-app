@@ -5,6 +5,7 @@ import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
+import type { SyncEntityKind } from "../../sync/syncBaseline";
 import type { SyncConflictResolution, SyncFieldChoice } from "../../sync/syncConflictResolution";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
@@ -29,6 +30,8 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
   const {
     folders,
     items,
+    tagGroups,
+    tagOptions,
     resolveSyncConflict,
     syncSnapshot,
   } = useTrove();
@@ -38,12 +41,25 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
   const conflict = syncSnapshot.conflict;
   const entity = useMemo(() => {
     if (!conflict) return null;
-    return conflict.entityKind === "folders"
-      ? folders.find((folder) => folder.id === conflict.entityId)
-      : items.find((item) => item.id === conflict.entityId);
-  }, [conflict, folders, items]);
+    switch (conflict.entityKind) {
+      case "folders":
+        return folders.find((folder) => folder.id === conflict.entityId);
+      case "tagGroups":
+        return tagGroups.find((tagGroup) => tagGroup.id === conflict.entityId);
+      case "tagOptions":
+        return tagOptions.find((tagOption) => tagOption.id === conflict.entityId);
+      default:
+        return items.find((item) => item.id === conflict.entityId);
+    }
+  }, [conflict, folders, items, tagGroups, tagOptions]);
 
-  const entityKindLabel = conflict?.entityKind === "folders" ? "folder" : "item";
+  const entityKindLabels: Record<SyncEntityKind, string> = {
+    folders: "folder",
+    items: "item",
+    tagGroups: "tag group",
+    tagOptions: "tag",
+  };
+  const entityKindLabel = conflict ? entityKindLabels[conflict.entityKind] : "item";
   const choices = useMemo(() => {
     if (!conflict?.fields) return {};
 

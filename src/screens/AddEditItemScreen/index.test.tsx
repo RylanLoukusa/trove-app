@@ -28,9 +28,7 @@ const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   folderId: "recipes",
   title: "Item",
   type: "text",
-  tags: [],
-  status: "waiting",
-  priority: "medium",
+  tagOptionIds: [],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
@@ -46,17 +44,38 @@ const navigation = {
 const folders: Folder[] = [makeFolder({ id: "recipes", name: "Recipes" })];
 const createItem = jest.fn();
 const updateItem = jest.fn();
+const createTagOption = jest.fn();
 const canEditFolderContent = jest.fn().mockReturnValue(true);
 const canEditItem = jest.fn().mockReturnValue(true);
 
 const renderNewItem = async (routeFolders: Folder[] = folders, items: SavedItem[] = []) => {
-  mockUseTrove.mockReturnValue({ folders: routeFolders, items, createItem, updateItem, canEditFolderContent, canEditItem });
+  mockUseTrove.mockReturnValue({
+    folders: routeFolders,
+    items,
+    tagGroups: [],
+    tagOptions: [],
+    createItem,
+    updateItem,
+    createTagOption,
+    canEditFolderContent,
+    canEditItem,
+  });
   const route = { params: undefined } as unknown as NativeStackScreenProps<RootStackParamList, "AddEditItem">["route"];
   await renderScreen(<AddEditItemScreen navigation={navigation} route={route} />);
 };
 
 const renderEditItem = async (items: SavedItem[]) => {
-  mockUseTrove.mockReturnValue({ folders, items, createItem, updateItem, canEditFolderContent, canEditItem });
+  mockUseTrove.mockReturnValue({
+    folders,
+    items,
+    tagGroups: [],
+    tagOptions: [],
+    createItem,
+    updateItem,
+    createTagOption,
+    canEditFolderContent,
+    canEditItem,
+  });
   const route = { params: { itemId: items[0].id } } as unknown as NativeStackScreenProps<
     RootStackParamList,
     "AddEditItem"

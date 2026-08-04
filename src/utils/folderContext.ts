@@ -1,5 +1,10 @@
-import { SavedItem } from "../types/models";
+import { SavedItem, TagOption } from "../types/models";
 import { getItemTypeLabel, normalizeItemType } from "./itemTypes";
+
+const resolveTagNames = (item: SavedItem, tagOptionsById: Map<string, TagOption>): string[] =>
+  item.tagOptionIds
+    .map((tagOptionId) => tagOptionsById.get(tagOptionId)?.name)
+    .filter((name): name is string => !!name);
 
 export type FolderPatternKind = "tag" | "phrase";
 
@@ -59,21 +64,21 @@ const STOP_WORDS = new Set([
   "would",
 ]);
 
-const getItemText = (item: SavedItem): string =>
+const getItemText = (item: SavedItem, tagOptionsById: Map<string, TagOption>): string =>
   [
     item.title,
     item.description,
     item.url,
     item.notes,
     item.richText,
-    item.tags.join(" "),
+    resolveTagNames(item, tagOptionsById).join(" "),
     item.listItems?.map((listItem) => listItem.text).join(" "),
   ]
     .filter(Boolean)
     .join(" ");
 
-const getItemTokens = (item: SavedItem): string[] => {
-  const matches = getItemText(item).toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) ?? [];
+const getItemTokens = (item: SavedItem, tagOptionsById: Map<string, TagOption>): string[] => {
+  const matches = getItemText(item, tagOptionsById).toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) ?? [];
   return Array.from(
     new Set(
       matches.filter((word) => word.length > 3 && !STOP_WORDS.has(word) && !word.includes("www")),
@@ -85,12 +90,13 @@ const pluralizeItem = (count: number): string => `${count} item${count === 1 ? "
 
 const titleCase = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
 
-export const getFolderPatterns = (items: SavedItem[], limit = 8): FolderPattern[] => {
+export const getFolderPatterns = (items: SavedItem[], tagOptions: TagOption[], limit = 8): FolderPattern[] => {
+  const tagOptionsById = new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption]));
   const tagMatches = new Map<string, Set<string>>();
   const phraseMatches = new Map<string, Set<string>>();
 
   items.forEach((item) => {
-    item.tags.forEach((tag) => {
+    resolveTagNames(item, tagOptionsById).forEach((tag) => {
       const normalized = tag.trim().toLowerCase();
       if (!normalized) return;
       const matches = tagMatches.get(normalized) ?? new Set<string>();
@@ -98,7 +104,7 @@ export const getFolderPatterns = (items: SavedItem[], limit = 8): FolderPattern[
       tagMatches.set(normalized, matches);
     });
 
-    getItemTokens(item).forEach((token) => {
+    getItemTokens(item, tagOptionsById).forEach((token) => {
       const matches = phraseMatches.get(token) ?? new Set<string>();
       matches.add(item.id);
       phraseMatches.set(token, matches);
@@ -131,17 +137,23 @@ export const getFolderPatterns = (items: SavedItem[], limit = 8): FolderPattern[
     .slice(0, limit);
 };
 
-export const getRelatedItems = (item: SavedItem, folderItems: SavedItem[], limit = 4): RelatedItemMatch[] => {
-  const itemTags = new Set(item.tags.map((tag) => tag.toLowerCase()));
-  const itemTokens = new Set(getItemTokens(item));
+export const getRelatedItems = (
+  item: SavedItem,
+  folderItems: SavedItem[],
+  tagOptions: TagOption[],
+  limit = 4,
+): RelatedItemMatch[] => {
+  const tagOptionsById = new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption]));
+  const itemTags = new Set(resolveTagNames(item, tagOptionsById).map((tag) => tag.toLowerCase()));
+  const itemTokens = new Set(getItemTokens(item, tagOptionsById));
   const explicitConnectionIds = new Set(item.connections?.map((connection) => connection.itemId) ?? []);
 
   return folderItems
     .filter((candidate) => candidate.id !== item.id)
     .map((candidate): RelatedItemMatch => {
-      const candidateTags = new Set(candidate.tags.map((tag) => tag.toLowerCase()));
+      const candidateTags = new Set(resolveTagNames(candidate, tagOptionsById).map((tag) => tag.toLowerCase()));
       const sharedTags = Array.from(itemTags).filter((tag) => candidateTags.has(tag));
-      const candidateTokens = new Set(getItemTokens(candidate));
+      const candidateTokens = new Set(getItemTokens(candidate, tagOptionsById));
       const sharedTokens = Array.from(itemTokens).filter((token) => candidateTokens.has(token)).slice(0, 3);
       const candidateConnections = new Set(candidate.connections?.map((connection) => connection.itemId) ?? []);
       const isConnected = explicitConnectionIds.has(candidate.id) || candidateConnections.has(item.id);

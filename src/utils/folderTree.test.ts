@@ -23,9 +23,7 @@ const item = (id: string, folderId: string): SavedItem => ({
   folderId,
   title: `Item ${id}`,
   type: "text",
-  tags: [],
-  status: "waiting",
-  priority: "medium",
+  tagOptionIds: [],
   createdAt: now,
   updatedAt: now,
 });

@@ -5,6 +5,8 @@ import type { TroveData } from "../types/models";
 export type SyncBaseline = {
   folders: Record<string, string>;
   items: Record<string, string>;
+  tagGroups: Record<string, string>;
+  tagOptions: Record<string, string>;
 };
 
 export type SyncEntityKind = keyof SyncBaseline;
@@ -33,6 +35,8 @@ export type SyncConflictSummary = {
 const emptyBaseline: SyncBaseline = {
   folders: {},
   items: {},
+  tagGroups: {},
+  tagOptions: {},
 };
 
 const syncBaselineKey = (userId: string) => `trove:syncBaseline:${userId}`;
@@ -43,6 +47,12 @@ export const baselineFromTroveData = (troveData: TroveData): SyncBaseline => ({
   ),
   items: Object.fromEntries(
     troveData.items.map((item) => [item.id, item.updatedAt]),
+  ),
+  tagGroups: Object.fromEntries(
+    troveData.tagGroups.map((tagGroup) => [tagGroup.id, tagGroup.updatedAt]),
+  ),
+  tagOptions: Object.fromEntries(
+    troveData.tagOptions.map((tagOption) => [tagOption.id, tagOption.updatedAt]),
   ),
 });
 
@@ -55,6 +65,8 @@ export const loadSyncBaseline = async (userId: string): Promise<SyncBaseline> =>
     return {
       folders: parsed.folders ?? {},
       items: parsed.items ?? {},
+      tagGroups: parsed.tagGroups ?? {},
+      tagOptions: parsed.tagOptions ?? {},
     };
   } catch (error) {
     console.warn("Failed to load sync baseline", error);

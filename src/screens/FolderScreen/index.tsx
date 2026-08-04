@@ -15,7 +15,7 @@ import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { spacing } from "../../theme/theme";
-import { Folder, SavedItem } from "../../types/models";
+import { Folder, SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
@@ -81,12 +81,16 @@ const SubfolderRow = React.memo(function SubfolderRow({ child, count, onOpenFold
 
 type FolderItemRowProps = {
   item: SavedItem;
+  tagOptions: TagOption[];
   onOpenItemDetail: (itemId: string) => void;
   onToggleChecklistItem: (itemId: string, listItemId: string) => void;
   styles: ScreenStyles;
 };
 
-const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail, onToggleChecklistItem, styles }: FolderItemRowProps) {
+const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOpenItemDetail, onToggleChecklistItem, styles }: FolderItemRowProps) {
+  const assignedTags = item.tagOptionIds
+    .map((tagOptionId) => tagOptions.find((option) => option.id === tagOptionId))
+    .filter((option): option is TagOption => !!option);
   const onPress = useCallback(() => {
     onOpenItemDetail(item.id);
   }, [item.id, onOpenItemDetail]);
@@ -165,11 +169,16 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
         )}
 
         <View style={styles.fullItemFooter}>
-          <View style={styles.fullItemPills}>
-            <Text style={styles.fullItemPill}>{item.status}</Text>
-            <Text style={styles.fullItemPill}>{item.priority} priority</Text>
-          </View>
-          <Text numberOfLines={1} style={styles.fullItemTags}>{item.tags.join(", ") || "No tags"}</Text>
+          {assignedTags.length > 0 && (
+            <View style={styles.fullItemPills}>
+              {assignedTags.map((tag) => (
+                <Text key={tag.id} style={[styles.fullItemPill, tag.color ? { color: tag.color } : undefined]}>
+                  {tag.name}
+                </Text>
+              ))}
+            </View>
+          )}
+          {assignedTags.length === 0 && <Text style={styles.fullItemTags}>No tags</Text>}
         </View>
       </View>
     </View>
@@ -179,7 +188,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
+  const { folders, isReady, items, tagOptions, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
@@ -188,7 +197,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
   const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
   const folderItems = useMemo(() => (folder ? getItemsInFolder(items, folder.id) : []), [folder, items]);
-  const folderPatterns = useMemo(() => getFolderPatterns(folderItems), [folderItems]);
+  const folderPatterns = useMemo(() => getFolderPatterns(folderItems, tagOptions), [folderItems, tagOptions]);
   const selectedPattern = folderPatterns.find((pattern) => pattern.id === selectedPatternId);
   const displayedItems = selectedPattern
     ? folderItems.filter((item) => selectedPattern.itemIds.includes(item.id))
@@ -236,13 +245,8 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           ? { ...listItem, checked: !listItem.checked }
           : listItem,
       );
-      const checklistItems = listItems.filter((listItem) => listItem.kind === "check");
-      const isChecklistComplete = checklistItems.length > 0 && checklistItems.every((listItem) => listItem.checked);
 
-      updateItem(currentItem.id, {
-        listItems,
-        status: isChecklistComplete ? "done" : currentItem.status === "done" ? "waiting" : currentItem.status,
-      });
+      updateItem(currentItem.id, { listItems });
     },
     [canEditItem, items, updateItem],
   );
@@ -466,6 +470,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             <FolderItemRow
               key={item.id}
               item={item}
+              tagOptions={tagOptions}
               onOpenItemDetail={onOpenItemDetail}
               onToggleChecklistItem={onToggleChecklistItem}
               styles={styles}

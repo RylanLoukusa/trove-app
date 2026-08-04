@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { ItemType, SavedItem } from "../types/models";
+import type { ItemType, SavedItem, TagOption } from "../types/models";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import { bulletGlyphForIndent, normalizeItemType } from "../utils/itemTypes";
@@ -18,13 +18,18 @@ const typeIcon: Record<ItemType, string> = {
 type Props = {
   item: SavedItem;
   folderPath?: string;
+  tagOptions?: TagOption[];
   onPress: () => void;
 };
 
-export const ItemCard = ({ item, folderPath, onPress }: Props) => {
+export const ItemCard = ({ item, folderPath, tagOptions = [], onPress }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const mediaCount = item.mediaItems?.length ?? (item.media?.storagePath ? 1 : 0);
+  const tagOptionsById = useMemo(() => new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption])), [tagOptions]);
+  const assignedTags = item.tagOptionIds
+    .map((tagOptionId) => tagOptionsById.get(tagOptionId))
+    .filter((tagOption): tagOption is TagOption => !!tagOption);
 
   return (
     <Pressable
@@ -70,10 +75,18 @@ export const ItemCard = ({ item, folderPath, onPress }: Props) => {
             style={styles.mediaStrip}
           />
         )}
-        <View style={styles.row}>
-          <Text style={styles.pill}>{item.status}</Text>
-          <Text style={[styles.pill, item.priority === "high" && styles.high]}>{item.priority}</Text>
-        </View>
+        {assignedTags.length > 0 && (
+          <View style={styles.row}>
+            {assignedTags.map((tagOption) => (
+              <Text
+                key={tagOption.id}
+                style={[styles.pill, tagOption.color ? { color: tagOption.color } : undefined]}
+              >
+                {tagOption.name}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -108,6 +121,5 @@ const createStyles = (colors: ThemeColors) =>
     paddingHorizontal: 9,
     paddingVertical: 4,
   },
-  high: { color: colors.danger },
   pressed: { opacity: 0.75 },
 });

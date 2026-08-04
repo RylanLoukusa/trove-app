@@ -6,7 +6,7 @@ import { ItemDetailScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useTrove } from "../../storage/storage";
-import type { SavedItem } from "../../types/models";
+import type { SavedItem, TagGroup, TagOption } from "../../types/models";
 import type { RootStackParamList } from "../../navigation/types";
 import { renderScreen } from "../../test-utils/renderScreen";
 
@@ -31,12 +31,30 @@ const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   folderId: "recipes",
   title: "Item",
   type: "text",
-  tags: [],
-  status: "waiting",
-  priority: "medium",
+  tagOptionIds: [],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
+});
+
+const tagsGroup: TagGroup = {
+  id: "tags-group",
+  name: "Tags",
+  selectionMode: "multi",
+  allowInlineCreate: true,
+  isSystem: true,
+  sortOrder: 0,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+const makeTagOption = (id: string, name: string): TagOption => ({
+  id,
+  groupId: tagsGroup.id,
+  name,
+  sortOrder: 0,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
 const navigation = {
@@ -48,11 +66,26 @@ const navigation = {
 
 const updateItem = jest.fn();
 const deleteItem = jest.fn();
+const createTagOption = jest.fn((input: { groupId: string; name: string }) => makeTagOption(`new-${input.name}`, input.name));
 const canEditItem = jest.fn().mockReturnValue(true);
 
-const renderItemDetail = async (items: SavedItem[], itemId = "pasta") => {
+const renderItemDetail = async (
+  items: SavedItem[],
+  itemId = "pasta",
+  extra: { tagGroups?: TagGroup[]; tagOptions?: TagOption[] } = {},
+) => {
   mockUseAuth.mockReturnValue({ session: null });
-  mockUseTrove.mockReturnValue({ folders: [], isReady: true, items, updateItem, deleteItem, canEditItem });
+  mockUseTrove.mockReturnValue({
+    folders: [],
+    isReady: true,
+    items,
+    tagGroups: extra.tagGroups ?? [],
+    tagOptions: extra.tagOptions ?? [],
+    updateItem,
+    createTagOption,
+    deleteItem,
+    canEditItem,
+  });
   mockUseEntitlement.mockReturnValue({
     isPro: false,
     isLoading: false,
@@ -83,14 +116,10 @@ describe("ItemDetailScreen", () => {
     expect(screen.getByText("Item not found")).toBeTruthy();
   });
 
-  it("shows the item title and marks it done", async () => {
+  it("shows the item title", async () => {
     await renderItemDetail([makeItem({ id: "pasta", title: "Pasta recipe" })]);
 
     expect(screen.getByText("Pasta recipe")).toBeTruthy();
-
-    await fireEvent.press(screen.getByLabelText("Mark as done"));
-
-    expect(updateItem).toHaveBeenCalledWith("pasta", { status: "done" });
   });
 
   it("navigates to edit the item", async () => {
@@ -106,7 +135,6 @@ describe("ItemDetailScreen", () => {
     await renderItemDetail([makeItem({ id: "pasta", title: "Pasta recipe" })]);
 
     expect(screen.queryByLabelText("Edit item")).toBeNull();
-    expect(screen.queryByLabelText("Mark as done")).toBeNull();
     expect(screen.queryByLabelText("Delete item")).toBeNull();
   });
 
@@ -126,7 +154,7 @@ describe("ItemDetailScreen", () => {
     expect(navigation.navigate).toHaveBeenCalledWith("Home");
   });
 
-  it("toggles a checklist item and completes the status when all are checked", async () => {
+  it("toggles a checklist item's checked state", async () => {
     const items = [
       makeItem({
         id: "shopping",
@@ -141,22 +169,35 @@ describe("ItemDetailScreen", () => {
 
     expect(updateItem).toHaveBeenCalledWith(
       "shopping",
-      expect.objectContaining({ status: "done" }),
+      expect.objectContaining({
+        listItems: [{ id: "li-1", kind: "check", text: "Eggs", checked: true }],
+      }),
     );
   });
 
-  it("adds a new tag", async () => {
-    await renderItemDetail([makeItem({ id: "pasta", title: "Pasta recipe", tags: ["dinner"] })]);
+  it("adds a new tag, creating a tag option in the Tags group", async () => {
+    const dinnerOption = makeTagOption("tag-dinner", "dinner");
+    await renderItemDetail(
+      [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [dinnerOption.id] })],
+      "pasta",
+      { tagGroups: [tagsGroup], tagOptions: [dinnerOption] },
+    );
 
     await fireEvent.press(screen.getByLabelText("Add tag"));
     await fireEvent.changeText(screen.getByPlaceholderText("Add a tag"), "quick");
     await fireEvent(screen.getByPlaceholderText("Add a tag"), "submitEditing");
 
-    expect(updateItem).toHaveBeenCalledWith("pasta", { tags: ["dinner", "quick"] });
+    expect(createTagOption).toHaveBeenCalledWith({ groupId: tagsGroup.id, name: "quick" });
+    expect(updateItem).toHaveBeenCalledWith("pasta", { tagOptionIds: [dinnerOption.id, "new-quick"] });
   });
 
   it("navigates to search when a tag is pressed", async () => {
-    await renderItemDetail([makeItem({ id: "pasta", title: "Pasta recipe", tags: ["dinner"] })]);
+    const dinnerOption = makeTagOption("tag-dinner", "dinner");
+    await renderItemDetail(
+      [makeItem({ id: "pasta", title: "Pasta recipe", tagOptionIds: [dinnerOption.id] })],
+      "pasta",
+      { tagGroups: [tagsGroup], tagOptions: [dinnerOption] },
+    );
 
     await fireEvent.press(screen.getByText("dinner"));
 

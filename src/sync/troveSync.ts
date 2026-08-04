@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AccessRole, Folder, SavedItem, ShareScope, TroveData } from "../types/models";
+import type { AccessRole, Folder, SavedItem, ShareScope, TagGroup, TagOption, TroveData } from "../types/models";
 import {
   baselineFromTroveData,
   loadSyncBaseline,
@@ -84,10 +84,30 @@ type ItemRow = {
   list_items: unknown;
   rich_text: string | null;
   connections: unknown;
-  tags: unknown;
-  status: SavedItem["status"];
-  priority: SavedItem["priority"];
+  tags: unknown; // holds tag-option ids, not free text (column name kept for continuity)
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type TagGroupRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  selection_mode: TagGroup["selectionMode"];
+  allow_inline_create: boolean;
+  is_system: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type TagOptionRow = {
+  id: string;
+  group_id: string;
+  name: string;
+  color: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -186,7 +206,7 @@ const objectValue = <T>(value: unknown): T | undefined =>
   value && typeof value === "object" ? (value as T) : undefined;
 
 const hasTroveData = (data: TroveData): boolean =>
-  data.folders.length > 0 || data.items.length > 0;
+  data.folders.length > 0 || data.items.length > 0 || data.tagGroups.length > 0 || data.tagOptions.length > 0;
 
 const latestTimestamp = (timestamps: Array<string | null | undefined>) => {
   const validTimestamps = timestamps.filter(
@@ -354,9 +374,7 @@ const itemRowToSavedItem = (
     connections: Array.isArray(row.connections)
       ? (row.connections as SavedItem["connections"])
       : undefined,
-    tags: stringArray(row.tags),
-    status: row.status,
-    priority: row.priority,
+    tagOptionIds: stringArray(row.tags),
     ownerId: row.owner_id,
     createdBy: row.created_by ?? undefined,
     accessRole: row.owner_id === userId ? "owner" : row.folder_id ? folderAccessById.get(row.folder_id) ?? "viewer" : "viewer",
@@ -408,14 +426,56 @@ const savedItemToRow = (
     list_items: optionalArray(normalizedItem.listItems),
     rich_text: optional(normalizedItem.richText),
     connections: optionalArray(normalizedItem.connections),
-    tags: normalizedItem.tags ?? [],
-    status: normalizedItem.status,
-    priority: normalizedItem.priority,
+    tags: normalizedItem.tagOptionIds ?? [],
     notes: optional(normalizedItem.notes),
     created_at: normalizedItem.createdAt,
     updated_at: normalizedItem.updatedAt,
   };
 };
+
+const tagGroupRowToTagGroup = (row: TagGroupRow): TagGroup => ({
+  id: row.id,
+  ownerId: row.owner_id,
+  name: row.name,
+  selectionMode: row.selection_mode,
+  allowInlineCreate: row.allow_inline_create,
+  isSystem: row.is_system,
+  sortOrder: row.sort_order,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const tagGroupToRow = (tagGroup: TagGroup, userId: string): TagGroupRow => ({
+  id: tagGroup.id,
+  owner_id: tagGroup.ownerId || userId,
+  name: tagGroup.name,
+  selection_mode: tagGroup.selectionMode,
+  allow_inline_create: tagGroup.allowInlineCreate,
+  is_system: tagGroup.isSystem,
+  sort_order: tagGroup.sortOrder,
+  created_at: tagGroup.createdAt,
+  updated_at: tagGroup.updatedAt,
+});
+
+const tagOptionRowToTagOption = (row: TagOptionRow): TagOption => ({
+  id: row.id,
+  groupId: row.group_id,
+  name: row.name,
+  color: row.color ?? undefined,
+  sortOrder: row.sort_order,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const tagOptionToRow = (tagOption: TagOption): TagOptionRow => ({
+  id: tagOption.id,
+  group_id: tagOption.groupId,
+  name: tagOption.name,
+  color: optional(tagOption.color),
+  sort_order: tagOption.sortOrder,
+  created_at: tagOption.createdAt,
+  updated_at: tagOption.updatedAt,
+});
 
 const upsertFolderRowForCurrentUser = async (
   supabase: SupabaseClient,
@@ -457,12 +517,14 @@ const upsertItemRowForCurrentUser = async (
     target_media_items: itemRow.media_items,
     target_media_uri: itemRow.media_uri,
     target_notes: itemRow.notes,
-    target_priority: itemRow.priority,
+    // status/priority are no longer modeled client-side; the columns still require
+    // a valid value so we send inert placeholders that satisfy the check constraints.
+    target_priority: "medium",
     target_rich_text: itemRow.rich_text,
     target_shared_text: itemRow.shared_text,
     target_source_platform: itemRow.source_platform,
     target_source_url: itemRow.source_url,
-    target_status: itemRow.status,
+    target_status: "waiting",
     target_tags: itemRow.tags,
     target_thumbnail_uri: itemRow.thumbnail_uri,
     target_title: itemRow.title,
@@ -476,25 +538,69 @@ const upsertItemRowForCurrentUser = async (
   }
 };
 
+const upsertTagGroupRowForCurrentUser = async (
+  supabase: SupabaseClient,
+  tagGroupRow: TagGroupRow,
+  expectedUpdatedAt?: string,
+): Promise<void> => {
+  const { error } = await supabase.rpc("trove_upsert_tag_group_for_current_user", {
+    target_allow_inline_create: tagGroupRow.allow_inline_create,
+    target_created_at: tagGroupRow.created_at,
+    target_expected_updated_at: expectedUpdatedAt ?? null,
+    target_group_id: tagGroupRow.id,
+    target_is_system: tagGroupRow.is_system,
+    target_name: tagGroupRow.name,
+    target_selection_mode: tagGroupRow.selection_mode,
+    target_sort_order: tagGroupRow.sort_order,
+    target_updated_at: tagGroupRow.updated_at,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
+const upsertTagOptionRowForCurrentUser = async (
+  supabase: SupabaseClient,
+  tagOptionRow: TagOptionRow,
+  expectedUpdatedAt?: string,
+): Promise<void> => {
+  const { error } = await supabase.rpc("trove_upsert_tag_option_for_current_user", {
+    target_color: tagOptionRow.color,
+    target_created_at: tagOptionRow.created_at,
+    target_expected_updated_at: expectedUpdatedAt ?? null,
+    target_group_id: tagOptionRow.group_id,
+    target_name: tagOptionRow.name,
+    target_option_id: tagOptionRow.id,
+    target_sort_order: tagOptionRow.sort_order,
+    target_updated_at: tagOptionRow.updated_at,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
 const deleteOwnedRowsMissing = async (
   supabase: SupabaseClient,
-  table: "trove_folders" | "trove_items",
+  table: "trove_folders" | "trove_items" | "trove_tag_groups" | "trove_tag_options",
   ids: string[],
   knownUpdatedAt: Record<string, string>,
   skipConflictCheck: boolean,
 ): Promise<void> => {
-  const { error } =
-    table === "trove_folders"
-      ? await supabase.rpc("trove_delete_missing_folders_for_current_user", {
-          known_updated_at: knownUpdatedAt,
-          local_folder_ids: ids,
-          skip_conflict_check: skipConflictCheck,
-        })
-      : await supabase.rpc("trove_delete_missing_items_for_current_user", {
-          known_updated_at: knownUpdatedAt,
-          local_item_ids: ids,
-          skip_conflict_check: skipConflictCheck,
-        });
+  const rpcByTable: Record<typeof table, { name: string; idParam: string }> = {
+    trove_folders: { name: "trove_delete_missing_folders_for_current_user", idParam: "local_folder_ids" },
+    trove_items: { name: "trove_delete_missing_items_for_current_user", idParam: "local_item_ids" },
+    trove_tag_groups: { name: "trove_delete_missing_tag_groups_for_current_user", idParam: "local_group_ids" },
+    trove_tag_options: { name: "trove_delete_missing_tag_options_for_current_user", idParam: "local_option_ids" },
+  };
+  const rpc = rpcByTable[table];
+
+  const { error } = await supabase.rpc(rpc.name, {
+    known_updated_at: knownUpdatedAt,
+    skip_conflict_check: skipConflictCheck,
+    [rpc.idParam]: ids,
+  });
 
   if (error) {
     throw error;
@@ -576,7 +682,7 @@ const fetchNormalizedTroveDataForUser = async (
     }
   | { kind: "error" }
 > => {
-  const [syncStateResult, foldersResult, itemsResult, sharesResult] = await Promise.all([
+  const [syncStateResult, foldersResult, itemsResult, sharesResult, tagGroupsResult, tagOptionsResult] = await Promise.all([
     supabase
       .from("trove_sync_state")
       .select("updated_at, normalized_initialized")
@@ -611,8 +717,6 @@ const fetchNormalizedTroveDataForUser = async (
           "rich_text",
           "connections",
           "tags",
-          "status",
-          "priority",
           "notes",
           "created_at",
           "updated_at",
@@ -622,6 +726,12 @@ const fetchNormalizedTroveDataForUser = async (
       .from("trove_folder_shares")
       .select("folder_id, shared_with_user_id, role, scope, updated_at")
       .eq("shared_with_user_id", userId),
+    supabase
+      .from("trove_tag_groups")
+      .select("id, owner_id, name, selection_mode, allow_inline_create, is_system, sort_order, created_at, updated_at"),
+    supabase
+      .from("trove_tag_options")
+      .select("id, group_id, name, color, sort_order, created_at, updated_at"),
   ]);
 
   if (syncStateResult.error) {
@@ -644,6 +754,16 @@ const fetchNormalizedTroveDataForUser = async (
     return { kind: "error" };
   }
 
+  if (tagGroupsResult.error) {
+    console.warn("Failed to pull remote Trove tag groups", tagGroupsResult.error);
+    return { kind: "error" };
+  }
+
+  if (tagOptionsResult.error) {
+    console.warn("Failed to pull remote Trove tag options", tagOptionsResult.error);
+    return { kind: "error" };
+  }
+
   const folderRows = (foldersResult.data ?? []) as unknown as FolderRow[];
   const shares = (sharesResult.data ?? []) as unknown as ShareRow[];
   const folderRowsById = new Map(folderRows.map((folder) => [folder.id, folder]));
@@ -656,16 +776,20 @@ const fetchNormalizedTroveDataForUser = async (
   const items = ((itemsResult.data ?? []) as unknown as ItemRow[]).map((item) =>
     itemRowToSavedItem(item, userId, folderAccessById),
   );
+  const tagGroups = ((tagGroupsResult.data ?? []) as unknown as TagGroupRow[]).map(tagGroupRowToTagGroup);
+  const tagOptions = ((tagOptionsResult.data ?? []) as unknown as TagOptionRow[]).map(tagOptionRowToTagOption);
 
   const latestRowUpdatedAt = latestTimestamp([
     ...folders.map((folder) => folder.updatedAt),
     ...items.map((item) => item.updatedAt),
     ...shares.map((share) => share.updated_at),
+    ...tagGroups.map((tagGroup) => tagGroup.updatedAt),
+    ...tagOptions.map((tagOption) => tagOption.updatedAt),
   ]);
 
   return {
     kind: "data",
-    data: { folders, items },
+    data: { folders, items, tagGroups, tagOptions },
     latestRowUpdatedAt,
     syncState: (syncStateResult.data as SyncStateRow | null) ?? null,
   };
@@ -768,10 +892,25 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "listItems",
     "richText",
     "connections",
-    "tags",
-    "status",
-    "priority",
+    "tagOptionIds",
     "notes",
+  ]);
+
+const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>
+  changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
+    "name",
+    "selectionMode",
+    "allowInlineCreate",
+    "isSystem",
+    "sortOrder",
+  ]);
+
+const tagOptionConflictFields = (local: TagOption, remote: TagOption): SyncConflictField[] =>
+  changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
+    "name",
+    "color",
+    "groupId",
+    "sortOrder",
   ]);
 
 const firstSyncConflict = async (
@@ -782,7 +921,9 @@ const firstSyncConflict = async (
   const baseline = await loadSyncBaseline(userId);
   const hasBaseline =
     Object.keys(baseline.folders).length > 0 ||
-    Object.keys(baseline.items).length > 0;
+    Object.keys(baseline.items).length > 0 ||
+    Object.keys(baseline.tagGroups).length > 0 ||
+    Object.keys(baseline.tagOptions).length > 0;
 
   if (!hasBaseline) {
     const remoteResult = await fetchNormalizedTroveDataForUser(supabase, userId);
@@ -812,6 +953,19 @@ const firstSyncConflict = async (
       };
     }
 
+    // Tag options always belong to a group, so group ownership already covers option
+    // ownership here — no separate remote-option check needed for the no-baseline case.
+    const remoteTagGroup = remoteResult.data.tagGroups.find((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
+    if (remoteTagGroup) {
+      return {
+        entityId: remoteTagGroup.id,
+        entityKind: "tagGroups",
+        reason: "remote_changed",
+        remoteLabel: remoteTagGroup.name,
+        remoteUpdatedAt: remoteTagGroup.updatedAt,
+      };
+    }
+
     return null;
   }
 
@@ -821,6 +975,9 @@ const firstSyncConflict = async (
   );
   const localFoldersById = new Map(localOwnedFolders.map((folder) => [folder.id, folder]));
   const localItemsById = new Map(normalizedData.items.map((item) => [item.id, item]));
+  const localOwnedTagGroups = normalizedData.tagGroups.filter((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
+  const localTagGroupsById = new Map(localOwnedTagGroups.map((tagGroup) => [tagGroup.id, tagGroup]));
+  const localTagOptionsById = new Map(normalizedData.tagOptions.map((tagOption) => [tagOption.id, tagOption]));
 
   const remoteResult = await fetchNormalizedTroveDataForUser(supabase, userId);
   if (remoteResult.kind === "error") {
@@ -927,6 +1084,113 @@ const firstSyncConflict = async (
     }
   }
 
+  const remoteTagGroups = remoteResult.data.tagGroups.filter((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
+  const remoteTagGroupIds = new Set(remoteTagGroups.map((tagGroup) => tagGroup.id));
+  for (const remoteTagGroup of remoteTagGroups) {
+    const localTagGroup = localTagGroupsById.get(remoteTagGroup.id);
+    const baselineUpdatedAt = baseline.tagGroups[remoteTagGroup.id];
+
+    if (localTagGroup) {
+      if (
+        localTagGroup.updatedAt !== remoteTagGroup.updatedAt &&
+        remoteChangedSinceBaseline(remoteTagGroup.updatedAt, baselineUpdatedAt)
+      ) {
+        return {
+          entityId: remoteTagGroup.id,
+          entityKind: "tagGroups",
+          fields: tagGroupConflictFields(localTagGroup, remoteTagGroup),
+          localLabel: localTagGroup.name,
+          localUpdatedAt: localTagGroup.updatedAt,
+          reason: "remote_changed",
+          remoteLabel: remoteTagGroup.name,
+          remoteUpdatedAt: remoteTagGroup.updatedAt,
+        };
+      }
+    } else if (
+      baselineUpdatedAt === undefined ||
+      remoteChangedSinceBaseline(remoteTagGroup.updatedAt, baselineUpdatedAt)
+    ) {
+      return {
+        entityId: remoteTagGroup.id,
+        entityKind: "tagGroups",
+        reason: "remote_changed",
+        remoteLabel: remoteTagGroup.name,
+        remoteUpdatedAt: remoteTagGroup.updatedAt,
+      };
+    }
+  }
+
+  for (const localTagGroup of localTagGroupsById.values()) {
+    if (baseline.tagGroups[localTagGroup.id] && !remoteTagGroupIds.has(localTagGroup.id)) {
+      return {
+        entityId: localTagGroup.id,
+        entityKind: "tagGroups",
+        localLabel: localTagGroup.name,
+        localUpdatedAt: localTagGroup.updatedAt,
+        reason: "remote_deleted",
+        remoteUpdatedAt: baseline.tagGroups[localTagGroup.id],
+      };
+    }
+  }
+
+  // Tag options only need checking against groups we own locally — an option's
+  // owning group determines writability the same way an item's folder does.
+  const remoteTagOptions = remoteResult.data.tagOptions.filter((tagOption) =>
+    localTagGroupsById.has(tagOption.groupId) || remoteTagGroupIds.has(tagOption.groupId),
+  );
+  const remoteTagOptionsById = new Map(remoteTagOptions.map((tagOption) => [tagOption.id, tagOption]));
+
+  for (const remoteTagOption of remoteTagOptionsById.values()) {
+    const localTagOption = localTagOptionsById.get(remoteTagOption.id);
+    const baselineUpdatedAt = baseline.tagOptions[remoteTagOption.id];
+
+    if (localTagOption) {
+      if (
+        localTagOption.updatedAt !== remoteTagOption.updatedAt &&
+        remoteChangedSinceBaseline(remoteTagOption.updatedAt, baselineUpdatedAt)
+      ) {
+        return {
+          entityId: remoteTagOption.id,
+          entityKind: "tagOptions",
+          fields: tagOptionConflictFields(localTagOption, remoteTagOption),
+          localLabel: localTagOption.name,
+          localUpdatedAt: localTagOption.updatedAt,
+          reason: "remote_changed",
+          remoteLabel: remoteTagOption.name,
+          remoteUpdatedAt: remoteTagOption.updatedAt,
+        };
+      }
+    } else if (
+      baselineUpdatedAt === undefined ||
+      remoteChangedSinceBaseline(remoteTagOption.updatedAt, baselineUpdatedAt)
+    ) {
+      return {
+        entityId: remoteTagOption.id,
+        entityKind: "tagOptions",
+        reason: "remote_changed",
+        remoteLabel: remoteTagOption.name,
+        remoteUpdatedAt: remoteTagOption.updatedAt,
+      };
+    }
+  }
+
+  for (const localTagOption of localTagOptionsById.values()) {
+    if (
+      baseline.tagOptions[localTagOption.id] &&
+      !remoteTagOptionsById.has(localTagOption.id) &&
+      localTagGroupsById.has(localTagOption.groupId)
+    ) {
+      return {
+        entityId: localTagOption.id,
+        entityKind: "tagOptions",
+        localLabel: localTagOption.name,
+        localUpdatedAt: localTagOption.updatedAt,
+        reason: "remote_deleted",
+        remoteUpdatedAt: baseline.tagOptions[localTagOption.id],
+      };
+    }
+  }
+
   return null;
 };
 
@@ -983,6 +1247,28 @@ const replaceNormalizedTroveDataForUser = async (
       );
     }
 
+    const ownedTagGroups = normalizedData.tagGroups.filter((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
+    const ownedTagGroupIds = new Set(ownedTagGroups.map((tagGroup) => tagGroup.id));
+    const writableTagOptions = normalizedData.tagOptions.filter((tagOption) => ownedTagGroupIds.has(tagOption.groupId));
+
+    const tagGroupRows = ownedTagGroups.map((tagGroup) => tagGroupToRow(tagGroup, userId));
+    for (const tagGroupRow of tagGroupRows) {
+      await upsertTagGroupRowForCurrentUser(
+        supabase,
+        tagGroupRow,
+        options.skipConflictCheck ? undefined : baseline.tagGroups[tagGroupRow.id],
+      );
+    }
+
+    const tagOptionRows = writableTagOptions.map(tagOptionToRow);
+    for (const tagOptionRow of tagOptionRows) {
+      await upsertTagOptionRowForCurrentUser(
+        supabase,
+        tagOptionRow,
+        options.skipConflictCheck ? undefined : baseline.tagOptions[tagOptionRow.id],
+      );
+    }
+
     const localItemIds = normalizedData.items
       .filter((item) => (item.ownerId ?? userId) === userId)
       .map((item) => item.id);
@@ -1000,6 +1286,22 @@ const replaceNormalizedTroveDataForUser = async (
       "trove_folders",
       localFolderIds,
       baseline.folders,
+      options.skipConflictCheck ?? false,
+    );
+
+    await deleteOwnedRowsMissing(
+      supabase,
+      "trove_tag_options",
+      writableTagOptions.map((tagOption) => tagOption.id),
+      baseline.tagOptions,
+      options.skipConflictCheck ?? false,
+    );
+
+    await deleteOwnedRowsMissing(
+      supabase,
+      "trove_tag_groups",
+      ownedTagGroups.map((tagGroup) => tagGroup.id),
+      baseline.tagGroups,
       options.skipConflictCheck ?? false,
     );
 
@@ -1282,6 +1584,16 @@ const subscribeTroveRealtimeForUser = (
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "trove_folder_share_invites" },
+      scheduleRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "trove_tag_groups" },
+      scheduleRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "trove_tag_options" },
       scheduleRefresh,
     )
     .subscribe((status) => {

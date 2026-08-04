@@ -34,9 +34,7 @@ const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   folderId: "recipes",
   title: "Item",
   type: "text",
-  tags: [],
-  status: "waiting",
-  priority: "medium",
+  tagOptionIds: [],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
@@ -60,6 +58,7 @@ const renderFolderScreen = async (folders: Folder[], items: SavedItem[], folderI
     folders,
     isReady: true,
     items,
+    tagOptions: [],
     updateItem,
     deleteFolder,
     canManageFolder,
@@ -104,7 +103,7 @@ describe("FolderScreen", () => {
     expect(screen.getByText("Desserts")).toBeTruthy();
   });
 
-  it("toggles a checklist item and marks it done when complete", async () => {
+  it("toggles a checklist item's checked state", async () => {
     const folders = [makeFolder({ id: "recipes", name: "Recipes" })];
     const items = [
       makeItem({
@@ -112,7 +111,6 @@ describe("FolderScreen", () => {
         folderId: "recipes",
         title: "Shopping list",
         type: "list",
-        status: "waiting",
         listItems: [{ id: "li-1", kind: "check", text: "Eggs", checked: false }],
       }),
     ];
@@ -124,7 +122,6 @@ describe("FolderScreen", () => {
     expect(updateItem).toHaveBeenCalledWith(
       "shopping",
       expect.objectContaining({
-        status: "done",
         listItems: [{ id: "li-1", kind: "check", text: "Eggs", checked: true }],
       }),
     );

@@ -27,9 +27,7 @@ const makeItem = (overrides: Partial<SavedItem>): SavedItem => ({
   folderId: "folder-1",
   title: "Item",
   type: "link",
-  tags: [],
-  status: "waiting",
-  priority: "medium",
+  tagOptionIds: [],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
@@ -52,7 +50,7 @@ const navigation = {
 } as unknown as NativeStackScreenProps<RootStackParamList, "Search">["navigation"];
 
 const renderSearchScreen = async (routeParams?: { query?: string }) => {
-  mockUseTrove.mockReturnValue({ folders, isReady: true, items });
+  mockUseTrove.mockReturnValue({ folders, isReady: true, items, tagOptions: [] });
   const route = { params: routeParams } as NativeStackScreenProps<RootStackParamList, "Search">["route"];
   await renderScreen(<SearchScreen navigation={navigation} route={route} />);
 };

@@ -1,7 +1,6 @@
 export type ItemType = "text" | "list" | "link" | "media" | "image" | "video";
-export type ItemStatus = "waiting" | "planned" | "done" | "skipped";
-export type ItemPriority = "low" | "medium" | "high";
 export type ListItemKind = "check" | "bullet";
+export type TagGroupSelectionMode = "single" | "multi";
 export type ItemConnectionRelation = "related" | "similar" | "compare" | "alternative" | "part_of" | "inspired_by";
 export type AccessRole = "owner" | "editor" | "viewer";
 export type ShareScope = "folder_only" | "folder_and_subfolders";
@@ -75,9 +74,7 @@ export type SavedItem = {
   listItems?: SavedListItem[];
   richText?: string;
   connections?: ItemConnection[];
-  tags: string[];
-  status: ItemStatus;
-  priority: ItemPriority;
+  tagOptionIds: string[];
   ownerId?: string;
   createdBy?: string;
   accessRole?: AccessRole;
@@ -86,15 +83,33 @@ export type SavedItem = {
   notes?: string;
 };
 
-export type Tag = {
+export type TagGroup = {
   id: string;
+  ownerId?: string;
+  name: string;
+  selectionMode: TagGroupSelectionMode;
+  allowInlineCreate: boolean;
+  isSystem: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TagOption = {
+  id: string;
+  groupId: string;
   name: string;
   color?: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TroveData = {
   folders: Folder[];
   items: SavedItem[];
+  tagGroups: TagGroup[];
+  tagOptions: TagOption[];
 };
 
 export type CommentAuthor = {

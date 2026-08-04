@@ -35,7 +35,15 @@ import {
   syncedSyncSnapshot,
 } from "../sync/syncStatus";
 import { seedData } from "../data/seedData";
-import { Folder, SavedItem, TroveData } from "../types/models";
+import {
+  isTagBackfillDone,
+  markTagBackfillDone,
+  readLegacyFieldsFromLocalItem,
+  fetchLegacyItemFieldsForUser,
+  resolveLegacyItemTagOptionIds,
+  seedDefaultTagGroups,
+} from "./tagBackfill";
+import { Folder, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
@@ -44,10 +52,11 @@ import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../uti
 import { normalizeTroveData } from "../utils/itemTypes";
 
 const STORAGE_KEY_PREFIX = "trove:data:v1";
-const emptyData: TroveData = { folders: [], items: [] };
+const emptyData: TroveData = { folders: [], items: [], tagGroups: [], tagOptions: [] };
 const FOREGROUND_REFRESH_INTERVAL_MS = 30_000;
 
-const hasTroveData = (data: TroveData): boolean => data.folders.length > 0 || data.items.length > 0;
+const hasTroveData = (data: TroveData): boolean =>
+  data.folders.length > 0 || data.items.length > 0 || data.tagGroups.length > 0 || data.tagOptions.length > 0;
 
 const hasPendingSync = (snapshot: SyncSnapshot): boolean =>
   snapshot.status === "queued" ||
@@ -69,6 +78,14 @@ type TroveContextValue = TroveData & {
   createItem: (input: Omit<SavedItem, "id" | "createdAt" | "updatedAt">) => SavedItem | null;
   updateItem: (itemId: string, updates: Partial<Omit<SavedItem, "id" | "createdAt">>) => void;
   deleteItem: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
+  createTagGroup: (
+    input: Pick<TagGroup, "name"> & Partial<Pick<TagGroup, "selectionMode" | "allowInlineCreate" | "isSystem" | "sortOrder">>,
+  ) => TagGroup;
+  updateTagGroup: (groupId: string, updates: Partial<Pick<TagGroup, "name" | "selectionMode" | "allowInlineCreate" | "sortOrder">>) => void;
+  deleteTagGroup: (groupId: string) => void;
+  createTagOption: (input: Pick<TagOption, "groupId" | "name"> & Partial<Pick<TagOption, "color" | "sortOrder">>) => TagOption;
+  updateTagOption: (optionId: string, updates: Partial<Pick<TagOption, "name" | "color" | "sortOrder">>) => void;
+  deleteTagOption: (optionId: string) => void;
   canManageFolder: (folderId?: string | null) => boolean;
   canEditFolderContent: (folderId?: string | null) => boolean;
   canEditItem: (itemId: string) => boolean;
@@ -412,7 +429,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const mediaResult = await deleteStoredMediaForItems(itemsToDelete);
     if (!mediaResult.ok) return mediaResult;
 
-    setData((current) => deleteFolderRecursively(current.folders, current.items, folderId));
+    setData((current) => ({ ...current, ...deleteFolderRecursively(current.folders, current.items, folderId) }));
     markLocalChangePending();
     return { ok: true };
   }, [markLocalChangePending]);
@@ -429,7 +446,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       ...input,
       id: createId("item"),
       title: input.title.trim() || "Untitled idea",
-      tags: input.tags.map((tag) => tag.trim()).filter(Boolean),
+      tagOptionIds: input.tagOptionIds,
       ownerId: folder?.ownerId ?? activeUserId ?? undefined,
       createdBy: input.createdBy ?? activeUserId ?? undefined,
       accessRole: folder?.accessRole ?? (activeUserId ? "owner" : undefined),
@@ -466,7 +483,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           ...item,
           ...updates,
           title: updates.title?.trim() || item.title,
-          tags: updates.tags ?? item.tags,
+          tagOptionIds: updates.tagOptionIds ?? item.tagOptionIds,
           ownerId: nextFolder?.ownerId ?? item.ownerId ?? activeUserId ?? undefined,
           accessRole: nextFolder?.accessRole ?? item.accessRole ?? (activeUserId ? "owner" : undefined),
           updatedAt: new Date().toISOString(),
@@ -477,6 +494,108 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       markLocalChangePending();
     }
   }, [activeUserId, markLocalChangePending]);
+
+  const createTagGroup = useCallback<TroveContextValue["createTagGroup"]>((input) => {
+    const timestamp = new Date().toISOString();
+    const tagGroup: TagGroup = {
+      id: createId("tag-group"),
+      ownerId: activeUserId ?? undefined,
+      name: input.name.trim() || "Untitled group",
+      selectionMode: input.selectionMode ?? "multi",
+      allowInlineCreate: input.allowInlineCreate ?? true,
+      isSystem: input.isSystem ?? false,
+      sortOrder: input.sortOrder ?? 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    setData((current) => ({ ...current, tagGroups: [...current.tagGroups, tagGroup] }));
+    markLocalChangePending();
+    return tagGroup;
+  }, [activeUserId, markLocalChangePending]);
+
+  const updateTagGroup = useCallback<TroveContextValue["updateTagGroup"]>((groupId, updates) => {
+    setData((current) => ({
+      ...current,
+      tagGroups: current.tagGroups.map((tagGroup) =>
+        tagGroup.id === groupId
+          ? {
+              ...tagGroup,
+              ...updates,
+              name: updates.name?.trim() || tagGroup.name,
+              updatedAt: new Date().toISOString(),
+            }
+          : tagGroup,
+      ),
+    }));
+    markLocalChangePending();
+  }, [markLocalChangePending]);
+
+  const deleteTagGroup = useCallback<TroveContextValue["deleteTagGroup"]>((groupId) => {
+    setData((current) => {
+      const optionIdsInGroup = new Set(
+        current.tagOptions.filter((tagOption) => tagOption.groupId === groupId).map((tagOption) => tagOption.id),
+      );
+      return {
+        ...current,
+        tagGroups: current.tagGroups.filter((tagGroup) => tagGroup.id !== groupId),
+        tagOptions: current.tagOptions.filter((tagOption) => tagOption.groupId !== groupId),
+        items: current.items.map((item) =>
+          item.tagOptionIds.some((id) => optionIdsInGroup.has(id))
+            ? { ...item, tagOptionIds: item.tagOptionIds.filter((id) => !optionIdsInGroup.has(id)) }
+            : item,
+        ),
+      };
+    });
+    markLocalChangePending();
+  }, [markLocalChangePending]);
+
+  const createTagOption = useCallback<TroveContextValue["createTagOption"]>((input) => {
+    const timestamp = new Date().toISOString();
+    const tagOption: TagOption = {
+      id: createId("tag-option"),
+      groupId: input.groupId,
+      name: input.name.trim() || "Untitled tag",
+      color: input.color,
+      sortOrder: input.sortOrder ?? 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    setData((current) => ({ ...current, tagOptions: [...current.tagOptions, tagOption] }));
+    markLocalChangePending();
+    return tagOption;
+  }, [markLocalChangePending]);
+
+  const updateTagOption = useCallback<TroveContextValue["updateTagOption"]>((optionId, updates) => {
+    setData((current) => ({
+      ...current,
+      tagOptions: current.tagOptions.map((tagOption) =>
+        tagOption.id === optionId
+          ? {
+              ...tagOption,
+              ...updates,
+              name: updates.name?.trim() || tagOption.name,
+              updatedAt: new Date().toISOString(),
+            }
+          : tagOption,
+      ),
+    }));
+    markLocalChangePending();
+  }, [markLocalChangePending]);
+
+  const deleteTagOption = useCallback<TroveContextValue["deleteTagOption"]>((optionId) => {
+    setData((current) => ({
+      ...current,
+      tagOptions: current.tagOptions.filter((tagOption) => tagOption.id !== optionId),
+      items: current.items.some((item) => item.tagOptionIds.includes(optionId))
+        ? current.items.map((item) =>
+            item.tagOptionIds.includes(optionId)
+              ? { ...item, tagOptionIds: item.tagOptionIds.filter((id) => id !== optionId) }
+              : item,
+          )
+        : current.items,
+    }));
+    markLocalChangePending();
+  }, [markLocalChangePending]);
 
   const canManageFolder = useCallback<TroveContextValue["canManageFolder"]>((folderId) => {
     if (!folderId) return true;
@@ -564,10 +683,16 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         remoteRowExistsRef.current = false;
         skipNextRemotePushRef.current = true;
         skipRemotePushRef.current = false;
-        setData((current) => ({
-          folders: current.folders.filter((folder) => !folder.ownerId || folder.ownerId === userId),
-          items: current.items.filter((item) => !item.ownerId || item.ownerId === userId),
-        }));
+        setData((current) => {
+          const survivingTagGroups = current.tagGroups.filter((tagGroup) => !tagGroup.ownerId || tagGroup.ownerId === userId);
+          const survivingTagGroupIds = new Set(survivingTagGroups.map((tagGroup) => tagGroup.id));
+          return {
+            folders: current.folders.filter((folder) => !folder.ownerId || folder.ownerId === userId),
+            items: current.items.filter((item) => !item.ownerId || item.ownerId === userId),
+            tagGroups: survivingTagGroups,
+            tagOptions: current.tagOptions.filter((tagOption) => survivingTagGroupIds.has(tagOption.groupId)),
+          };
+        });
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
         return { ok: true };
       }
@@ -672,6 +797,8 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       const nextBaseline: SyncBaseline = {
         folders: { ...baseline.folders },
         items: { ...baseline.items },
+        tagGroups: { ...baseline.tagGroups },
+        tagOptions: { ...baseline.tagOptions },
       };
       nextBaseline[entityKind][conflict.entityId] = conflict.remoteUpdatedAt;
       await saveSyncBaseline(userId, nextBaseline);
@@ -728,6 +855,76 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [activeUserId, isAuthReady, isReady, refreshFromRemote]);
 
+  useEffect(() => {
+    if (!isReady || !isAuthReady) return;
+
+    const userKey = activeUserId ?? "anonymous";
+    let cancelled = false;
+
+    void (async () => {
+      if (await isTagBackfillDone(userKey)) return;
+
+      try {
+        const existingByName = new Map(dataRef.current.tagGroups.map((tagGroup) => [tagGroup.name, tagGroup]));
+        const seeded =
+          existingByName.has("Status") && existingByName.has("Priority") && existingByName.has("Tags")
+            ? {
+                statusOptionIdByName: new Map(
+                  dataRef.current.tagOptions
+                    .filter((option) => option.groupId === existingByName.get("Status")!.id)
+                    .map((option) => [option.name.trim().toLowerCase(), option.id]),
+                ),
+                priorityOptionIdByName: new Map(
+                  dataRef.current.tagOptions
+                    .filter((option) => option.groupId === existingByName.get("Priority")!.id)
+                    .map((option) => [option.name.trim().toLowerCase(), option.id]),
+                ),
+                tagsGroupId: existingByName.get("Tags")!.id,
+              }
+            : seedDefaultTagGroups(createTagGroup, createTagOption);
+
+        if (cancelled) return;
+
+        const legacyByItemId = activeUserId
+          ? await (async () => {
+              const supabase = getSupabase();
+              return supabase ? fetchLegacyItemFieldsForUser(supabase) : new Map();
+            })()
+          : new Map(dataRef.current.items.map((item) => [item.id, readLegacyFieldsFromLocalItem(item)]));
+
+        if (cancelled) return;
+
+        const tagOptionIdByFreeTagName = new Map<string, string>();
+        for (const item of dataRef.current.items) {
+          if (item.tagOptionIds.length > 0) continue;
+          const legacy = legacyByItemId.get(item.id);
+          if (!legacy) continue;
+
+          const tagOptionIds = resolveLegacyItemTagOptionIds(
+            item,
+            legacy,
+            seeded,
+            tagOptionIdByFreeTagName,
+            createTagOption,
+          );
+          if (tagOptionIds.length > 0) {
+            updateItem(item.id, { tagOptionIds });
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to seed/backfill tag taxonomy", error);
+      } finally {
+        if (!cancelled) {
+          await markTagBackfillDone(userKey);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId, createTagGroup, createTagOption, isAuthReady, isReady, updateItem]);
+
   const resetToSeed = useCallback(() => setData(seedData), []);
   const clearLocalData = useCallback(() => setData(emptyData), []);
 
@@ -742,6 +939,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createItem,
       updateItem,
       deleteItem,
+      createTagGroup,
+      updateTagGroup,
+      deleteTagGroup,
+      createTagOption,
+      updateTagOption,
+      deleteTagOption,
       canManageFolder,
       canEditFolderContent,
       canEditItem,
@@ -762,6 +965,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createItem,
       updateItem,
       deleteItem,
+      createTagGroup,
+      updateTagGroup,
+      deleteTagGroup,
+      createTagOption,
+      updateTagOption,
+      deleteTagOption,
       canManageFolder,
       canEditFolderContent,
       canEditItem,
