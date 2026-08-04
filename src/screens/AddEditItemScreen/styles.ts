@@ -138,4 +138,21 @@ export const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,
     },
+    tagsCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      gap: spacing.md,
+      marginTop: spacing.xs,
+      padding: spacing.md,
+    },
+    tagGroupLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0.4,
+      marginBottom: spacing.xs,
+      textTransform: "uppercase",
+    },
   });

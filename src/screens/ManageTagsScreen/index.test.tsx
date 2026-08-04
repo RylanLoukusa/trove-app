@@ -43,13 +43,12 @@ const navigation = {
   canGoBack: jest.fn().mockReturnValue(true),
 } as unknown as NativeStackScreenProps<RootStackParamList, "ManageTags">["navigation"];
 
-const createTagGroup = jest.fn();
 const updateTagGroup = jest.fn();
 
 const route = { params: undefined } as unknown as NativeStackScreenProps<RootStackParamList, "ManageTags">["route"];
 
 const renderManageTags = async (tagGroups: TagGroup[], tagOptions: TagOption[] = []) => {
-  mockUseTrove.mockReturnValue({ tagGroups, tagOptions, createTagGroup, updateTagGroup });
+  mockUseTrove.mockReturnValue({ tagGroups, tagOptions, updateTagGroup });
   await renderScreen(<ManageTagsScreen navigation={navigation} route={route} />);
 };
 
@@ -110,13 +109,11 @@ describe("ManageTagsScreen", () => {
     expect(screen.getByLabelText("Move Priority down").props.accessibilityState.disabled).toBe(true);
   });
 
-  it("creates a new group and navigates to it", async () => {
-    createTagGroup.mockReturnValue(makeGroup({ id: "new-group", name: "New group" }));
+  it("navigates to a blank create screen when adding a group", async () => {
     await renderManageTags([]);
 
     await fireEvent.press(screen.getByText("Add group"));
 
-    expect(createTagGroup).toHaveBeenCalledWith({ name: "New group", selectionMode: "multi", sortOrder: 0 });
-    expect(navigation.navigate).toHaveBeenCalledWith("AddEditTagGroup", { groupId: "new-group" });
+    expect(navigation.navigate).toHaveBeenCalledWith("AddEditTagGroup");
   });
 });

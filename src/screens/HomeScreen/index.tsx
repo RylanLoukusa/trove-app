@@ -109,6 +109,10 @@ export const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("Settings");
   }, [navigation]);
 
+  const onPressManageTags = useCallback(() => {
+    navigation.navigate("ManageTags");
+  }, [navigation]);
+
   const onPressProfile = useCallback(() => {
     navigation.navigate("Profile");
   }, [navigation]);
@@ -245,6 +249,14 @@ export const HomeScreen = ({ navigation }: Props) => {
             />
           ))
         )}
+
+        <Text style={styles.section}>Tags</Text>
+        <View style={styles.legalLinks}>
+          <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
+            <Text style={styles.legalLinkText}>Manage Tags</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
           </>
         )}
       </ScrollView>

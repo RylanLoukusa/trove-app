@@ -22,7 +22,6 @@ import { spacing } from "../../theme/theme";
 import { useTrove } from "../../storage/storage";
 import type { TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
-import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
 import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
 import { requiresProForVideoPlayback } from "../../utils/limits";
@@ -66,14 +65,6 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const sortedTagGroups = useMemo(() => [...tagGroups].sort((a, b) => a.sortOrder - b.sortOrder), [tagGroups]);
-  const singleSelectGroups = useMemo(
-    () => sortedTagGroups.filter((group) => group.selectionMode === "single"),
-    [sortedTagGroups],
-  );
-  const multiSelectGroups = useMemo(
-    () => sortedTagGroups.filter((group) => group.selectionMode === "multi"),
-    [sortedTagGroups],
-  );
 
   const folderItems = useMemo(
     () => (item ? getItemsInFolder(items, item.folderId) : []),
@@ -82,10 +73,6 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const itemIndex = item ? folderItems.findIndex((candidate) => candidate.id === item.id) : -1;
   const previousItem = itemIndex > 0 ? folderItems[itemIndex - 1] : undefined;
   const nextItem = itemIndex >= 0 && itemIndex < folderItems.length - 1 ? folderItems[itemIndex + 1] : undefined;
-  const relatedItems = useMemo(
-    () => (item ? getRelatedItems(item, folderItems, tagOptions) : []),
-    [folderItems, item, tagOptions],
-  );
   const mediaDisplayItems = useMemo(
     () => (item ? resolveDisplayItems(item.media, item.mediaItems) : []),
     [item],
@@ -221,67 +208,84 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     });
   };
 
-  const openSingleSelectGroup = singleSelectGroups.find((group) => group.id === openSingleSelectGroupId);
+  const openSingleSelectGroup = sortedTagGroups.find((group) => group.id === openSingleSelectGroupId);
   const openSingleSelectGroupOptions = openSingleSelectGroup
     ? tagOptions.filter((option) => option.groupId === openSingleSelectGroup.id)
     : [];
   const openSingleSelectSelectedId =
     item.tagOptionIds.find((id) => openSingleSelectGroupOptions.some((option) => option.id === id)) ?? "";
 
-  const openMultiSelectGroup = multiSelectGroups.find((group) => group.id === openMultiSelectGroupId);
+  const openMultiSelectGroup = sortedTagGroups.find((group) => group.id === openMultiSelectGroupId);
   const openMultiSelectGroupOptions = openMultiSelectGroup
     ? tagOptions.filter((option) => option.groupId === openMultiSelectGroup.id)
     : [];
 
-  const multiSelectSections = multiSelectGroups.map((group) => {
-    const groupOptions = tagOptions.filter((option) => option.groupId === group.id).sort((a, b) => a.sortOrder - b.sortOrder);
-    const assignedOptions = item.tagOptionIds
-      .map((id) => groupOptions.find((option) => option.id === id))
-      .filter((option): option is TagOption => !!option);
+  const tagGroupClusters = sortedTagGroups
+    .map((group) => {
+      const groupOptions = tagOptions.filter((option) => option.groupId === group.id).sort((a, b) => a.sortOrder - b.sortOrder);
 
-    return (
-      <Section
-        key={group.id}
-        title={group.name}
-        action={
-          canEditCurrentItem ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${group.name.toLowerCase()}`}
-              hitSlop={8}
-              onPress={() => setOpenMultiSelectGroupId(group.id)}
-              style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
-            >
-              <Plus size={18} color={colors.accentDark} strokeWidth={2.6} />
-            </Pressable>
-          ) : undefined
-        }
-      >
-        {assignedOptions.length ? (
+      if (group.selectionMode === "single") {
+        if (groupOptions.length === 0) return null;
+        const selectedOption = groupOptions.find((option) => item.tagOptionIds.includes(option.id));
+        return (
+          <View key={group.id}>
+            <Text style={styles.tagGroupLabel}>{group.name}</Text>
+            <View style={styles.tagRow}>
+              {selectedOption ? (
+                <TagChip
+                  label={selectedOption.name}
+                  color={selectedOption.color}
+                  onPress={canEditCurrentItem ? () => setOpenSingleSelectGroupId(group.id) : undefined}
+                />
+              ) : canEditCurrentItem ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set ${group.name.toLowerCase()}`}
+                  hitSlop={8}
+                  onPress={() => setOpenSingleSelectGroupId(group.id)}
+                  style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
+                >
+                  <Plus size={16} color={colors.accentDark} strokeWidth={2.6} />
+                </Pressable>
+              ) : (
+                <Text style={styles.meta}>Not set</Text>
+              )}
+            </View>
+          </View>
+        );
+      }
+
+      const assignedOptions = item.tagOptionIds
+        .map((id) => groupOptions.find((option) => option.id === id))
+        .filter((option): option is TagOption => !!option);
+
+      return (
+        <View key={group.id}>
+          <Text style={styles.tagGroupLabel}>{group.name}</Text>
           <View style={styles.tagRow}>
             {assignedOptions.map((option) => (
               <TagChip key={option.id} label={option.name} color={option.color} onPress={() => onPressTag(option.name)} />
             ))}
+            {canEditCurrentItem && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${group.name.toLowerCase()}`}
+                hitSlop={8}
+                onPress={() => setOpenMultiSelectGroupId(group.id)}
+                style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}
+              >
+                <Plus size={16} color={colors.accentDark} strokeWidth={2.6} />
+              </Pressable>
+            )}
           </View>
-        ) : (
-          <Text style={styles.meta}>No {group.name.toLowerCase()}</Text>
-        )}
-      </Section>
-    );
-  });
+        </View>
+      );
+    })
+    .filter((cluster): cluster is React.JSX.Element => cluster !== null);
 
-  const relatedSection = relatedItems.length > 0 && (
-    <Section title="Related Here">
-      {relatedItems.map((match) => (
-        <Pressable
-          key={match.item.id}
-          onPress={() => openAdjacentItem(match.item.id)}
-          style={({ pressed }) => [styles.relatedCard, pressed && styles.relatedCardPressed]}
-        >
-          <Text style={styles.relatedTitle}>{match.item.title}</Text>
-          <Text style={styles.relatedMeta}>{match.reasons.join(" · ")}</Text>
-        </Pressable>
-      ))}
+  const tagsSection = tagGroupClusters.length > 0 && (
+    <Section title="Tags">
+      <View style={styles.tagGroupsList}>{tagGroupClusters}</View>
     </Section>
   );
 
@@ -439,34 +443,14 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
 
           <Text style={styles.createdAt}>{new Date(item.createdAt).toLocaleString()}</Text>
 
-          <View style={styles.row}>
-            {singleSelectGroups.map((group) => {
-              const groupOptions = tagOptions.filter((option) => option.groupId === group.id);
-              if (groupOptions.length === 0) return null;
-              const selectedOption = groupOptions.find((option) => item.tagOptionIds.includes(option.id));
-              return (
-                <Pressable
-                  key={group.id}
-                  disabled={!canEditCurrentItem}
-                  onPress={() => setOpenSingleSelectGroupId(group.id)}
-                  style={({ pressed }) => [styles.pill, pressed && canEditCurrentItem && styles.pillPressed]}
-                >
-                  <Text style={styles.pillText}>{selectedOption?.name ?? group.name}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
           {isSharedAccess(item) ? (
             <>
               {commentsSection}
-              {multiSelectSections}
-              {relatedSection}
+              {tagsSection}
             </>
           ) : (
             <>
-              {multiSelectSections}
-              {relatedSection}
+              {tagsSection}
               {commentsSection}
             </>
           )}

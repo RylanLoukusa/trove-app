@@ -196,19 +196,6 @@ export const createStyles = (colors: ThemeColors) =>
       gap: spacing.sm,
       marginTop: spacing.lg,
     },
-    pill: {
-      backgroundColor: colors.surface,
-      borderRadius: 999,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-    },
-    pillPressed: {
-      opacity: 0.72,
-    },
-    pillText: {
-      color: colors.muted,
-      fontWeight: "800",
-    },
     meta: {
       color: colors.muted,
       marginTop: spacing.xs,
@@ -220,9 +207,21 @@ export const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.lg,
     },
     tagRow: {
+      alignItems: "center",
       flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.xs,
+    },
+    tagGroupsList: {
+      gap: spacing.md,
+    },
+    tagGroupLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0.4,
+      marginBottom: spacing.xs,
+      textTransform: "uppercase",
     },
     sectionAction: {
       alignItems: "center",
@@ -245,29 +244,6 @@ export const createStyles = (colors: ThemeColors) =>
     },
     topBarActionPressed: {
       opacity: 0.55,
-    },
-    relatedCard: {
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderRadius: 16,
-      borderWidth: 1,
-      marginTop: spacing.xs,
-      padding: spacing.md,
-    },
-    relatedCardPressed: {
-      opacity: 0.72,
-      transform: [{ scale: 0.99 }],
-    },
-    relatedTitle: {
-      color: colors.ink,
-      fontSize: 15,
-      fontWeight: "900",
-    },
-    relatedMeta: {
-      color: colors.accentDark,
-      fontSize: 12,
-      fontWeight: "800",
-      marginTop: 3,
     },
     button: {
       marginTop: spacing.md,

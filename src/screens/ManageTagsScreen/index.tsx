@@ -37,11 +37,13 @@ const TagGroupRow = React.memo(function TagGroupRow({
   colors,
   styles,
 }: TagGroupRowProps) {
+  const displayName = group.name || "Untitled group";
+
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={styles.rowMain}>
         <View style={styles.rowTitleLine}>
-          <Text style={styles.rowTitle}>{group.name}</Text>
+          <Text style={styles.rowTitle}>{displayName}</Text>
           {group.isSystem && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Default</Text>
@@ -54,7 +56,7 @@ const TagGroupRow = React.memo(function TagGroupRow({
       </View>
       <View style={styles.reorderColumn}>
         <Pressable
-          accessibilityLabel={`Move ${group.name} up`}
+          accessibilityLabel={`Move ${displayName} up`}
           disabled={!canMoveUp}
           onPress={onMoveUp}
           hitSlop={8}
@@ -63,7 +65,7 @@ const TagGroupRow = React.memo(function TagGroupRow({
           <ChevronUp size={18} color={canMoveUp ? colors.accentDark : colors.border} />
         </Pressable>
         <Pressable
-          accessibilityLabel={`Move ${group.name} down`}
+          accessibilityLabel={`Move ${displayName} down`}
           disabled={!canMoveDown}
           onPress={onMoveDown}
           hitSlop={8}
@@ -79,7 +81,7 @@ const TagGroupRow = React.memo(function TagGroupRow({
 export const ManageTagsScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { tagGroups, tagOptions, createTagGroup, updateTagGroup } = useTrove();
+  const { tagGroups, tagOptions, updateTagGroup } = useTrove();
 
   const sortedGroups = useMemo(() => [...tagGroups].sort((a, b) => a.sortOrder - b.sortOrder), [tagGroups]);
   const optionCountByGroupId = useMemo(() => {
@@ -98,9 +100,8 @@ export const ManageTagsScreen = ({ navigation }: Props) => {
   );
 
   const onAddGroup = useCallback(() => {
-    const group = createTagGroup({ name: "New group", selectionMode: "multi", sortOrder: sortedGroups.length });
-    navigation.navigate("AddEditTagGroup", { groupId: group.id });
-  }, [createTagGroup, navigation, sortedGroups.length]);
+    navigation.navigate("AddEditTagGroup");
+  }, [navigation]);
 
   const moveGroup = useCallback(
     (groupId: string, direction: -1 | 1) => {

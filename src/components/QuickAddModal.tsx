@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useTrove } from "../storage/storage";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../utils/folderSuggestions";
+import { detectItemType, suggestFolders, suggestTitle } from "../utils/folderSuggestions";
 import { AppButton } from "./AppButton";
 import { FolderPickerField } from "./FolderPickerField";
 
@@ -16,13 +16,12 @@ type Props = {
 export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, items, tagGroups, tagOptions, createItem, createTagOption, canEditFolderContent } = useTrove();
+  const { folders, items, tagOptions, createItem, canEditFolderContent } = useTrove();
   const [content, setContent] = useState("");
   const editableFolders = useMemo(
     () => folders.filter((folder) => canEditFolderContent(folder.id)),
     [canEditFolderContent, folders],
   );
-  const tagsGroup = tagGroups.find((group) => group.name === "Tags");
   const suggestions = useMemo(
     () => suggestFolders(content, editableFolders, items, tagOptions),
     [content, editableFolders, items, tagOptions],
@@ -36,21 +35,12 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
   }, [canEditFolderContent, currentFolderId, visible]);
 
   const preview = useMemo(
-    () => ({ title: suggestTitle(content), type: detectItemType(content), tags: suggestTags(content) }),
+    () => ({ title: suggestTitle(content), type: detectItemType(content) }),
     [content],
   );
 
   const save = (): void => {
     if (!targetFolderId || content.trim().length === 0 || !canEditFolderContent(targetFolderId)) return;
-
-    const existingByName = new Map(
-      tagsGroup
-        ? tagOptions.filter((option) => option.groupId === tagsGroup.id).map((option) => [option.name.toLowerCase(), option.id])
-        : [],
-    );
-    const tagOptionIds = tagsGroup
-      ? preview.tags.map((name) => existingByName.get(name.toLowerCase()) ?? createTagOption({ groupId: tagsGroup.id, name }).id)
-      : [];
 
     const item = createItem({
       folderId: targetFolderId,
@@ -59,7 +49,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
       type: preview.type,
       url: preview.type === "link" ? content.trim() : undefined,
       mediaUri: preview.type === "media" ? content.trim() : undefined,
-      tagOptionIds,
+      tagOptionIds: [],
     });
     if (!item) return;
     setContent("");
@@ -87,9 +77,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
         />
         <View style={styles.preview}>
           <Text style={styles.previewTitle}>{preview.title}</Text>
-          <Text style={styles.meta}>
-            Type: {preview.type} · Tags: {preview.tags.join(", ") || "none yet"}
-          </Text>
+          <Text style={styles.meta}>Type: {preview.type}</Text>
         </View>
         <Text style={styles.section}>Suggested folder</Text>
         {suggestions.length === 0 ? (

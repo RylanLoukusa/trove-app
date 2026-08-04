@@ -266,7 +266,6 @@ describe("ItemDetailScreen", () => {
     );
 
     expect(screen.getByText("Projects")).toBeTruthy();
-    expect(screen.getByText("No projects")).toBeTruthy();
 
     await fireEvent.press(screen.getByLabelText("Add projects"));
     await fireEvent.changeText(screen.getByPlaceholderText("Search projects..."), "Website");

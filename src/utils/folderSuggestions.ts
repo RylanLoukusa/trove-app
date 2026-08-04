@@ -36,18 +36,6 @@ export const suggestTitle = (content: string): string => {
   return trimmed.length > 72 ? `${trimmed.slice(0, 69)}...` : trimmed || "Untitled idea";
 };
 
-export const suggestTags = (content: string): string[] => {
-  const text = content.toLowerCase();
-  const tags = new Set<string>();
-  keywordRules.forEach((rule) => {
-    rule.keywords.forEach((keyword) => {
-      if (text.includes(keyword)) tags.add(keyword === "make" || keyword === "bake" ? "cooking" : keyword);
-    });
-  });
-  if (/^https?:\/\//i.test(content.trim())) tags.add("link");
-  return Array.from(tags).slice(0, 5);
-};
-
 // Keyword-based fallback scorer: compares pasted content with folder names, ancestor names, existing item titles, and tags.
 export const suggestFolders = (
   content: string,

@@ -228,6 +228,7 @@ describe("AddEditItemScreen", () => {
 
     await fireEvent.changeText(screen.getByPlaceholderText("What are you saving?"), "New item");
     await fireEvent.press(screen.getByText("Note"));
+    await fireEvent.press(screen.getAllByText("+ Add")[0]);
     await fireEvent.press(screen.getByText("Kitchen"));
 
     await fireEvent.press(screen.getByText("+ Add"));

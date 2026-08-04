@@ -7,6 +7,9 @@ export const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       flex: 1,
     },
+    keyboardAvoiding: {
+      flex: 1,
+    },
     scroll: {
       flex: 1,
     },
@@ -37,9 +40,20 @@ export const createStyles = (colors: ThemeColors) =>
     },
     input: {
       backgroundColor: colors.surface,
+      borderColor: "transparent",
       borderRadius: 16,
+      borderWidth: 1,
       color: colors.ink,
       padding: spacing.md,
+    },
+    inputError: {
+      borderColor: colors.danger,
+    },
+    errorText: {
+      color: colors.danger,
+      fontSize: 13,
+      fontWeight: "700",
+      marginTop: spacing.xs,
     },
     section: {
       color: colors.ink,
@@ -92,7 +106,10 @@ export const createStyles = (colors: ThemeColors) =>
     addOptionButton: {
       marginTop: spacing.sm,
     },
-    deleteGroupButton: {
+    saveButton: {
       marginTop: spacing.xl,
+    },
+    deleteGroupButton: {
+      marginTop: spacing.md,
     },
   });

@@ -1,5 +1,4 @@
 import { SavedItem, TagOption } from "../types/models";
-import { getItemTypeLabel, normalizeItemType } from "./itemTypes";
 
 const resolveTagNames = (item: SavedItem, tagOptionsById: Map<string, TagOption>): string[] =>
   item.tagOptionIds
@@ -14,12 +13,6 @@ export type FolderPattern = {
   label: string;
   detail: string;
   itemIds: string[];
-};
-
-export type RelatedItemMatch = {
-  item: SavedItem;
-  score: number;
-  reasons: string[];
 };
 
 const STOP_WORDS = new Set([
@@ -137,40 +130,3 @@ export const getFolderPatterns = (items: SavedItem[], tagOptions: TagOption[], l
     .slice(0, limit);
 };
 
-export const getRelatedItems = (
-  item: SavedItem,
-  folderItems: SavedItem[],
-  tagOptions: TagOption[],
-  limit = 4,
-): RelatedItemMatch[] => {
-  const tagOptionsById = new Map(tagOptions.map((tagOption) => [tagOption.id, tagOption]));
-  const itemTags = new Set(resolveTagNames(item, tagOptionsById).map((tag) => tag.toLowerCase()));
-  const itemTokens = new Set(getItemTokens(item, tagOptionsById));
-  const explicitConnectionIds = new Set(item.connections?.map((connection) => connection.itemId) ?? []);
-
-  return folderItems
-    .filter((candidate) => candidate.id !== item.id)
-    .map((candidate): RelatedItemMatch => {
-      const candidateTags = new Set(resolveTagNames(candidate, tagOptionsById).map((tag) => tag.toLowerCase()));
-      const sharedTags = Array.from(itemTags).filter((tag) => candidateTags.has(tag));
-      const candidateTokens = new Set(getItemTokens(candidate, tagOptionsById));
-      const sharedTokens = Array.from(itemTokens).filter((token) => candidateTokens.has(token)).slice(0, 3);
-      const candidateConnections = new Set(candidate.connections?.map((connection) => connection.itemId) ?? []);
-      const isConnected = explicitConnectionIds.has(candidate.id) || candidateConnections.has(item.id);
-      const itemType = normalizeItemType(item.type);
-      const candidateType = normalizeItemType(candidate.type);
-      const sameTypeScore = candidateType === itemType && itemType !== "text" ? 1 : 0;
-      const score = sharedTags.length * 4 + sharedTokens.length + sameTypeScore + (isConnected ? 20 : 0);
-      const reasons = [
-        ...sharedTags.slice(0, 2).map((tag) => `#${tag}`),
-        ...sharedTokens.map((token) => `mentions ${token}`),
-        isConnected ? "connected" : "",
-        sameTypeScore ? `both ${getItemTypeLabel(itemType).toLowerCase()}` : "",
-      ].filter(Boolean);
-
-      return { item: candidate, score, reasons };
-    })
-    .filter((match) => match.score > 0)
-    .sort((a, b) => b.score - a.score || b.item.updatedAt.localeCompare(a.item.updatedAt))
-    .slice(0, limit);
-};

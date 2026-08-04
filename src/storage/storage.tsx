@@ -500,7 +500,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const tagGroup: TagGroup = {
       id: createId("tag-group"),
       ownerId: activeUserId ?? undefined,
-      name: input.name.trim() || "Untitled group",
+      name: input.name.trim(),
       selectionMode: input.selectionMode ?? "multi",
       allowInlineCreate: input.allowInlineCreate ?? true,
       isSystem: input.isSystem ?? false,
@@ -554,7 +554,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const tagOption: TagOption = {
       id: createId("tag-option"),
       groupId: input.groupId,
-      name: input.name.trim() || "Untitled tag",
+      name: input.name.trim(),
       color: input.color,
       sortOrder: input.sortOrder ?? 0,
       createdAt: timestamp,
@@ -867,7 +867,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       try {
         const existingByName = new Map(dataRef.current.tagGroups.map((tagGroup) => [tagGroup.name, tagGroup]));
         const seeded =
-          existingByName.has("Status") && existingByName.has("Priority") && existingByName.has("Tags")
+          existingByName.has("Status") && existingByName.has("Priority")
             ? {
                 statusOptionIdByName: new Map(
                   dataRef.current.tagOptions
@@ -879,7 +879,6 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
                     .filter((option) => option.groupId === existingByName.get("Priority")!.id)
                     .map((option) => [option.name.trim().toLowerCase(), option.id]),
                 ),
-                tagsGroupId: existingByName.get("Tags")!.id,
               }
             : seedDefaultTagGroups(createTagGroup, createTagOption);
 
@@ -894,19 +893,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
 
         if (cancelled) return;
 
-        const tagOptionIdByFreeTagName = new Map<string, string>();
         for (const item of dataRef.current.items) {
           if (item.tagOptionIds.length > 0) continue;
           const legacy = legacyByItemId.get(item.id);
           if (!legacy) continue;
 
-          const tagOptionIds = resolveLegacyItemTagOptionIds(
-            item,
-            legacy,
-            seeded,
-            tagOptionIdByFreeTagName,
-            createTagOption,
-          );
+          const tagOptionIds = resolveLegacyItemTagOptionIds(legacy, seeded);
           if (tagOptionIds.length > 0) {
             updateItem(item.id, { tagOptionIds });
           }

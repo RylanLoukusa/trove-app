@@ -67,7 +67,6 @@ export const fetchLegacyItemFieldsForUser = async (
 export type SeededTagTaxonomy = {
   statusOptionIdByName: Map<string, string>;
   priorityOptionIdByName: Map<string, string>;
-  tagsGroupId: string;
 };
 
 type CreateTagGroup = (
@@ -77,9 +76,9 @@ type CreateTagOption = (input: Pick<TagOption, "groupId" | "name"> & Partial<Pic
 
 const lowerCaseKey = (name: string): string => name.trim().toLowerCase();
 
-// Creates the three starter groups (Status, Priority, Tags) with isSystem: true — a
-// cosmetic "this was a default" marker only, never a delete-guard, since nothing in
-// the app depends on any specific group or option existing anymore.
+// Creates the two starter groups (Status, Priority) with isSystem: true — a cosmetic
+// "this was a default" marker only, never a delete-guard, since nothing in the app
+// depends on any specific group or option existing anymore.
 export const seedDefaultTagGroups = (createTagGroup: CreateTagGroup, createTagOption: CreateTagOption): SeededTagTaxonomy => {
   const statusGroup = createTagGroup({ name: "Status", selectionMode: "single", allowInlineCreate: true, isSystem: true, sortOrder: 0 });
   const statusOptionIdByName = new Map(
@@ -97,22 +96,12 @@ export const seedDefaultTagGroups = (createTagGroup: CreateTagGroup, createTagOp
     ]),
   );
 
-  const tagsGroup = createTagGroup({ name: "Tags", selectionMode: "multi", allowInlineCreate: true, isSystem: true, sortOrder: 2 });
-
-  return { statusOptionIdByName, priorityOptionIdByName, tagsGroupId: tagsGroup.id };
+  return { statusOptionIdByName, priorityOptionIdByName };
 };
 
-// Resolves one item's legacy status/priority/tags into tag-option ids against the
-// seeded taxonomy, creating a "Tags" option on the fly for any free-text tag name
-// seen for the first time. `tagOptionIdByFreeTagName` is mutated across calls so
-// repeated tag names across items reuse the same created option.
-export const resolveLegacyItemTagOptionIds = (
-  item: SavedItem,
-  legacy: LegacyItemFields,
-  seeded: SeededTagTaxonomy,
-  tagOptionIdByFreeTagName: Map<string, string>,
-  createTagOption: CreateTagOption,
-): string[] => {
+// Resolves one item's legacy status/priority into tag-option ids against the seeded
+// taxonomy. Legacy free-text tags have no group to attach to anymore and are dropped.
+export const resolveLegacyItemTagOptionIds = (legacy: LegacyItemFields, seeded: SeededTagTaxonomy): string[] => {
   const resolvedIds = new Set<string>();
 
   const statusOptionId = seeded.statusOptionIdByName.get(lowerCaseKey(legacy.status));
@@ -120,19 +109,6 @@ export const resolveLegacyItemTagOptionIds = (
 
   const priorityOptionId = seeded.priorityOptionIdByName.get(lowerCaseKey(legacy.priority));
   if (priorityOptionId) resolvedIds.add(priorityOptionId);
-
-  for (const tagName of legacy.tags) {
-    const trimmed = tagName.trim();
-    if (!trimmed) continue;
-
-    const key = lowerCaseKey(trimmed);
-    let optionId = tagOptionIdByFreeTagName.get(key);
-    if (!optionId) {
-      optionId = createTagOption({ groupId: seeded.tagsGroupId, name: trimmed }).id;
-      tagOptionIdByFreeTagName.set(key, optionId);
-    }
-    resolvedIds.add(optionId);
-  }
 
   return Array.from(resolvedIds);
 };

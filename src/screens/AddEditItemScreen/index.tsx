@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { FolderPickerField } from "../../components/FolderPickerField";
 import { MediaCollectionPicker } from "../../components/MediaCollectionPicker";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
@@ -59,6 +60,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(!editing);
   const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? editableFolders[0]?.id ?? "");
   const [tagOptionIds, setTagOptionIds] = useState<string[]>(editing?.tagOptionIds ?? []);
+  const [openSingleSelectGroupId, setOpenSingleSelectGroupId] = useState<string | null>(null);
   const [openMultiSelectGroupId, setOpenMultiSelectGroupId] = useState<string | null>(null);
   const [listItems, setListItems] = useState<SavedListItem[]>(
     editing?.listItems?.length ? editing.listItems : [{ id: createId("list-item"), kind: "check", text: "", checked: false }],
@@ -395,7 +397,16 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, sharedImportId, sharedText, sourceUrl, tagOptionIds, title, type, updateItem]);
 
   const selectedTypeOption = type ? typeChoices[normalizeItemType(type) as SelectableItemType] : null;
+  const openSingleSelectGroup = sortedTagGroups.find((group) => group.id === openSingleSelectGroupId);
+  const openSingleSelectGroupOptions = openSingleSelectGroup
+    ? tagOptions.filter((option) => option.groupId === openSingleSelectGroup.id)
+    : [];
+  const openSingleSelectSelectedId =
+    tagOptionIds.find((id) => openSingleSelectGroupOptions.some((option) => option.id === id)) ?? "";
   const openMultiSelectGroup = sortedTagGroups.find((group) => group.id === openMultiSelectGroupId);
+  const visibleTagGroups = sortedTagGroups.filter(
+    (group) => group.selectionMode !== "single" || tagOptions.some((option) => option.groupId === group.id),
+  );
 
   return (
     <View style={styles.screen}>
@@ -584,52 +595,74 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         <Text style={styles.section}>Folder</Text>
         <FolderPickerField folders={folderPickerFolders} selectedFolderId={folderId} onSelectFolder={setFolderId} />
 
-        {sortedTagGroups.map((group) => {
-          const groupOptions = tagOptions
-            .filter((option) => option.groupId === group.id)
-            .sort((a, b) => a.sortOrder - b.sortOrder);
+        {visibleTagGroups.length > 0 && (
+          <>
+            <Text style={styles.section}>Tags</Text>
+            <View style={styles.tagsCard}>
+              {visibleTagGroups.map((group) => {
+                const groupOptions = tagOptions
+                  .filter((option) => option.groupId === group.id)
+                  .sort((a, b) => a.sortOrder - b.sortOrder);
 
-          if (group.selectionMode === "single") {
-            if (groupOptions.length === 0) return null;
-            return (
-              <View key={group.id}>
-                <Text style={styles.section}>{group.name}</Text>
-                {groupOptions.map((option) => (
-                  <OptionChoiceRow
-                    key={option.id}
-                    label={option.name}
-                    tone={option.color}
-                    isSelected={tagOptionIds.includes(option.id)}
-                    onPress={() => selectSingleOption(groupOptions.map((o) => o.id), option.id)}
-                  />
-                ))}
-              </View>
-            );
-          }
+                if (group.selectionMode === "single") {
+                  const selectedOption = groupOptions.find((option) => tagOptionIds.includes(option.id));
+                  return (
+                    <View key={group.id}>
+                      <Text style={styles.tagGroupLabel}>{group.name}</Text>
+                      <View style={styles.tagChipRow}>
+                        {selectedOption ? (
+                          <TagChip
+                            label={selectedOption.name}
+                            color={selectedOption.color}
+                            onPress={() => setOpenSingleSelectGroupId(group.id)}
+                          />
+                        ) : (
+                          <AppButton
+                            label="+ Add"
+                            variant="secondary"
+                            onPress={() => setOpenSingleSelectGroupId(group.id)}
+                            style={styles.tagAddButton}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  );
+                }
 
-          const selectedOptions = groupOptions.filter((option) => tagOptionIds.includes(option.id));
-          return (
-            <View key={group.id}>
-              <Text style={styles.section}>{group.name}</Text>
-              <View style={styles.tagChipRow}>
-                {selectedOptions.map((option) => (
-                  <TagChip key={option.id} label={option.name} color={option.color} />
-                ))}
-                <AppButton
-                  label="+ Add"
-                  variant="secondary"
-                  onPress={() => setOpenMultiSelectGroupId(group.id)}
-                  style={styles.tagAddButton}
-                />
-              </View>
+                const selectedOptions = groupOptions.filter((option) => tagOptionIds.includes(option.id));
+                return (
+                  <View key={group.id}>
+                    <Text style={styles.tagGroupLabel}>{group.name}</Text>
+                    <View style={styles.tagChipRow}>
+                      {selectedOptions.map((option) => (
+                        <TagChip key={option.id} label={option.name} color={option.color} />
+                      ))}
+                      <AppButton
+                        label="+ Add"
+                        variant="secondary"
+                        onPress={() => setOpenMultiSelectGroupId(group.id)}
+                        style={styles.tagAddButton}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-          );
-        })}
+          </>
+        )}
 
         <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
         {isSaving && <ActivityIndicator size="large" style={styles.button} />}
       </ScrollView>
 
+      <ChoiceSheet
+        visible={openSingleSelectGroupId !== null}
+        title={openSingleSelectGroup?.name ?? ""}
+        options={openSingleSelectGroupOptions.map((option) => ({ value: option.id, label: option.name, tone: option.color }))}
+        selectedValue={openSingleSelectSelectedId}
+        onSelect={(value) => selectSingleOption(openSingleSelectGroupOptions.map((o) => o.id), value)}
+        onClose={() => setOpenSingleSelectGroupId(null)}
+      />
       <TagMultiSelectSheet
         visible={openMultiSelectGroupId !== null}
         title={openMultiSelectGroup?.name ?? ""}
