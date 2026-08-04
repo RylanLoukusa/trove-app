@@ -199,7 +199,7 @@ function AppNavigator() {
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
             <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
-            <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
+            <Stack.Screen name="ItemDetail" component={ItemDetailScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />

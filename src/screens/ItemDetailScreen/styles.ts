@@ -30,7 +30,8 @@ export const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      marginBottom: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
     },
     itemNavButton: {
       alignItems: "center",
