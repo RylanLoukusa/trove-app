@@ -117,6 +117,10 @@ export const SettingsScreen = ({ navigation }: Props) => {
     navigation.navigate("Login");
   }, [navigation]);
 
+  const onPressManageTags = useCallback(() => {
+    navigation.navigate("ManageTags");
+  }, [navigation]);
+
   const openLegalLink = useCallback(async (url: string): Promise<void> => {
     try {
       await Linking.openURL(url);
@@ -157,6 +161,14 @@ export const SettingsScreen = ({ navigation }: Props) => {
               </Pressable>
             );
           })}
+        </View>
+
+        <Text style={styles.sectionTitle}>Organization</Text>
+        <View style={styles.legalLinks}>
+          <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
+            <Text style={styles.legalLinkText}>Manage Tags</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Account</Text>

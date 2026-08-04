@@ -19,10 +19,12 @@ import { RootStackParamList } from "./src/navigation/types";
 import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
 import { AddEditFolderScreen } from "./src/screens/AddEditFolderScreen";
 import { AddEditItemScreen } from "./src/screens/AddEditItemScreen";
+import { AddEditTagGroupScreen } from "./src/screens/AddEditTagGroupScreen";
 import { FolderScreen } from "./src/screens/FolderScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { ItemDetailScreen } from "./src/screens/ItemDetailScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
+import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
@@ -202,6 +204,8 @@ function AppNavigator() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="ManageTags" component={ManageTagsScreen} />
+            <Stack.Screen name="AddEditTagGroup" component={AddEditTagGroupScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
           </>

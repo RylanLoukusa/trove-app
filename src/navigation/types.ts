@@ -14,5 +14,7 @@ export type RootStackParamList = {
   Profile: undefined;
   SyncConflict: undefined;
   Settings: undefined;
+  ManageTags: undefined;
+  AddEditTagGroup: { groupId: string };
   Paywall: { trigger: PaywallTrigger };
 };
