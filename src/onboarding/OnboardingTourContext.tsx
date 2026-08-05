@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { RootStackParamList } from "../navigation/types";
-import { markAppTourDone } from "../storage/appTour";
+import { isAppTourDone, markAppTourDone } from "../storage/appTour";
 import { useTrove } from "../storage/storage";
 
 export type TourStepMode = "info" | "action" | "message";
@@ -222,8 +222,10 @@ export const OnboardingTourProvider = ({ children }: { children: ReactNode }) =>
   const maybeStart = useCallback(() => {
     if (!isReady || stepIndex !== null || startAttemptedForKeyRef.current === userKey) return;
     startAttemptedForKeyRef.current = userKey;
-    // TODO(temp): forces the tour on every launch for testing. Revert to the isAppTourDone gate before shipping.
-    setStepIndex(0);
+    void (async () => {
+      const done = await isAppTourDone(userKey);
+      if (!done) setStepIndex(0);
+    })();
   }, [isReady, stepIndex, userKey]);
 
   const next = useCallback(() => {
