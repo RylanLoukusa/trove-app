@@ -107,60 +107,8 @@ export const createStyles = (colors: ThemeColors) =>
       fontSize: 14,
       fontWeight: "900",
     },
-    patternGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.xs,
-      marginTop: spacing.xs,
-    },
-    patternChip: {
-      alignItems: "center",
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderRadius: 999,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.xs,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-    },
-    patternChipSelected: {
-      backgroundColor: colors.accentDark,
-      borderColor: colors.accentDark,
-    },
-    patternChipPressed: {
-      opacity: 0.72,
-      transform: [{ scale: 0.98 }],
-    },
-    patternLabel: {
-      color: colors.accentDark,
-      fontSize: 13,
-      fontWeight: "900",
-    },
-    patternLabelSelected: {
-      color: colors.surface,
-    },
-    patternDetail: {
-      color: colors.muted,
-      fontSize: 12,
-      fontWeight: "900",
-    },
-    patternDetailSelected: {
-      color: colors.surface,
-    },
-    selectedPatternDetail: {
-      color: colors.muted,
-      marginBottom: spacing.xs,
-    },
     fullItemBlock: {
       marginTop: spacing.lg,
-    },
-    fullItemSubheading: {
-      color: colors.ink,
-      fontSize: 20,
-      fontWeight: "900",
-      letterSpacing: 0,
-      marginBottom: spacing.xs,
     },
     fullItemCard: {
       backgroundColor: colors.surface,
@@ -170,16 +118,14 @@ export const createStyles = (colors: ThemeColors) =>
       padding: spacing.md,
     },
     fullItemHeader: {
-      alignItems: "flex-start",
+      alignItems: "center",
       flexDirection: "row",
       gap: spacing.md,
     },
-    fullItemTitleGroup: {
+    fullItemTitle: {
+      color: colors.ink,
       flex: 1,
-    },
-    fullItemType: {
-      color: colors.accentDark,
-      fontSize: 12,
+      fontSize: 18,
       fontWeight: "900",
     },
     openItemButton: {
@@ -188,18 +134,19 @@ export const createStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
-      minHeight: 40,
+      height: 36,
       justifyContent: "center",
-      paddingHorizontal: spacing.md,
+      width: 36,
     },
     openItemButtonPressed: {
       opacity: 0.72,
       transform: [{ scale: 0.98 }],
     },
-    openItemButtonText: {
+    openItemButtonIcon: {
       color: colors.accentDark,
-      fontSize: 13,
+      fontSize: 22,
       fontWeight: "900",
+      lineHeight: 22,
     },
     fullItemLink: {
       backgroundColor: colors.background,

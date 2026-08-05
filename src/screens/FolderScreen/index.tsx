@@ -13,6 +13,7 @@ import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
 import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { VideoPreview } from "../../components/VideoPreview";
+import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { RootStackParamList } from "../../navigation/types";
 import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
@@ -20,9 +21,8 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import { spacing } from "../../theme/theme";
 import { Folder, SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
-import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
-import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
+import { bulletGlyphForIndent } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
@@ -57,8 +57,8 @@ const FolderSkeleton = ({ styles }: { styles: ScreenStyles }) => (
       renderItem={() => (
         <View style={styles.skeletonFullItemCard}>
           <View style={styles.fullItemHeader}>
-            <SkeletonText lineCount={1} lineWidths={["32%"]} style={styles.fullItemTitleGroup} />
-            <SkeletonBlock height={40} radius={20} width={96} />
+            <SkeletonText lineCount={1} lineWidths={["60%"]} style={styles.fullItemTitle} />
+            <SkeletonBlock height={36} radius={18} width={36} />
           </View>
           <SkeletonBlock height={160} radius={14} style={styles.fullItemMedia} />
           <SkeletonText lineCount={3} lineWidths={["88%", "72%", "42%"]} style={styles.skeletonCardText} />
@@ -106,14 +106,16 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOp
 
   return (
     <View style={styles.fullItemBlock}>
-      <Text style={styles.fullItemSubheading}>{item.title}</Text>
       <View style={styles.fullItemCard}>
         <View style={styles.fullItemHeader}>
-          <View style={styles.fullItemTitleGroup}>
-            <Text style={styles.fullItemType}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
-          </View>
-          <Pressable onPress={onPress} style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}>
-            <Text style={styles.openItemButtonText}>Open item</Text>
+          <Text style={styles.fullItemTitle} numberOfLines={2}>{item.title}</Text>
+          <Pressable
+            accessibilityLabel="Open item"
+            accessibilityRole="button"
+            onPress={onPress}
+            style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}
+          >
+            <Text style={styles.openItemButtonIcon}>›</Text>
           </Pressable>
         </View>
 
@@ -193,21 +195,17 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, tagOptions, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
-  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
   const folder = getFolderById(folders, route.params.folderId);
   const subfolders = useMemo(() => (folder ? getChildFolders(folders, folder.id) : []), [folder, folders]);
   const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
   const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
   const folderItems = useMemo(() => (folder ? getItemsInFolder(items, folder.id) : []), [folder, items]);
-  const folderPatterns = useMemo(() => getFolderPatterns(folderItems, tagOptions), [folderItems, tagOptions]);
-  const selectedPattern = folderPatterns.find((pattern) => pattern.id === selectedPatternId);
-  const displayedItems = selectedPattern
-    ? folderItems.filter((item) => selectedPattern.itemIds.includes(item.id))
-    : folderItems;
   const canNestMore = folder ? canAddChildFolder(folders, folder.id) : false;
   const canManageCurrentFolder = folder ? canManageFolder(folder.id) : false;
   const canEditCurrentFolderContent = folder ? canEditFolderContent(folder.id) : false;
+  const { isShared: isFolderSharedByOwner } = useFolderShareStatus(folder?.id);
+  const showComments = isSharedAccess(folder) || isFolderSharedByOwner;
 
   const onBreadcrumbHome = useCallback(() => {
     navigation.navigate("Home");
@@ -334,10 +332,6 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     ]);
   }, [canManageCurrentFolder, confirmDelete, folder, onPressEditFolder, onPressManageAccess, onPressShare]);
 
-  const onPressPattern = useCallback((patternId: string): void => {
-    setSelectedPatternId((current) => (current === patternId ? null : patternId));
-  }, []);
-
   const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
   const isTourStepHere = currentStep?.screen === "Folder" && !!folder && folder.id === stepTargetFolderId;
   const isSpotlightStepHere = isTourStepHere && currentStep?.mode !== "message";
@@ -455,45 +449,14 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         )}
         </View>
 
-        {folderPatterns.length > 0 && (
-          <>
-            <Text style={styles.section}>Patterns</Text>
-            <View style={styles.patternGrid}>
-              {folderPatterns.map((pattern) => {
-                const isSelected = selectedPattern?.id === pattern.id;
-                return (
-                  <Pressable
-                    key={pattern.id}
-                    onPress={() => onPressPattern(pattern.id)}
-                    style={({ pressed }) => [
-                      styles.patternChip,
-                      isSelected && styles.patternChipSelected,
-                      pressed && styles.patternChipPressed,
-                    ]}
-                  >
-                    <Text style={[styles.patternLabel, isSelected && styles.patternLabelSelected]}>{pattern.label}</Text>
-                    <Text style={[styles.patternDetail, isSelected && styles.patternDetailSelected]}>{pattern.itemIds.length}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </>
-        )}
-
-        <Text style={styles.section}>{selectedPattern ? selectedPattern.label : "Items"}</Text>
-        {!!selectedPattern && <Text style={styles.selectedPatternDetail}>{selectedPattern.detail}</Text>}
+        <Text style={styles.section}>Items</Text>
         {folderItems.length === 0 ? (
           <EmptyState
             title="No items here yet."
             message="Add a note, list, link, or media item to this folder."
           />
-        ) : displayedItems.length === 0 ? (
-          <EmptyState
-            title="No matches here."
-            message="Try another pattern or clear the current one."
-          />
         ) : (
-          displayedItems.map((item) => (
+          folderItems.map((item) => (
             <FolderItemRow
               key={item.id}
               item={item}
@@ -505,7 +468,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           ))
         )}
 
-        <CommentThread targetType="folder" targetId={folder.id} />
+        {showComments && <CommentThread targetType="folder" targetId={folder.id} />}
       </ScrollView>
       </KeyboardAvoidingView>
       {isSpotlightStepHere && currentStep && rect ? (

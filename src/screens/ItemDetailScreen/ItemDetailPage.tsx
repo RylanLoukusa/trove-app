@@ -11,6 +11,7 @@ import { Section } from "../../components/Section";
 import { TagChip } from "../../components/TagChip";
 import { TagMultiSelectSheet } from "../../components/TagMultiSelectSheet";
 import { VideoPreview } from "../../components/VideoPreview";
+import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -36,6 +37,8 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const { isPro } = useEntitlement();
   const canEditCurrentItem = canEditItem(item.id);
   const videoLocked = requiresProForVideoPlayback(isPro, item.accessRole);
+  const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId);
+  const showComments = isSharedAccess(item) || isFolderSharedByOwner;
   const [openSingleSelectGroupId, setOpenSingleSelectGroupId] = useState<string | null>(null);
   const [openMultiSelectGroupId, setOpenMultiSelectGroupId] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -182,7 +185,7 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
     </Section>
   );
 
-  const commentsSection = (
+  const commentsSection = showComments && (
     <Section hideHeader>
       <CommentThread targetType="item" targetId={item.id} style={styles.commentThread} />
     </Section>
