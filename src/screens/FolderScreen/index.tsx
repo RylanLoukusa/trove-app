@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { CommentThread } from "../../components/CommentThread";
@@ -10,8 +11,10 @@ import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay"
 import { MediaImage } from "../../components/MediaImage";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { spacing } from "../../theme/theme";
@@ -335,6 +338,20 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     setSelectedPatternId((current) => (current === patternId ? null : patternId));
   }, []);
 
+  const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
+  const isTourStepHere = currentStep?.screen === "Folder" && !!folder && folder.id === stepTargetFolderId;
+  const isSpotlightStepHere = isTourStepHere && currentStep?.mode !== "message";
+  const isMessageStepHere = isTourStepHere && currentStep?.mode === "message";
+  const { scrollRef, onScroll, registerAnchor, rect } = useSpotlightAnchor(
+    isSpotlightStepHere ? currentStep?.anchorKey : undefined,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      reportFocus({ screen: "Folder", folderId: folder?.id ?? null, parentFolderId: folder?.parentFolderId ?? null });
+    }, [folder, reportFocus]),
+  );
+
   if (!isReady) {
     return (
       <View style={styles.screen}>
@@ -361,7 +378,13 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
       <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
         <Breadcrumbs
           path={getFolderPath(folders, folder.id)}
           onHome={onBreadcrumbHome}
@@ -384,21 +407,24 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         {!!folder.purpose && <Text style={styles.purpose}>{folder.purpose}</Text>}
 
         <View style={styles.actions}>
-          <AppButton
-            label={canEditCurrentFolderContent ? "Add item" : "View only"}
-            onPress={onPressAddItem}
-            style={styles.action}
-            disabled={!canEditCurrentFolderContent}
-          />
-          <AppButton
-            label={!canManageCurrentFolder ? "Owner only" : canNestMore ? "Add subfolder" : "Max depth reached"}
-            variant="secondary"
-            onPress={onPressAddSubfolder}
-            style={styles.action}
-            disabled={!canNestMore || !canManageCurrentFolder}
-          />
+          <View style={styles.action} ref={registerAnchor("add-item")}>
+            <AppButton
+              label={canEditCurrentFolderContent ? "Add item" : "View only"}
+              onPress={onPressAddItem}
+              disabled={!canEditCurrentFolderContent}
+            />
+          </View>
+          <View style={styles.action} ref={registerAnchor("add-subfolder")}>
+            <AppButton
+              label={!canManageCurrentFolder ? "Owner only" : canNestMore ? "Add subfolder" : "Max depth reached"}
+              variant="secondary"
+              onPress={onPressAddSubfolder}
+              disabled={!canNestMore || !canManageCurrentFolder}
+            />
+          </View>
         </View>
 
+        <View ref={registerAnchor("subfolders", spacing.lg, spacing.xs)}>
         <Text style={styles.section}>Subfolders</Text>
         {subfolders.length === 0 ? (
           <EmptyState
@@ -427,6 +453,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             )}
           </>
         )}
+        </View>
 
         {folderPatterns.length > 0 && (
           <>
@@ -481,6 +508,22 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         <CommentThread targetType="folder" targetId={folder.id} />
       </ScrollView>
       </KeyboardAvoidingView>
+      {isSpotlightStepHere && currentStep && rect ? (
+        <SpotlightOverlay
+          rect={rect}
+          title={currentStep.title}
+          body={currentStep.body}
+          stepNumber={stepNumber}
+          totalSteps={totalSteps}
+          mode={currentStep.mode === "info" ? "info" : "action"}
+          placement={currentStep.preferredPlacement}
+          onNext={next}
+          onSkip={skip}
+        />
+      ) : null}
+      {isMessageStepHere && currentStep ? (
+        <SpotlightMessageCard title={currentStep.title} body={currentStep.body} primaryLabel="Next" onPrimary={next} onSkip={skip} />
+      ) : null}
     </View>
   );
 };

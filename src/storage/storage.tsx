@@ -34,7 +34,8 @@ import {
   SyncSnapshot,
   syncedSyncSnapshot,
 } from "../sync/syncStatus";
-import { seedData } from "../data/seedData";
+import { seedData, seedFolders, seedItems } from "../data/seedData";
+import { isBaseDataSeeded, markBaseDataSeeded } from "./baseDataSeed";
 import {
   isTagBackfillDone,
   markTagBackfillDone,
@@ -286,7 +287,38 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           }
         } else if (result.kind === "no_row") {
           shouldAllowRemotePush = true;
-          if (isPro && hasTroveData(dataRef.current)) {
+          if (!hasTroveData(dataRef.current) && !(await isBaseDataSeeded(userId))) {
+            const timestamp = new Date().toISOString();
+            const folderIdBySeedId = new Map(seedFolders.map((seedFolder) => [seedFolder.id, createId("folder")]));
+            const newFolders: Folder[] = seedFolders.map((seedFolder) => ({
+              ...seedFolder,
+              id: folderIdBySeedId.get(seedFolder.id)!,
+              parentFolderId: seedFolder.parentFolderId
+                ? folderIdBySeedId.get(seedFolder.parentFolderId) ?? null
+                : null,
+              ownerId: userId,
+              accessRole: "owner",
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            }));
+            const newItems: SavedItem[] = seedItems.map((seedItem) => ({
+              ...seedItem,
+              id: createId("item"),
+              folderId: folderIdBySeedId.get(seedItem.folderId) ?? seedItem.folderId,
+              ownerId: userId,
+              createdBy: userId,
+              accessRole: "owner",
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            }));
+            setData((current) => ({
+              ...current,
+              folders: [...current.folders, ...newFolders],
+              items: [...newItems, ...current.items],
+            }));
+            markLocalChangePending();
+            await markBaseDataSeeded(userId);
+          } else if (isPro && hasTroveData(dataRef.current)) {
             const ensured = await ensureRemoteRowForUser(supabase, userId, dataRef.current);
             remoteRowExistsRef.current = ensured.created;
           }
@@ -917,7 +949,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [activeUserId, createTagGroup, createTagOption, isAuthReady, isReady, updateItem]);
 
-  const resetToSeed = useCallback(() => setData(seedData), []);
+  const resetToSeed = useCallback(() => {
+    setData(seedData);
+    seedDefaultTagGroups(createTagGroup, createTagOption);
+  }, [createTagGroup, createTagOption]);
   const clearLocalData = useCallback(() => setData(emptyData), []);
 
   const value = useMemo<TroveContextValue>(

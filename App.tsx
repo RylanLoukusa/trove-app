@@ -13,6 +13,7 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
+import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
@@ -25,6 +26,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { ItemDetailScreen } from "./src/screens/ItemDetailScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
+import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
@@ -195,6 +197,7 @@ function AppNavigator() {
         ) : session ? (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
@@ -229,7 +232,9 @@ function App() {
             <AuthProvider>
               <EntitlementProvider>
                 <TroveProvider>
-                  <AppNavigator />
+                  <OnboardingTourProvider>
+                    <AppNavigator />
+                  </OnboardingTourProvider>
                 </TroveProvider>
               </EntitlementProvider>
             </AuthProvider>

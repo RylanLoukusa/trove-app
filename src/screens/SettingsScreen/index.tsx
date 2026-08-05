@@ -121,6 +121,10 @@ export const SettingsScreen = ({ navigation }: Props) => {
     navigation.navigate("ManageTags");
   }, [navigation]);
 
+  const onPressOnboarding = useCallback(() => {
+    navigation.navigate("Onboarding");
+  }, [navigation]);
+
   const openLegalLink = useCallback(async (url: string): Promise<void> => {
     try {
       await Linking.openURL(url);
@@ -167,6 +171,14 @@ export const SettingsScreen = ({ navigation }: Props) => {
         <View style={styles.legalLinks}>
           <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
             <Text style={styles.legalLinkText}>Manage Tags</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.sectionTitle}>Help</Text>
+        <View style={styles.legalLinks}>
+          <Pressable onPress={onPressOnboarding} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
+            <Text style={styles.legalLinkText}>How Trove works</Text>
             <Text style={styles.legalLinkArrow}>›</Text>
           </Pressable>
         </View>

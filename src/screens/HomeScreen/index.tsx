@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { Sparkles } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
@@ -8,9 +9,12 @@ import { FolderCard } from "../../components/FolderCard";
 import { FolderTreeBrowserModal } from "../../components/FolderTreeBrowserModal";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
+import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useAuth } from "../../auth/AuthContext";
@@ -48,12 +52,21 @@ type FolderListItemProps = {
   folder: Folder;
   count: number;
   onOpenFolder: (folderId: string) => void;
+  anchorRef?: React.Ref<View>;
 };
 
-const FolderListItem = React.memo(function FolderListItem({ folder, count, onOpenFolder }: FolderListItemProps) {
+const FolderListItem = React.memo(function FolderListItem({ folder, count, onOpenFolder, anchorRef }: FolderListItemProps) {
   const onPress = useCallback(() => {
     onOpenFolder(folder.id);
   }, [folder.id, onOpenFolder]);
+
+  if (anchorRef) {
+    return (
+      <View ref={anchorRef}>
+        <FolderCard folder={folder} count={count} onPress={onPress} />
+      </View>
+    );
+  }
 
   return <FolderCard folder={folder} count={count} onPress={onPress} />;
 });
@@ -65,6 +78,20 @@ export const HomeScreen = ({ navigation }: Props) => {
   const { session, signOut } = useAuth();
   const { isPro, isLoading: isEntitlementLoading, presentPaywall } = useEntitlement();
   const [isFolderBrowserOpen, setIsFolderBrowserOpen] = useState(false);
+
+  const { currentStep, stepNumber, totalSteps, next, skip, maybeStart } = useOnboardingTour();
+  const isHomeStepHere = currentStep?.screen === "Home";
+  const isSpotlightStepHere = isHomeStepHere && currentStep?.mode !== "message";
+  const isMessageStepHere = isHomeStepHere && currentStep?.mode === "message";
+  const { scrollRef, onScroll, registerAnchor, rect } = useSpotlightAnchor(
+    isSpotlightStepHere ? currentStep?.anchorKey : undefined,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      maybeStart();
+    }, [maybeStart]),
+  );
 
   const onOpenFolderBrowser = useCallback(() => {
     setIsFolderBrowserOpen(true);
@@ -177,7 +204,13 @@ export const HomeScreen = ({ navigation }: Props) => {
           ) : undefined
         }
       />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
         {!isReady ? (
           <HomeSkeleton styles={styles} />
         ) : (
@@ -220,6 +253,7 @@ export const HomeScreen = ({ navigation }: Props) => {
           <AppButton label="Add Item" onPress={onPressAddItem} style={styles.action} />
         </View>
 
+        <View ref={registerAnchor("folders", spacing.lg)}>
         <View style={styles.rowHeader}>
           <Text style={styles.section}>Folders</Text>
           <View style={styles.rowHeaderActions}>
@@ -246,9 +280,15 @@ export const HomeScreen = ({ navigation }: Props) => {
               folder={folder}
               count={countForFolder(folder.id)}
               onOpenFolder={onOpenFolder}
+              anchorRef={
+                folder.name === "Places" && !folder.parentFolderId
+                  ? registerAnchor("places-folder", spacing.xs, spacing.xs)
+                  : undefined
+              }
             />
           ))
         )}
+        </View>
 
         <Text style={styles.section}>Tags</Text>
         <View style={styles.legalLinks}>
@@ -266,6 +306,22 @@ export const HomeScreen = ({ navigation }: Props) => {
         onClose={onCloseFolderBrowser}
         onSelectFolder={onSelectFolderFromBrowser}
       />
+      {isSpotlightStepHere && currentStep && rect ? (
+        <SpotlightOverlay
+          rect={rect}
+          title={currentStep.title}
+          body={currentStep.body}
+          stepNumber={stepNumber}
+          totalSteps={totalSteps}
+          mode={currentStep.mode === "info" ? "info" : "action"}
+          placement={currentStep.preferredPlacement}
+          onNext={next}
+          onSkip={skip}
+        />
+      ) : null}
+      {isMessageStepHere && currentStep ? (
+        <SpotlightMessageCard title={currentStep.title} body={currentStep.body} primaryLabel="Next" onPrimary={next} onSkip={skip} />
+      ) : null}
     </View>
   );
 };

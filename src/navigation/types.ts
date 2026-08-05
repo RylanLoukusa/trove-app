@@ -2,6 +2,7 @@ import type { PaywallTrigger } from "../utils/limits";
 
 export type RootStackParamList = {
   Home: undefined;
+  Onboarding: undefined;
   Login: undefined;
   ResetPassword: undefined;
   AcceptFolderInvite: { token: string };

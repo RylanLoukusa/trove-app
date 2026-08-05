@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { Maximize2, Minimize2 } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { emojiCategories } from "../../data/emojiPalette";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { RootStackParamList } from "../../navigation/types";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -206,12 +209,31 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
     navigation.replace("Folder", { folderId: folder.id });
   }, [canManageFolder, color, createFolder, editing, folders, icon, name, navigation, parentFolderId, purpose, updateFolder]);
 
+  const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
+  const isTourStepHere = currentStep?.screen === "AddEditFolder" && parentFolderId === stepTargetFolderId;
+  const { scrollRef: tourScrollRef, onScroll: onTourScroll, registerAnchor, rect } = useSpotlightAnchor(
+    isTourStepHere ? currentStep?.anchorKey : undefined,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      reportFocus({ screen: "AddEditFolder", parentFolderId });
+    }, [parentFolderId, reportFocus]),
+  );
+
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={tourScrollRef}
+        onScroll={onTourScroll}
+        scrollEventThrottle={16}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.title}>{editing ? "Edit folder" : "New folder"}</Text>
 
+        <View ref={registerAnchor("name", spacing.md)}>
         <Text style={styles.label}>Name</Text>
         <TextInput
           style={styles.input}
@@ -220,7 +242,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           placeholder="Weekend Ideas"
           placeholderTextColor={colors.muted}
         />
+        </View>
 
+        <View ref={registerAnchor("purpose", spacing.md)}>
         <Text style={styles.label}>Purpose</Text>
         <TextInput
           multiline
@@ -231,7 +255,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           textAlignVertical="top"
           value={purpose}
         />
+        </View>
 
+        <View ref={registerAnchor("look", spacing.md)}>
         <Text style={styles.label}>Icon</Text>
         <Pressable
           accessibilityLabel="Choose folder icon"
@@ -352,6 +378,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             );
           })}
         </View>
+        </View>
 
         <Text style={styles.section}>Parent folder</Text>
         <Pressable
@@ -373,7 +400,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           <Text style={styles.parentSummaryAction}>Change</Text>
         </Pressable>
 
-        <AppButton label="Save folder" onPress={save} style={styles.save} />
+        <View ref={registerAnchor("save", spacing.lg)}>
+          <AppButton label="Save folder" onPress={save} style={styles.save} />
+        </View>
       </ScrollView>
 
       <Modal animationType="slide" visible={parentPickerOpen} presentationStyle="pageSheet" onRequestClose={closeParentPicker}>
@@ -428,6 +457,19 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           )}
         </ScrollView>
       </Modal>
+      {isTourStepHere && currentStep && rect ? (
+        <SpotlightOverlay
+          rect={rect}
+          title={currentStep.title}
+          body={currentStep.body}
+          stepNumber={stepNumber}
+          totalSteps={totalSteps}
+          mode={currentStep.mode === "info" ? "info" : "action"}
+          placement={currentStep.preferredPlacement}
+          onNext={next}
+          onSkip={skip}
+        />
+      ) : null}
     </View>
   );
 };

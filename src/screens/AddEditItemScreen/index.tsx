@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { AppButton } from "../../components/AppButton";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { FolderPickerField } from "../../components/FolderPickerField";
 import { MediaCollectionPicker } from "../../components/MediaCollectionPicker";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { TagChip } from "../../components/TagChip";
 import { TagMultiSelectSheet } from "../../components/TagMultiSelectSheet";
 import { ListItemRow, LIST_ROW_HEIGHT } from "./ListItemRow";
 import { RootStackParamList } from "../../navigation/types";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { clearSharedImport, inferSourcePlatform, readSharedImport, titleFromSharedImport } from "../../share/sharedImport";
 import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useTrove } from "../../storage/storage";
@@ -396,6 +399,22 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     }
   }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, sharedImportId, sharedText, sourceUrl, tagOptionIds, title, type, updateItem]);
 
+  const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, advance, reportFocus } = useOnboardingTour();
+  const isTourStepHere = currentStep?.screen === "AddEditItem" && folderId === stepTargetFolderId;
+  const { scrollRef: tourScrollRef, onScroll: onTourScroll, registerAnchor, rect } = useSpotlightAnchor(
+    isTourStepHere ? currentStep?.anchorKey : undefined,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      reportFocus({ screen: "AddEditItem", folderId: folderId || null });
+    }, [folderId, reportFocus]),
+  );
+
+  useEffect(() => {
+    if (type === "text") advance("item-type");
+  }, [advance, type]);
+
   const selectedTypeOption = type ? typeChoices[normalizeItemType(type) as SelectableItemType] : null;
   const openSingleSelectGroup = sortedTagGroups.find((group) => group.id === openSingleSelectGroupId);
   const openSingleSelectGroupOptions = openSingleSelectGroup
@@ -411,9 +430,19 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
-      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={(node) => {
+          scrollViewRef.current = node;
+          tourScrollRef.current = node;
+        }}
+        onScroll={onTourScroll}
+        scrollEventThrottle={16}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.title}>{editing ? "Edit item" : "Add item"}</Text>
 
+        <View ref={registerAnchor("title", spacing.md)}>
         <Text style={styles.label}>
           Title <Text style={styles.requiredMarker}>*</Text>
         </Text>
@@ -427,14 +456,14 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           returnKeyType="done"
         />
         {titleError && <Text style={styles.errorText}>{titleError}</Text>}
+        </View>
 
         <Text style={styles.section}>Type</Text>
         {isTypePickerOpen || !selectedTypeOption ? (
           types.map((choice) => {
             const option = typeChoices[choice];
-            return (
+            const row = (
               <OptionChoiceRow
-                key={choice}
                 label={option.label}
                 detail={option.detail}
                 tone={option.tone}
@@ -445,6 +474,13 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
                   setTypeError(null);
                 }}
               />
+            );
+            return choice === "text" ? (
+              <View key={choice} ref={registerAnchor("type-note", spacing.xs)}>
+                {row}
+              </View>
+            ) : (
+              <View key={choice}>{row}</View>
             );
           })
         ) : (
@@ -459,7 +495,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         {typeError && <Text style={styles.errorText}>{typeError}</Text>}
 
         {type === "text" && (
-          <>
+          <View ref={registerAnchor("note", spacing.md)}>
             <Text style={styles.label}>Note</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -470,7 +506,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
               placeholderTextColor={colors.muted}
               textAlignVertical="top"
             />
-          </>
+          </View>
         )}
 
         {type === "link" && (
@@ -601,7 +637,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         <FolderPickerField folders={folderPickerFolders} selectedFolderId={folderId} onSelectFolder={setFolderId} />
 
         {visibleTagGroups.length > 0 && (
-          <>
+          <View ref={registerAnchor("tags", spacing.lg)}>
             <Text style={styles.section}>Tags</Text>
             <View style={styles.tagsCard}>
               {visibleTagGroups.map((group) => {
@@ -653,10 +689,12 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
                 );
               })}
             </View>
-          </>
+          </View>
         )}
 
-        <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
+        <View ref={registerAnchor("save", spacing.lg)}>
+          <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
+        </View>
         {isSaving && <ActivityIndicator size="large" style={styles.button} />}
       </ScrollView>
 
@@ -680,6 +718,19 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         }}
         onClose={() => setOpenMultiSelectGroupId(null)}
       />
+      {isTourStepHere && currentStep && rect ? (
+        <SpotlightOverlay
+          rect={rect}
+          title={currentStep.title}
+          body={currentStep.body}
+          stepNumber={stepNumber}
+          totalSteps={totalSteps}
+          mode={currentStep.mode === "info" ? "info" : "action"}
+          placement={currentStep.preferredPlacement}
+          onNext={next}
+          onSkip={skip}
+        />
+      ) : null}
     </View>
   );
 };

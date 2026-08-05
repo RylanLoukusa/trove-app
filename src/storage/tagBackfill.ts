@@ -20,8 +20,17 @@ export const markTagBackfillDone = async (userKey: string): Promise<void> => {
   }
 };
 
-const STATUS_OPTION_NAMES = ["Waiting", "Planned", "Done", "Skipped"];
-const PRIORITY_OPTION_NAMES = ["Low", "Medium", "High"];
+const STATUS_OPTIONS = [
+  { name: "Waiting", color: "#F3B562" },
+  { name: "Planned", color: "#8AA8D8" },
+  { name: "Done", color: "#8AC9A7" },
+  { name: "Skipped", color: "#D8C7AA" },
+];
+const PRIORITY_OPTIONS = [
+  { name: "Low", color: "#8AC9A7" },
+  { name: "Medium", color: "#F0A66A" },
+  { name: "High", color: "#D98A8A" },
+];
 
 type LegacyItemFields = {
   tags: string[];
@@ -82,17 +91,17 @@ const lowerCaseKey = (name: string): string => name.trim().toLowerCase();
 export const seedDefaultTagGroups = (createTagGroup: CreateTagGroup, createTagOption: CreateTagOption): SeededTagTaxonomy => {
   const statusGroup = createTagGroup({ name: "Status", selectionMode: "single", allowInlineCreate: true, isSystem: true, sortOrder: 0 });
   const statusOptionIdByName = new Map(
-    STATUS_OPTION_NAMES.map((name, index) => [
+    STATUS_OPTIONS.map(({ name, color }, index) => [
       lowerCaseKey(name),
-      createTagOption({ groupId: statusGroup.id, name, sortOrder: index }).id,
+      createTagOption({ groupId: statusGroup.id, name, color, sortOrder: index }).id,
     ]),
   );
 
   const priorityGroup = createTagGroup({ name: "Priority", selectionMode: "single", allowInlineCreate: true, isSystem: true, sortOrder: 1 });
   const priorityOptionIdByName = new Map(
-    PRIORITY_OPTION_NAMES.map((name, index) => [
+    PRIORITY_OPTIONS.map(({ name, color }, index) => [
       lowerCaseKey(name),
-      createTagOption({ groupId: priorityGroup.id, name, sortOrder: index }).id,
+      createTagOption({ groupId: priorityGroup.id, name, color, sortOrder: index }).id,
     ]),
   );
 

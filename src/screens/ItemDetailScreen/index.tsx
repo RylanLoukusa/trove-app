@@ -13,10 +13,14 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { Pencil, Trash2 } from "lucide-react-native";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { SpotlightMessageCard } from "../../components/SpotlightTour";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { useTrove } from "../../storage/storage";
 import type { SavedItem } from "../../types/models";
@@ -57,6 +61,28 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
   const item = items.find((candidate) => candidate.id === route.params.itemId);
   const canEditCurrentItem = item ? canEditItem(item.id) : false;
   const pagerRef = useRef<FlatList<SavedItem>>(null);
+
+  const { presentPaywall } = useEntitlement();
+  const { currentStep, next, skip: skipTour, reportFocus } = useOnboardingTour();
+  const isMessageStepHere = currentStep?.screen === "ItemDetail" && currentStep.mode === "message";
+  const isProPreview = currentStep?.id === "pro-preview";
+
+  useFocusEffect(
+    useCallback(() => {
+      reportFocus({ screen: "ItemDetail" });
+    }, [reportFocus]),
+  );
+
+  const onPressSeePro = useCallback(() => {
+    skipTour();
+    navigation.navigate("Home");
+    presentPaywall("sharing");
+  }, [navigation, presentPaywall, skipTour]);
+
+  const onPressExitToHome = useCallback(() => {
+    skipTour();
+    navigation.navigate("Home");
+  }, [navigation, skipTour]);
 
   const folderItems = useMemo(
     () => (item ? getItemsInFolder(items, item.folderId) : []),
@@ -202,6 +228,15 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           renderItem={({ item: pageItem }) => <ItemDetailPage item={pageItem} width={width} navigation={navigation} />}
         />
       </KeyboardAvoidingView>
+      {isMessageStepHere && currentStep ? (
+        <SpotlightMessageCard
+          title={currentStep.title}
+          body={currentStep.body}
+          primaryLabel={isProPreview ? "See Pro features" : "Next"}
+          onPrimary={isProPreview ? onPressSeePro : next}
+          onSkip={isProPreview ? onPressExitToHome : skipTour}
+        />
+      ) : null}
     </View>
   );
 };

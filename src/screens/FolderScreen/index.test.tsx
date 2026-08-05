@@ -4,6 +4,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { FolderScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import type { Folder, SavedItem } from "../../types/models";
 import type { RootStackParamList } from "../../navigation/types";
@@ -17,8 +18,13 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../onboarding/OnboardingTourContext", () => ({
+  useOnboardingTour: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseOnboardingTour = useOnboardingTour as jest.Mock;
 
 const makeFolder = (overrides: Partial<Folder>): Folder => ({
   id: "folder-1",
@@ -78,6 +84,17 @@ describe("FolderScreen", () => {
     canEditFolderContent.mockReturnValue(true);
     canEditItem.mockReturnValue(true);
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    mockUseOnboardingTour.mockReturnValue({
+      currentStep: undefined,
+      stepNumber: 0,
+      totalSteps: 0,
+      stepTargetFolderId: null,
+      next: jest.fn(),
+      skip: jest.fn(),
+      advance: jest.fn(),
+      reportFocus: jest.fn(),
+      maybeStart: jest.fn(),
+    });
   });
 
   afterEach(() => {

@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { HomeScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
+import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import type { SyncSnapshot } from "../../sync/syncStatus";
 import type { Folder, SavedItem } from "../../types/models";
@@ -24,9 +25,14 @@ jest.mock("../../entitlements/EntitlementContext", () => ({
   useEntitlement: jest.fn(),
 }));
 
+jest.mock("../../onboarding/OnboardingTourContext", () => ({
+  useOnboardingTour: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
 const mockUseEntitlement = useEntitlement as jest.Mock;
+const mockUseOnboardingTour = useOnboardingTour as jest.Mock;
 
 const makeFolder = (overrides: Partial<Folder>): Folder => ({
   id: "folder-1",
@@ -86,6 +92,15 @@ describe("HomeScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    mockUseOnboardingTour.mockReturnValue({
+      currentStep: undefined,
+      stepNumber: 0,
+      totalSteps: 0,
+      next: jest.fn(),
+      skip: jest.fn(),
+      advance: jest.fn(),
+      maybeStart: jest.fn(),
+    });
   });
 
   afterEach(() => {
