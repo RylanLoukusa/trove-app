@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
+import { EllipsisVertical, Lock, Pencil, UserPlus } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { CommentThread } from "../../components/CommentThread";
@@ -14,6 +15,7 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../..
 import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
 import { VideoPreview } from "../../components/VideoPreview";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
@@ -23,6 +25,7 @@ import { Folder, SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { bulletGlyphForIndent } from "../../utils/itemTypes";
+import { requiresProForSharing } from "../../utils/limits";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
@@ -194,6 +197,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { folders, isReady, items, tagOptions, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
+  const { isPro, presentPaywall } = useEntitlement();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
 
   const folder = getFolderById(folders, route.params.folderId);
@@ -206,6 +210,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const canEditCurrentFolderContent = folder ? canEditFolderContent(folder.id) : false;
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(folder?.id);
   const showComments = isSharedAccess(folder) || isFolderSharedByOwner;
+  const sharingLocked = requiresProForSharing(isPro);
 
   const onBreadcrumbHome = useCallback(() => {
     navigation.navigate("Home");
@@ -273,8 +278,12 @@ export const FolderScreen = ({ navigation, route }: Props) => {
 
   const onPressManageAccess = useCallback(() => {
     if (!folder) return;
+    if (requiresProForSharing(isPro)) {
+      presentPaywall("sharing");
+      return;
+    }
     navigation.navigate("ShareFolder", { folderId: folder.id });
-  }, [folder, navigation]);
+  }, [folder, isPro, navigation, presentPaywall]);
 
   const onPressShare = useCallback(async (): Promise<void> => {
     if (!folder) return;
@@ -318,19 +327,13 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const onOpenMenu = useCallback((): void => {
     if (!folder) return;
     Alert.alert("Folder actions", folder.name, [
-      ...(canManageCurrentFolder
-        ? [
-            { text: "Edit", onPress: onPressEditFolder },
-            { text: "Manage access", onPress: onPressManageAccess },
-          ]
-        : [{ text: "View access", onPress: onPressManageAccess }]),
       { text: "Share summary", onPress: () => void onPressShare() },
       ...(canManageCurrentFolder
         ? [{ text: "Delete folder", style: "destructive" as const, onPress: confirmDelete }]
         : []),
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [canManageCurrentFolder, confirmDelete, folder, onPressEditFolder, onPressManageAccess, onPressShare]);
+  }, [canManageCurrentFolder, confirmDelete, folder, onPressShare]);
 
   const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
   const isTourStepHere = currentStep?.screen === "Folder" && !!folder && folder.id === stepTargetFolderId;
@@ -389,9 +392,43 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           <Text style={styles.title}>
             {folder.icon} {folder.name}
           </Text>
-          <Pressable onPress={onOpenMenu} style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}>
-            <Text style={styles.moreButtonText}>More</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            {canManageCurrentFolder && (
+              <Pressable
+                accessibilityLabel="Edit folder"
+                accessibilityRole="button"
+                onPress={onPressEditFolder}
+                style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
+              >
+                <Pencil color={colors.accentDark} size={18} strokeWidth={2.4} />
+              </Pressable>
+            )}
+            <View style={styles.headerIconButtonWrapper}>
+              <Pressable
+                accessibilityLabel={
+                  sharingLocked ? "Share folder (Pro required)" : canManageCurrentFolder ? "Manage access" : "View access"
+                }
+                accessibilityRole="button"
+                onPress={onPressManageAccess}
+                style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
+              >
+                <UserPlus color={colors.accentDark} size={18} strokeWidth={2.4} />
+              </Pressable>
+              {sharingLocked && (
+                <View style={styles.headerIconLockBadge}>
+                  <Lock size={11} color={colors.surface} />
+                </View>
+              )}
+            </View>
+            <Pressable
+              accessibilityLabel="More folder actions"
+              accessibilityRole="button"
+              onPress={onOpenMenu}
+              style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
+            >
+              <EllipsisVertical color={colors.muted} size={18} strokeWidth={2.4} />
+            </Pressable>
+          </View>
         </View>
         {isSharedAccess(folder) && (
           <View style={styles.accessBadge}>

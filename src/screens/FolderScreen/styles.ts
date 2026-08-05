@@ -34,21 +34,38 @@ export const createStyles = (colors: ThemeColors) =>
       fontSize: 32,
       fontWeight: "900",
     },
-    moreButton: {
+    headerActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    headerIconButton: {
+      alignItems: "center",
       backgroundColor: colors.surface,
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      height: 40,
+      justifyContent: "center",
+      width: 40,
     },
-    moreButtonPressed: {
+    headerIconButtonPressed: {
       opacity: 0.72,
+      transform: [{ scale: 0.96 }],
     },
-    moreButtonText: {
-      color: colors.accentDark,
-      fontSize: 14,
-      fontWeight: "900",
+    headerIconButtonWrapper: {
+      position: "relative",
+    },
+    headerIconLockBadge: {
+      alignItems: "center",
+      backgroundColor: colors.ink,
+      borderRadius: 999,
+      height: 18,
+      justifyContent: "center",
+      position: "absolute",
+      right: -4,
+      top: -4,
+      width: 18,
     },
     purpose: {
       color: colors.muted,

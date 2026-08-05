@@ -4,6 +4,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { FolderScreen } from "./index";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import type { Folder, SavedItem } from "../../types/models";
@@ -18,12 +19,17 @@ jest.mock("../../storage/storage", () => ({
   useTrove: jest.fn(),
 }));
 
+jest.mock("../../entitlements/EntitlementContext", () => ({
+  useEntitlement: jest.fn(),
+}));
+
 jest.mock("../../onboarding/OnboardingTourContext", () => ({
   useOnboardingTour: jest.fn(),
 }));
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseTrove = useTrove as jest.Mock;
+const mockUseEntitlement = useEntitlement as jest.Mock;
 const mockUseOnboardingTour = useOnboardingTour as jest.Mock;
 
 const makeFolder = (overrides: Partial<Folder>): Folder => ({
@@ -84,6 +90,13 @@ describe("FolderScreen", () => {
     canEditFolderContent.mockReturnValue(true);
     canEditItem.mockReturnValue(true);
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    mockUseEntitlement.mockReturnValue({
+      isPro: true,
+      isLoading: false,
+      presentPaywall: jest.fn(),
+      restorePurchases: jest.fn(),
+      setDevIsPro: jest.fn(),
+    });
     mockUseOnboardingTour.mockReturnValue({
       currentStep: undefined,
       stepNumber: 0,
@@ -183,7 +196,7 @@ describe("FolderScreen", () => {
     });
 
     await renderFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], []);
-    await fireEvent.press(screen.getByText("More"));
+    await fireEvent.press(screen.getByLabelText("More folder actions"));
 
     const menuButtons = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
     menuButtons.find((button) => button.text === "Delete folder")?.onPress?.();

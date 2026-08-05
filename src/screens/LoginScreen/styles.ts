@@ -93,6 +93,7 @@ export const createStyles = (colors: ThemeColors) =>
       width: "100%",
     },
     emailButton: {
+      backgroundColor: "#FFFFFF",
       borderColor: "#000000",
       borderRadius: 8,
       height: 48,
