@@ -5,6 +5,7 @@
     "scheme": "trove",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "orientation": "portrait",
     "ios": {
       "bundleIdentifier": "com.rylanloukusa.trove"
     },
