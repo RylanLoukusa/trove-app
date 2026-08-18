@@ -6,6 +6,7 @@ export type RootStackParamList = {
   Login: undefined;
   ResetPassword: undefined;
   AcceptFolderInvite: { token: string };
+  PublicFolderPreview: { token: string };
   Folder: { folderId: string };
   AddEditFolder: { folderId?: string; parentFolderId?: string | null } | undefined;
   AddEditItem: { itemId?: string; folderId?: string; sharedImportId?: string } | undefined;

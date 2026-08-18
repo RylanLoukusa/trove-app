@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "trove-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../trove-web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

@@ -28,6 +28,7 @@ import { LoginScreen } from "./src/screens/LoginScreen";
 import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
+import { PublicFolderPreviewScreen } from "./src/screens/PublicFolderPreview";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
@@ -45,6 +46,7 @@ const linking: LinkingOptions<RootStackParamList> = {
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
+      PublicFolderPreview: "shared/:token",
       AddEditItem: "shared-import/:sharedImportId",
       ShareFolder: "folder/:folderId/share",
       Folder: "folder/:folderId",
@@ -199,6 +201,7 @@ function AppNavigator() {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
+            <Stack.Screen name="PublicFolderPreview" component={PublicFolderPreviewScreen} />
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
             <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
@@ -216,6 +219,7 @@ function AppNavigator() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
+            <Stack.Screen name="PublicFolderPreview" component={PublicFolderPreviewScreen} />
           </>
         )}
       </Stack.Navigator>

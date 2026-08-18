@@ -14,6 +14,11 @@ import {
   revokeFolderInvite,
   shareFolderByEmail,
 } from "../../collaboration/folderSharing";
+import {
+  createPublicLink,
+  loadPublicLinkStatus,
+  revokePublicLink,
+} from "../../collaboration/folderPublicLinks";
 import { getSupabase } from "../../lib/supabase";
 import type { Folder } from "../../types/models";
 import type { RootStackParamList } from "../../navigation/types";
@@ -42,6 +47,13 @@ jest.mock("../../collaboration/folderSharing", () => ({
   updateFolderShare: jest.fn(),
 }));
 
+jest.mock("../../collaboration/folderPublicLinks", () => ({
+  buildPublicFolderLink: jest.fn().mockReturnValue("https://trovecollections.app/shared/token"),
+  createPublicLink: jest.fn(),
+  loadPublicLinkStatus: jest.fn(),
+  revokePublicLink: jest.fn(),
+}));
+
 jest.mock("../../lib/supabase", () => ({
   getSupabase: jest.fn(),
 }));
@@ -54,6 +66,9 @@ const mockLoadSavedCollaborators = loadSavedCollaborators as jest.Mock;
 const mockShareFolderByEmail = shareFolderByEmail as jest.Mock;
 const mockRemoveFolderShare = removeFolderShare as jest.Mock;
 const mockRevokeFolderInvite = revokeFolderInvite as jest.Mock;
+const mockLoadPublicLinkStatus = loadPublicLinkStatus as jest.Mock;
+const mockCreatePublicLink = createPublicLink as jest.Mock;
+const mockRevokePublicLink = revokePublicLink as jest.Mock;
 const mockGetSupabase = getSupabase as jest.Mock;
 
 const makeFolder = (overrides: Partial<Folder>): Folder => ({
@@ -97,6 +112,7 @@ describe("ShareFolderScreen", () => {
     mockGetSupabase.mockReturnValue({});
     mockLoadFolderSharing.mockResolvedValue({ access: [], invites: [] });
     mockLoadSavedCollaborators.mockResolvedValue({ collaborators: [] });
+    mockLoadPublicLinkStatus.mockResolvedValue({ link: undefined });
     refreshFromRemote.mockResolvedValue({ ok: true });
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
@@ -202,6 +218,58 @@ describe("ShareFolderScreen", () => {
     await fireEvent.press(screen.getByText("Revoke"));
 
     expect(mockRevokeFolderInvite).toHaveBeenCalledWith(expect.anything(), "i1");
+  });
+
+  it("creates a public link after syncing the folder", async () => {
+    syncFolderForSharing.mockResolvedValue({ ok: true });
+    mockCreatePublicLink.mockResolvedValue({
+      link: {
+        id: "link-1",
+        folderId: "recipes",
+        token: "tok-1",
+        scope: "folder_only",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })]);
+    await waitFor(() => expect(mockLoadPublicLinkStatus).toHaveBeenCalled());
+
+    await fireEvent.press(screen.getByText("Create link"));
+
+    await waitFor(() => expect(mockCreatePublicLink).toHaveBeenCalled());
+    expect(syncFolderForSharing).toHaveBeenCalledWith("recipes");
+    expect(mockCreatePublicLink).toHaveBeenCalledWith(expect.anything(), "recipes", "folder_only");
+    expect(await screen.findByText("Revoke")).toBeTruthy();
+  });
+
+  it("revokes an active public link after confirming", async () => {
+    mockLoadPublicLinkStatus.mockResolvedValue({
+      link: {
+        id: "link-1",
+        folderId: "recipes",
+        token: "tok-1",
+        scope: "folder_only",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    mockRevokePublicLink.mockResolvedValue({});
+    alertSpy.mockImplementation((_title, _message, buttons) => {
+      const destructive = Array.isArray(buttons)
+        ? (buttons as Array<{ style?: string; onPress?: () => void }>).find((button) => button.style === "destructive")
+        : undefined;
+      destructive?.onPress?.();
+    });
+
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })]);
+    await waitFor(() => expect(screen.getByText("Revoke")).toBeTruthy());
+
+    await fireEvent.press(screen.getByText("Revoke"));
+
+    expect(mockRevokePublicLink).toHaveBeenCalledWith(expect.anything(), "link-1");
+    await waitFor(() => expect(screen.getByText("Create link")).toBeTruthy());
   });
 
   it("hides the share panel for non-owner viewers", async () => {

@@ -32,6 +32,14 @@ import {
   shareFolderWithCollaborator,
   updateFolderShare,
 } from "../../collaboration/folderSharing";
+import {
+  FolderPublicLink,
+  PublicLinkScope,
+  buildPublicFolderLink,
+  createPublicLink,
+  loadPublicLinkStatus,
+  revokePublicLink,
+} from "../../collaboration/folderPublicLinks";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
@@ -187,9 +195,12 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const [accessRows, setAccessRows] = useState<FolderAccess[]>([]);
   const [collaborators, setCollaborators] = useState<SavedCollaborator[]>([]);
   const [invites, setInvites] = useState<FolderShareInvite[]>([]);
+  const [publicLink, setPublicLink] = useState<FolderPublicLink | undefined>(undefined);
+  const [publicLinkScope, setPublicLinkScope] = useState<PublicLinkScope>("folder_only");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublicLinkSaving, setIsPublicLinkSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const folderPath = useMemo(
@@ -228,20 +239,24 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
         setIsLoading(true);
       }
 
-      const [sharingResult, collaboratorsResult] = await Promise.all([
+      const [sharingResult, collaboratorsResult, publicLinkResult] = await Promise.all([
         loadFolderSharing(supabase, folder.id),
         canManageAccess
           ? loadSavedCollaborators(supabase)
           : Promise.resolve({ collaborators: [], error: undefined }),
+        canManageAccess
+          ? loadPublicLinkStatus(supabase, folder.id)
+          : Promise.resolve({ link: undefined, error: undefined }),
       ]);
 
       if (sharingResult.error) {
         setError(sharingResult.error);
       } else {
-        setError(collaboratorsResult.error ?? null);
+        setError(collaboratorsResult.error ?? publicLinkResult.error ?? null);
         setAccessRows(sharingResult.access);
         setInvites(sharingResult.invites);
         setCollaborators(collaboratorsResult.collaborators);
+        setPublicLink(publicLinkResult.link);
       }
 
       setIsLoading(false);
@@ -470,6 +485,84 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     [],
   );
 
+  const onCreatePublicLink = useCallback(async (): Promise<void> => {
+    if (!folder) return;
+
+    if (requiresProForSharing(isPro)) {
+      presentPaywall("sharing");
+      return;
+    }
+
+    const supabase = getSupabase();
+    if (!supabase || !session?.user) {
+      setError("Sign in with sync enabled to create a shareable link.");
+      return;
+    }
+
+    setIsPublicLinkSaving(true);
+    setError(null);
+
+    const syncResult = await syncFolderForSharing(folder.id);
+    if (!syncResult.ok) {
+      setIsPublicLinkSaving(false);
+      setError(syncResult.error ?? "Sync this folder before creating a link.");
+      return;
+    }
+
+    const result = await createPublicLink(supabase, folder.id, publicLinkScope);
+    setIsPublicLinkSaving(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    setPublicLink(result.link);
+  }, [folder, isPro, presentPaywall, publicLinkScope, session?.user, syncFolderForSharing]);
+
+  const onRevokePublicLink = useCallback((): void => {
+    if (!publicLink) return;
+    const linkId = publicLink.id;
+
+    Alert.alert(
+      "Revoke this link?",
+      "Anyone with the current link will no longer be able to view this folder.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Revoke",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              const supabase = getSupabase();
+              if (!supabase) return;
+
+              setIsPublicLinkSaving(true);
+              const result = await revokePublicLink(supabase, linkId);
+              setIsPublicLinkSaving(false);
+
+              if (result.error) {
+                Alert.alert("Could not revoke link", result.error);
+                return;
+              }
+
+              setPublicLink(undefined);
+            })();
+          },
+        },
+      ],
+    );
+  }, [publicLink]);
+
+  const onSharePublicLink = useCallback(async (): Promise<void> => {
+    if (!publicLink) return;
+    const link = buildPublicFolderLink(publicLink.token);
+    await Share.share({
+      message: `View "${folder?.name ?? "this folder"}" in Trove: ${link}`,
+      url: link,
+    });
+  }, [folder?.name, publicLink]);
+
   if (!folder) {
     return (
       <View style={styles.screen}>
@@ -690,6 +783,50 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
             </View>
               ))
             )}
+
+            <Text style={styles.section}>Shareable link</Text>
+            <View style={styles.panel}>
+              {publicLink ? (
+                <>
+                  <Text style={styles.label}>Anyone with this link can view</Text>
+                  <Text style={styles.accessMeta}>{scopeLabel(publicLink.scope)}</Text>
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      disabled={isPublicLinkSaving}
+                      onPress={() => {
+                        void onSharePublicLink();
+                      }}
+                      style={({ pressed }) => [styles.smallButton, pressed && styles.smallButtonPressed]}
+                    >
+                      <Text style={styles.smallButtonText}>Share link</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={isPublicLinkSaving}
+                      onPress={onRevokePublicLink}
+                      style={({ pressed }) => [styles.smallButton, styles.dangerButton, pressed && styles.smallButtonPressed]}
+                    >
+                      <Text style={[styles.smallButtonText, styles.dangerButtonText]}>Revoke</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>
+                    Create a link that lets anyone view this folder, no account required.
+                  </Text>
+                  <Text style={styles.label}>Scope</Text>
+                  <ChoicePills options={scopeOptions} selected={publicLinkScope} onSelect={setPublicLinkScope} />
+                  <AppButton
+                    disabled={isPublicLinkSaving}
+                    label={isPublicLinkSaving ? "Creating..." : "Create link"}
+                    onPress={() => {
+                      void onCreatePublicLink();
+                    }}
+                    style={styles.submitButton}
+                  />
+                </>
+              )}
+            </View>
           </>
         )}
       </ScrollView>

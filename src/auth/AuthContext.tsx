@@ -6,7 +6,7 @@ import { Alert, Linking, Platform } from "react-native";
 import { upsertProfileForUser } from "../collaboration/profiles";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { friendlyErrorMessage } from "../utils/errorMessages";
-import { AUTH_CALLBACK_URL } from "./authRedirect";
+import { AUTH_CALLBACK_SCHEME_URL, AUTH_CALLBACK_URL } from "./authRedirect";
 
 type AuthContextValue = {
   session: Session | null;
@@ -33,7 +33,7 @@ const decodeParam = (value: string): string => {
 };
 
 const parseAuthCallbackParams = (url: string): Map<string, string> | null => {
-  if (!url.startsWith(AUTH_CALLBACK_URL)) return null;
+  if (!url.startsWith(AUTH_CALLBACK_URL) && !url.startsWith(AUTH_CALLBACK_SCHEME_URL)) return null;
 
   const params = new Map<string, string>();
   const [, hash = ""] = url.split("#");

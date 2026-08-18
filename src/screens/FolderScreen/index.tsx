@@ -328,12 +328,13 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     if (!folder) return;
     Alert.alert("Folder actions", folder.name, [
       { text: "Share summary", onPress: () => void onPressShare() },
+      ...(canManageCurrentFolder ? [{ text: "Get shareable link", onPress: onPressManageAccess }] : []),
       ...(canManageCurrentFolder
         ? [{ text: "Delete folder", style: "destructive" as const, onPress: confirmDelete }]
         : []),
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [canManageCurrentFolder, confirmDelete, folder, onPressShare]);
+  }, [canManageCurrentFolder, confirmDelete, folder, onPressManageAccess, onPressShare]);
 
   const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
   const isTourStepHere = currentStep?.screen === "Folder" && !!folder && folder.id === stepTargetFolderId;

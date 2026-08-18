@@ -7,7 +7,8 @@
     "userInterfaceStyle": "automatic",
     "orientation": "portrait",
     "ios": {
-      "bundleIdentifier": "com.rylanloukusa.trove"
+      "bundleIdentifier": "com.rylanloukusa.trove",
+      "associatedDomains": ["applinks:trovecollections.app"]
     },
     "plugins": [
       [
