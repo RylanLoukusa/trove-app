@@ -49,6 +49,11 @@ type ItemRow = {
   shared_text: string | null;
   source_platform: string | null;
   source_url: string | null;
+  // Array of trove_tag_options.id -- despite the tag_taxonomy migration also creating a
+  // normalized trove_item_tag_assignments join table, the client's sync engine
+  // (savedItemToRow/itemRowToItem in troveSync.ts) never actually reads or writes that
+  // table. Assignments live directly on the item as this plain jsonb id array.
+  tags: string[] | null;
   title: string;
   type: string;
   updated_at: string;
@@ -56,8 +61,6 @@ type ItemRow = {
 };
 
 type TagOptionRow = { color: string | null; id: string; name: string };
-
-type TagAssignmentRow = { item_id: string; trove_tag_options: TagOptionRow | null };
 
 type RequestBody = { token?: string };
 
@@ -170,9 +173,13 @@ const mapMediaItems = async (
   );
 };
 
-const mapItem = async (row: ItemRow, tagsByItemId: Map<string, TagOptionRow[]>) => {
+const mapItem = async (row: ItemRow, tagOptionsById: Map<string, TagOptionRow>) => {
   const { mediaUrl, thumbnailUrl } = await mapMedia(row.media);
   const mediaItems = await mapMediaItems(row.media_items);
+  const tags = (row.tags ?? [])
+    .map((tagOptionId) => tagOptionsById.get(tagOptionId))
+    .filter((tag): tag is TagOptionRow => !!tag)
+    .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }));
 
   return {
     attachments: (row.attachments ?? []).map((attachment) => ({
@@ -198,7 +205,7 @@ const mapItem = async (row: ItemRow, tagsByItemId: Map<string, TagOptionRow[]>) 
     sharedText: row.shared_text,
     sourcePlatform: row.source_platform,
     sourceUrl: row.source_url,
-    tags: (tagsByItemId.get(row.id) ?? []).map((tag) => ({ id: tag.id, name: tag.name, color: tag.color })),
+    tags,
     thumbnailUrl,
     title: row.title,
     type: row.type,
@@ -286,26 +293,23 @@ Deno.serve(async (request) => {
         : [rootFolder];
 
     const itemRows = await serviceFetch<ItemRow[]>(
-      `/rest/v1/trove_items?select=id,folder_id,title,description,type,url,source_url,source_platform,shared_text,media,media_items,attachments,list_items,rich_text,created_at,updated_at&folder_id=in.${inList(folderIds)}&order=created_at.asc`,
+      `/rest/v1/trove_items?select=id,folder_id,title,description,type,url,source_url,source_platform,shared_text,media,media_items,attachments,list_items,rich_text,tags,created_at,updated_at&folder_id=in.${inList(folderIds)}&order=created_at.asc`,
       { method: "GET" },
     );
 
-    const tagsByItemId = new Map<string, TagOptionRow[]>();
-    if (itemRows.length > 0) {
-      const itemIds = itemRows.map((row) => row.id);
-      const assignments = await serviceFetch<TagAssignmentRow[]>(
-        `/rest/v1/trove_item_tag_assignments?select=item_id,trove_tag_options(id,name,color)&item_id=in.${inList(itemIds)}`,
+    const tagOptionsById = new Map<string, TagOptionRow>();
+    const tagOptionIds = Array.from(new Set(itemRows.flatMap((row) => row.tags ?? [])));
+    if (tagOptionIds.length > 0) {
+      const tagOptions = await serviceFetch<TagOptionRow[]>(
+        `/rest/v1/trove_tag_options?select=id,name,color&id=in.${inList(tagOptionIds)}`,
         { method: "GET" },
       );
-      for (const assignment of assignments) {
-        if (!assignment.trove_tag_options) continue;
-        const existing = tagsByItemId.get(assignment.item_id) ?? [];
-        existing.push(assignment.trove_tag_options);
-        tagsByItemId.set(assignment.item_id, existing);
+      for (const tagOption of tagOptions) {
+        tagOptionsById.set(tagOption.id, tagOption);
       }
     }
 
-    const items = await Promise.all(itemRows.map((row) => mapItem(row, tagsByItemId)));
+    const items = await Promise.all(itemRows.map((row) => mapItem(row, tagOptionsById)));
 
     return jsonResponse({
       folder: mapFolder(rootFolder),
