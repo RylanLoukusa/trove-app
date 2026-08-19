@@ -229,6 +229,13 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "A link token is required." }, 400);
     }
 
+    // token is a uuid column -- a malformed value would otherwise reach Postgres
+    // and come back as a raw type-coercion error, leaking implementation details
+    // to an anonymous caller. Treat it the same as "not found" instead.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+      return jsonResponse({ error: "This link is no longer available." }, 404);
+    }
+
     const links = await serviceFetch<LinkRow[]>(
       `/rest/v1/trove_folder_public_links?select=folder_id,scope,revoked_at&token=eq.${encodeURIComponent(token)}&limit=1`,
       { method: "GET" },

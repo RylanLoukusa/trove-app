@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Link2, Lock, Share2, UserPlus } from "lucide-react-native";
 import { useAuth } from "../../auth/AuthContext";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
@@ -49,6 +50,8 @@ import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ShareFolder">;
 
+type ShareOutcome = { error?: string; message?: string; title?: string };
+
 const AccessListSkeleton = () => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -81,11 +84,6 @@ type PillOption<T extends string> = {
   label: string;
   value: T;
 };
-
-const roleOptions: Array<PillOption<FolderShareRole>> = [
-  { label: "Can view", detail: "Read only", value: "viewer" },
-  { label: "Can edit", detail: "Add and update", value: "editor" },
-];
 
 const scopeOptions: Array<PillOption<FolderShareScope>> = [
   { label: "This folder", detail: "No children", value: "folder_only" },
@@ -181,6 +179,57 @@ const ChoicePills = <T extends string,>({
   );
 };
 
+const SavedCollaboratorRow = ({
+  collaborators,
+  disabled,
+  onPress,
+}: {
+  collaborators: SavedCollaborator[];
+  disabled: boolean;
+  onPress: (collaborator: SavedCollaborator) => void;
+}) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <>
+      <Text style={styles.label}>Saved collaborators</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.collaboratorRow}
+      >
+        {collaborators.map((collaborator) => (
+          <Pressable
+            key={collaborator.id}
+            disabled={disabled}
+            onPress={() => onPress(collaborator)}
+            style={({ pressed }) => [
+              styles.collaboratorChip,
+              pressed && styles.collaboratorChipPressed,
+              disabled && styles.disabledChip,
+            ]}
+          >
+            <View style={styles.collaboratorAvatar}>
+              <Text style={styles.avatarText}>{collaboratorInitials(collaborator)}</Text>
+            </View>
+            <View style={styles.collaboratorCopy}>
+              <Text numberOfLines={1} style={styles.collaboratorName}>
+                {collaboratorLabel(collaborator)}
+              </Text>
+              {!!collaborator.email && (
+                <Text numberOfLines={1} style={styles.collaboratorEmail}>
+                  {collaborator.email}
+                </Text>
+              )}
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </>
+  );
+};
+
 export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -189,9 +238,16 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const { folders, refreshFromRemote, syncFolderForSharing } = useTrove();
   const folder = getFolderById(folders, route.params.folderId);
 
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<FolderShareRole>("viewer");
-  const [scope, setScope] = useState<FolderShareScope>("folder_only");
+  const [collaboratorEmail, setCollaboratorEmail] = useState("");
+  const [collaboratorScope, setCollaboratorScope] = useState<FolderShareScope>("folder_only");
+  const [collaboratorError, setCollaboratorError] = useState<string | null>(null);
+  const [isCollaboratorSaving, setIsCollaboratorSaving] = useState(false);
+
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareScope, setShareScope] = useState<FolderShareScope>("folder_only");
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [isShareSaving, setIsShareSaving] = useState(false);
+
   const [accessRows, setAccessRows] = useState<FolderAccess[]>([]);
   const [collaborators, setCollaborators] = useState<SavedCollaborator[]>([]);
   const [invites, setInvites] = useState<FolderShareInvite[]>([]);
@@ -199,7 +255,6 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const [publicLinkScope, setPublicLinkScope] = useState<PublicLinkScope>("folder_only");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isPublicLinkSaving, setIsPublicLinkSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -277,131 +332,172 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     }
   }, [load, refreshFromRemote]);
 
-  const onSubmit = useCallback(async (): Promise<void> => {
-    if (!folder) return;
+  const performShareByEmail = useCallback(
+    async (role: FolderShareRole, rawEmail: string, scope: FolderShareScope): Promise<ShareOutcome> => {
+      if (!folder) return { error: "Folder not found." };
 
-    if (requiresProForSharing(isPro)) {
-      presentPaywall("sharing");
-      return;
-    }
-
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!emailLooksValid(trimmedEmail)) {
-      setError("Enter a valid email address.");
-      return;
-    }
-
-    const supabase = getSupabase();
-    if (!supabase || !session?.user) {
-      setError("Sign in with sync enabled to share folders.");
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    const syncResult = await syncFolderForSharing(folder.id);
-    if (!syncResult.ok) {
-      setIsSaving(false);
-      setError(syncResult.error ?? "Sync this folder before sharing it.");
-      return;
-    }
-
-    const result = await shareFolderByEmail(supabase, {
-      email: trimmedEmail,
-      folderId: folder.id,
-      role,
-      scope,
-    });
-
-    setIsSaving(false);
-
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-
-    setEmail("");
-    await refreshAfterMutation();
-
-    const didShareExistingUser = result.result === "share";
-    const successTitle = result.emailSent
-      ? didShareExistingUser
-        ? "Access email sent"
-        : "Invite sent"
-      : didShareExistingUser
-        ? "Access added"
-        : "Invite saved";
-    const successMessage = result.emailSent
-      ? didShareExistingUser
-        ? "This person now has access to the folder, and an email was sent."
-        : "The invite was saved and emailed."
-      : `${didShareExistingUser ? "This person now has access to the folder" : "The invite was saved"}, but the email could not be sent.${
-          result.emailError ? `\n\n${result.emailError}` : ""
-        }`;
-
-    Alert.alert(
-      successTitle,
-      successMessage,
-    );
-  }, [email, folder, isPro, presentPaywall, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing]);
-
-  const onShareCollaborator = useCallback(
-    async (collaborator: SavedCollaborator): Promise<void> => {
-      if (!folder) return;
-
-      if (requiresProForSharing(isPro)) {
-        presentPaywall("sharing");
-        return;
+      const trimmedEmail = rawEmail.trim().toLowerCase();
+      if (!emailLooksValid(trimmedEmail)) {
+        return { error: "Enter a valid email address." };
       }
 
       const supabase = getSupabase();
       if (!supabase || !session?.user) {
-        setError("Sign in with sync enabled to share folders.");
-        return;
+        return { error: "Sign in with sync enabled to share folders." };
       }
-
-      setIsSaving(true);
-      setError(null);
 
       const syncResult = await syncFolderForSharing(folder.id);
       if (!syncResult.ok) {
-        setIsSaving(false);
-        setError(syncResult.error ?? "Sync this folder before sharing it.");
-        return;
+        return { error: syncResult.error ?? "Sync this folder before sharing it." };
       }
 
-      const result = await shareFolderWithCollaborator(supabase, {
-        collaborator,
-        folderId: folder.id,
-        role,
-        scope,
-      });
-
-      setIsSaving(false);
-
+      const result = await shareFolderByEmail(supabase, { email: trimmedEmail, folderId: folder.id, role, scope });
       if (result.error) {
-        setError(result.error);
-        return;
+        return { error: result.error };
       }
 
-      await refreshAfterMutation();
+      const didShareExistingUser = result.result === "share";
+      return {
+        title: result.emailSent
+          ? didShareExistingUser
+            ? "Access email sent"
+            : "Invite sent"
+          : didShareExistingUser
+            ? "Access added"
+            : "Invite saved",
+        message: result.emailSent
+          ? didShareExistingUser
+            ? "This person now has access to the folder, and an email was sent."
+            : "The invite was saved and emailed."
+          : `${didShareExistingUser ? "This person now has access to the folder" : "The invite was saved"}, but the email could not be sent.${
+              result.emailError ? `\n\n${result.emailError}` : ""
+            }`,
+      };
+    },
+    [folder, session?.user, syncFolderForSharing],
+  );
 
-      Alert.alert(
-        result.emailSent ? "Access email sent" : "Access added",
-        result.emailSent
+  const performShareWithCollaborator = useCallback(
+    async (role: FolderShareRole, collaborator: SavedCollaborator, scope: FolderShareScope): Promise<ShareOutcome> => {
+      if (!folder) return { error: "Folder not found." };
+
+      const supabase = getSupabase();
+      if (!supabase || !session?.user) {
+        return { error: "Sign in with sync enabled to share folders." };
+      }
+
+      const syncResult = await syncFolderForSharing(folder.id);
+      if (!syncResult.ok) {
+        return { error: syncResult.error ?? "Sync this folder before sharing it." };
+      }
+
+      const result = await shareFolderWithCollaborator(supabase, { collaborator, folderId: folder.id, role, scope });
+      if (result.error) {
+        return { error: result.error };
+      }
+
+      return {
+        title: result.emailSent ? "Access email sent" : "Access added",
+        message: result.emailSent
           ? `${collaboratorLabel(collaborator)} now has access to the folder, and an email was sent.`
           : `${collaboratorLabel(collaborator)} now has access to the folder.${
               result.emailError ? `\n\n${result.emailError}` : ""
             }`,
-      );
+      };
     },
-    [folder, isPro, presentPaywall, refreshAfterMutation, role, scope, session?.user, syncFolderForSharing],
+    [folder, session?.user, syncFolderForSharing],
+  );
+
+  const onInviteCollaborator = useCallback(async (): Promise<void> => {
+    if (requiresProForSharing(isPro, "editor")) {
+      presentPaywall("sharing");
+      return;
+    }
+
+    setIsCollaboratorSaving(true);
+    setCollaboratorError(null);
+
+    const outcome = await performShareByEmail("editor", collaboratorEmail, collaboratorScope);
+    setIsCollaboratorSaving(false);
+
+    if (outcome.error) {
+      setCollaboratorError(outcome.error);
+      return;
+    }
+
+    setCollaboratorEmail("");
+    await refreshAfterMutation();
+    Alert.alert(outcome.title ?? "Invite sent", outcome.message ?? "");
+  }, [collaboratorEmail, collaboratorScope, isPro, performShareByEmail, presentPaywall, refreshAfterMutation]);
+
+  const onQuickInviteCollaborator = useCallback(
+    async (collaborator: SavedCollaborator): Promise<void> => {
+      if (requiresProForSharing(isPro, "editor")) {
+        presentPaywall("sharing");
+        return;
+      }
+
+      setIsCollaboratorSaving(true);
+      setCollaboratorError(null);
+
+      const outcome = await performShareWithCollaborator("editor", collaborator, collaboratorScope);
+      setIsCollaboratorSaving(false);
+
+      if (outcome.error) {
+        setCollaboratorError(outcome.error);
+        return;
+      }
+
+      await refreshAfterMutation();
+      Alert.alert(outcome.title ?? "Access added", outcome.message ?? "");
+    },
+    [collaboratorScope, isPro, performShareWithCollaborator, presentPaywall, refreshAfterMutation],
+  );
+
+  const onAddViewerByEmail = useCallback(async (): Promise<void> => {
+    setIsShareSaving(true);
+    setShareError(null);
+
+    const outcome = await performShareByEmail("viewer", shareEmail, shareScope);
+    setIsShareSaving(false);
+
+    if (outcome.error) {
+      setShareError(outcome.error);
+      return;
+    }
+
+    setShareEmail("");
+    await refreshAfterMutation();
+    Alert.alert(outcome.title ?? "Invite sent", outcome.message ?? "");
+  }, [performShareByEmail, refreshAfterMutation, shareEmail, shareScope]);
+
+  const onQuickAddViewer = useCallback(
+    async (collaborator: SavedCollaborator): Promise<void> => {
+      setIsShareSaving(true);
+      setShareError(null);
+
+      const outcome = await performShareWithCollaborator("viewer", collaborator, shareScope);
+      setIsShareSaving(false);
+
+      if (outcome.error) {
+        setShareError(outcome.error);
+        return;
+      }
+
+      await refreshAfterMutation();
+      Alert.alert(outcome.title ?? "Access added", outcome.message ?? "");
+    },
+    [performShareWithCollaborator, refreshAfterMutation, shareScope],
   );
 
   const onUpdateAccess = useCallback(
     async (access: FolderAccess, updates: { role?: FolderShareRole; scope?: FolderShareScope }): Promise<void> => {
       if (!access.shareId || access.kind !== "direct") return;
+
+      if (updates.role && requiresProForSharing(isPro, updates.role)) {
+        presentPaywall("sharing");
+        return;
+      }
 
       const supabase = getSupabase();
       if (!supabase) return;
@@ -414,7 +510,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
 
       await refreshAfterMutation();
     },
-    [refreshAfterMutation],
+    [isPro, presentPaywall, refreshAfterMutation],
   );
 
   const onRemoveAccess = useCallback(
@@ -485,40 +581,49 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     [],
   );
 
-  const onCreatePublicLink = useCallback(async (): Promise<void> => {
+  const onGetAndShareLink = useCallback(async (): Promise<void> => {
     if (!folder) return;
-
-    if (requiresProForSharing(isPro)) {
-      presentPaywall("sharing");
-      return;
-    }
 
     const supabase = getSupabase();
     if (!supabase || !session?.user) {
-      setError("Sign in with sync enabled to create a shareable link.");
+      setShareError("Sign in with sync enabled to create a shareable link.");
       return;
     }
 
     setIsPublicLinkSaving(true);
-    setError(null);
+    setShareError(null);
 
-    const syncResult = await syncFolderForSharing(folder.id);
-    if (!syncResult.ok) {
-      setIsPublicLinkSaving(false);
-      setError(syncResult.error ?? "Sync this folder before creating a link.");
-      return;
+    let link = publicLink;
+
+    if (!link) {
+      const syncResult = await syncFolderForSharing(folder.id);
+      if (!syncResult.ok) {
+        setIsPublicLinkSaving(false);
+        setShareError(syncResult.error ?? "Sync this folder before creating a link.");
+        return;
+      }
+
+      const result = await createPublicLink(supabase, folder.id, publicLinkScope);
+      if (result.error) {
+        setIsPublicLinkSaving(false);
+        setShareError(result.error);
+        return;
+      }
+
+      link = result.link;
+      setPublicLink(link);
     }
 
-    const result = await createPublicLink(supabase, folder.id, publicLinkScope);
     setIsPublicLinkSaving(false);
 
-    if (result.error) {
-      setError(result.error);
-      return;
+    if (link) {
+      const url = buildPublicFolderLink(link.token);
+      await Share.share({
+        message: `View "${folder.name}" in Trove: ${url}`,
+        url,
+      });
     }
-
-    setPublicLink(result.link);
-  }, [folder, isPro, presentPaywall, publicLinkScope, session?.user, syncFolderForSharing]);
+  }, [folder, publicLink, publicLinkScope, session?.user, syncFolderForSharing]);
 
   const onRevokePublicLink = useCallback((): void => {
     if (!publicLink) return;
@@ -554,15 +659,6 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
     );
   }, [publicLink]);
 
-  const onSharePublicLink = useCallback(async (): Promise<void> => {
-    if (!publicLink) return;
-    const link = buildPublicFolderLink(publicLink.token);
-    await Share.share({
-      message: `View "${folder?.name ?? "this folder"}" in Trove: ${link}`,
-      url: link,
-    });
-  }, [folder?.name, publicLink]);
-
   if (!folder) {
     return (
       <View style={styles.screen}>
@@ -596,74 +692,162 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
 
         {canManageAccess && (
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Share folder</Text>
-            {collaborators.length > 0 && (
-              <>
-                <Text style={styles.label}>Saved collaborators</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.collaboratorRow}
-                >
-                  {collaborators.map((collaborator) => (
-                    <Pressable
-                      key={collaborator.id}
-                      disabled={isSaving}
-                      onPress={() => {
-                        void onShareCollaborator(collaborator);
-                      }}
-                      style={({ pressed }) => [
-                        styles.collaboratorChip,
-                        pressed && styles.collaboratorChipPressed,
-                        isSaving && styles.disabledChip,
-                      ]}
-                    >
-                      <View style={styles.collaboratorAvatar}>
-                        <Text style={styles.avatarText}>{collaboratorInitials(collaborator)}</Text>
-                      </View>
-                      <View style={styles.collaboratorCopy}>
-                        <Text numberOfLines={1} style={styles.collaboratorName}>
-                          {collaboratorLabel(collaborator)}
-                        </Text>
-                        {!!collaborator.email && (
-                          <Text numberOfLines={1} style={styles.collaboratorEmail}>
-                            {collaborator.email}
-                          </Text>
-                        )}
-                      </View>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
+            {!isPro && (
+              <View style={styles.proCornerBadge}>
+                <Lock size={11} color={colors.surface} />
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
             )}
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderTitleRow}>
+                <UserPlus size={18} color={colors.accentDark} />
+                <Text style={styles.panelTitle}>Invite Collaborators</Text>
+              </View>
+            </View>
+            <Text style={styles.cardDescription}>
+              Invited collaborators can edit this folder together with you.
+            </Text>
 
-            <Text style={styles.label}>Invite by email</Text>
+            {isPro ? (
+              <>
+                {collaborators.length > 0 && (
+                  <SavedCollaboratorRow
+                    collaborators={collaborators}
+                    disabled={isCollaboratorSaving}
+                    onPress={(collaborator) => {
+                      void onQuickInviteCollaborator(collaborator);
+                    }}
+                  />
+                )}
+
+                <Text style={styles.label}>Invite by email</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  onChangeText={setCollaboratorEmail}
+                  placeholder="name@example.com"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  testID="collaboratorEmailInput"
+                  value={collaboratorEmail}
+                />
+
+                <Text style={styles.label}>Scope</Text>
+                <ChoicePills options={scopeOptions} selected={collaboratorScope} onSelect={setCollaboratorScope} />
+
+                {!!collaboratorError && <Text style={styles.error}>{collaboratorError}</Text>}
+                <AppButton
+                  disabled={isCollaboratorSaving}
+                  label={isCollaboratorSaving ? "Inviting..." : "Invite"}
+                  onPress={() => {
+                    void onInviteCollaborator();
+                  }}
+                  style={styles.submitButton}
+                />
+              </>
+            ) : (
+              <AppButton
+                label="Upgrade to Invite Collaborators"
+                onPress={() => presentPaywall("sharing")}
+                style={styles.submitButton}
+              />
+            )}
+          </View>
+        )}
+
+        {canManageAccess && (
+          <View style={styles.panel}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderTitleRow}>
+                <Share2 size={18} color={colors.accentDark} />
+                <Text style={styles.panelTitle}>Invite Viewers</Text>
+              </View>
+            </View>
+
+            <Text style={styles.subsectionLabel}>Add a person</Text>
+            <Text style={styles.cardDescription}>
+              Add someone by email to let them view this folder for free. They'll need a Trove account to accept.
+            </Text>
+            {collaborators.length > 0 && (
+              <SavedCollaboratorRow
+                collaborators={collaborators}
+                disabled={isShareSaving}
+                onPress={(collaborator) => {
+                  void onQuickAddViewer(collaborator);
+                }}
+              />
+            )}
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
-              onChangeText={setEmail}
+              onChangeText={setShareEmail}
               placeholder="name@example.com"
               placeholderTextColor={colors.muted}
               style={styles.input}
-              value={email}
+              testID="shareEmailInput"
+              value={shareEmail}
             />
 
-            <Text style={styles.label}>Permission</Text>
-            <ChoicePills options={roleOptions} selected={role} onSelect={setRole} />
-
             <Text style={styles.label}>Scope</Text>
-            <ChoicePills options={scopeOptions} selected={scope} onSelect={setScope} />
+            <ChoicePills options={scopeOptions} selected={shareScope} onSelect={setShareScope} />
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            {!!shareError && <Text style={styles.error}>{shareError}</Text>}
             <AppButton
-              disabled={isSaving}
-              label={isSaving ? "Saving..." : "Share Folder"}
+              disabled={isShareSaving}
+              variant="secondary"
+              label={isShareSaving ? "Adding..." : "Add"}
               onPress={() => {
-                void onSubmit();
+                void onAddViewerByEmail();
               }}
               style={styles.submitButton}
             />
+
+            <View style={styles.cardDivider} />
+
+            <Text style={styles.subsectionLabel}>Get a link</Text>
+            <Text style={styles.cardDescription}>
+              Anyone with this link can see this folder and its items, even without the Trove app.
+            </Text>
+            {publicLink ? (
+              <>
+                <Text style={styles.label}>Scope</Text>
+                <Text style={styles.accessMeta}>{scopeLabel(publicLink.scope)}</Text>
+                <View style={styles.inlineActions}>
+                  <AppButton
+                    disabled={isPublicLinkSaving}
+                    variant="secondary"
+                    label={isPublicLinkSaving ? "Sharing..." : "Share Link"}
+                    onPress={() => {
+                      void onGetAndShareLink();
+                    }}
+                    style={styles.publicLinkButton}
+                  />
+                  <Pressable
+                    disabled={isPublicLinkSaving}
+                    onPress={onRevokePublicLink}
+                    style={({ pressed }) => [styles.smallButton, styles.dangerButton, pressed && styles.smallButtonPressed]}
+                  >
+                    <Text style={[styles.smallButtonText, styles.dangerButtonText]}>Revoke</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Scope</Text>
+                <ChoicePills options={scopeOptions} selected={publicLinkScope} onSelect={setPublicLinkScope} />
+                <AppButton
+                  disabled={isPublicLinkSaving}
+                  variant="secondary"
+                  label={isPublicLinkSaving ? "Getting link..." : "Get Link"}
+                  onPress={() => {
+                    void onGetAndShareLink();
+                  }}
+                  style={styles.submitButton}
+                />
+              </>
+            )}
           </View>
         )}
         {!canManageAccess && !!error && <Text style={styles.error}>{error}</Text>}
@@ -783,50 +967,6 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
             </View>
               ))
             )}
-
-            <Text style={styles.section}>Shareable link</Text>
-            <View style={styles.panel}>
-              {publicLink ? (
-                <>
-                  <Text style={styles.label}>Anyone with this link can view</Text>
-                  <Text style={styles.accessMeta}>{scopeLabel(publicLink.scope)}</Text>
-                  <View style={styles.inlineActions}>
-                    <Pressable
-                      disabled={isPublicLinkSaving}
-                      onPress={() => {
-                        void onSharePublicLink();
-                      }}
-                      style={({ pressed }) => [styles.smallButton, pressed && styles.smallButtonPressed]}
-                    >
-                      <Text style={styles.smallButtonText}>Share link</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={isPublicLinkSaving}
-                      onPress={onRevokePublicLink}
-                      style={({ pressed }) => [styles.smallButton, styles.dangerButton, pressed && styles.smallButtonPressed]}
-                    >
-                      <Text style={[styles.smallButtonText, styles.dangerButtonText]}>Revoke</Text>
-                    </Pressable>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.label}>
-                    Create a link that lets anyone view this folder, no account required.
-                  </Text>
-                  <Text style={styles.label}>Scope</Text>
-                  <ChoicePills options={scopeOptions} selected={publicLinkScope} onSelect={setPublicLinkScope} />
-                  <AppButton
-                    disabled={isPublicLinkSaving}
-                    label={isPublicLinkSaving ? "Creating..." : "Create link"}
-                    onPress={() => {
-                      void onCreatePublicLink();
-                    }}
-                    style={styles.submitButton}
-                  />
-                </>
-              )}
-            </View>
           </>
         )}
       </ScrollView>

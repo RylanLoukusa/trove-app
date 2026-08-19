@@ -87,6 +87,186 @@ describe("PublicFolderPreviewScreen", () => {
     expect(mockFetchPublicFolder).not.toHaveBeenCalled();
   });
 
+  it("renders a media gallery for items with multiple mediaItems (not just a single mediaUrl)", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Trip" },
+        folders: [{ id: "folder-1", name: "Trip" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Beach photos",
+            type: "media",
+            mediaItems: [
+              { id: "m1", mediaType: "image", url: "https://example.com/1.jpg" },
+              { id: "m2", mediaType: "video", url: "https://example.com/2.mp4" },
+            ],
+            attachments: [],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Beach photos")).toBeTruthy();
+    expect(screen.getByTestId("itemMediaGallery")).toBeTruthy();
+    expect(screen.getByTestId("mediaTile-m1")).toBeTruthy();
+    expect(screen.getByTestId("mediaTile-m2")).toBeTruthy();
+    // m1 is an image, so it should not show the video-locked placeholder.
+    expect(screen.getAllByText(/Open Trove to/)).toHaveLength(1);
+  });
+
+  it("shows a locked placeholder instead of playing video attachments", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Clips" },
+        folders: [{ id: "folder-1", name: "Clips" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Screen recording",
+            type: "text",
+            mediaItems: [],
+            attachments: [{ id: "a1", uri: "https://example.com/clip.mp4", mediaType: "video" }],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Screen recording")).toBeTruthy();
+    expect(screen.getByText(/Open Trove to/)).toBeTruthy();
+  });
+
+  it("renders subfolders as folder cards with an item count, not a plain chip", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Trip", icon: "🧳" },
+        folders: [
+          { id: "folder-1", name: "Trip", icon: "🧳" },
+          { id: "folder-2", name: "Packing", icon: "🎒", parentFolderId: "folder-1" },
+        ],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-2",
+            title: "Passport",
+            type: "text",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "item-2",
+            folderId: "folder-2",
+            title: "Chargers",
+            type: "text",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_and_subfolders" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Packing")).toBeTruthy();
+    expect(screen.getByText("2 saved here")).toBeTruthy();
+    expect(screen.getByText("Passport")).toBeTruthy();
+    expect(screen.getByText("Chargers")).toBeTruthy();
+  });
+
+  it("renders indented checklist items with the right marker per kind", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Packing" },
+        folders: [{ id: "folder-1", name: "Packing" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Packing list",
+            type: "list",
+            mediaItems: [],
+            attachments: [],
+            listItems: [
+              { id: "l1", kind: "check", text: "Passport", checked: true, indentLevel: 0 },
+              { id: "l2", kind: "bullet", text: "Chargers", checked: false, indentLevel: 1 },
+            ],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Passport")).toBeTruthy();
+    expect(screen.getByText("Chargers")).toBeTruthy();
+    expect(screen.getByText("☑")).toBeTruthy();
+  });
+
+  it("falls back to attachments only when there is no stored media", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Notes" },
+        folders: [{ id: "folder-1", name: "Notes" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Screenshot",
+            type: "text",
+            mediaItems: [],
+            attachments: [{ id: "a1", uri: "https://example.com/a1.jpg", mediaType: "image" }],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "item-2",
+            folderId: "folder-1",
+            title: "Has both",
+            type: "image",
+            mediaUrl: "https://example.com/stored.jpg",
+            mediaItems: [],
+            attachments: [{ id: "a2", uri: "https://example.com/a2.jpg", mediaType: "image" }],
+            listItems: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    await waitFor(() => expect(screen.getByText("Screenshot")).toBeTruthy());
+    expect(screen.getAllByTestId("itemAttachments")).toHaveLength(1);
+    expect(screen.getByTestId("mediaTile-item-2")).toBeTruthy();
+  });
+
   it("shows an empty state for a folder with no items", async () => {
     mockFetchPublicFolder.mockResolvedValue({
       data: {

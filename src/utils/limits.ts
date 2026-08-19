@@ -4,7 +4,11 @@ export type PaywallTrigger = "sync" | "sharing" | "video_upload" | "video_playba
 
 export const requiresProForSync = (isPro: boolean): boolean => !isPro;
 
-export const requiresProForSharing = (isPro: boolean): boolean => !isPro;
+// Viewer access -- via a public link or an invited collaborator -- is free.
+// Only granting editor access (the person can actually modify the folder)
+// requires Pro, mirroring requiresProForEditorAccept on the accepting side.
+export const requiresProForSharing = (isPro: boolean, role: "viewer" | "editor"): boolean =>
+  role === "editor" && !isPro;
 
 export const requiresProForVideoUpload = (isPro: boolean): boolean => !isPro;
 

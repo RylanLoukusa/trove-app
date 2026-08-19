@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { radius, spacing, ThemeColors } from "../../theme/theme";
+import { spacing, ThemeColors } from "../../theme/theme";
 
 export const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -44,64 +44,154 @@ export const createStyles = (colors: ThemeColors) =>
       marginBottom: spacing.sm,
       marginTop: spacing.lg,
     },
+    // Item card visuals mirror FolderScreen's fullItem* styles (src/screens/FolderScreen/styles.ts)
+    // so a shared folder looks the same here as it does inside the app.
     itemCard: {
       backgroundColor: colors.surface,
       borderColor: colors.border,
-      borderRadius: radius.md,
+      borderRadius: 18,
       borderWidth: 1,
-      marginBottom: spacing.sm,
-      overflow: "hidden",
+      marginTop: spacing.md,
       padding: spacing.md,
-    },
-    itemImage: {
-      backgroundColor: colors.background,
-      borderRadius: radius.sm,
-      height: 160,
-      marginBottom: spacing.sm,
-      width: "100%",
     },
     itemTitle: {
       color: colors.ink,
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    itemLink: {
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      marginTop: spacing.md,
+      padding: spacing.md,
+    },
+    itemLinkPressed: {
+      opacity: 0.72,
+    },
+    itemLinkText: {
+      color: colors.blue,
+      fontWeight: "800",
+    },
+    itemMedia: {
+      marginTop: spacing.md,
+    },
+    itemMediaRow: {
+      gap: 10,
+      paddingRight: spacing.md,
+    },
+    // 300x300 matches FolderScreen's MediaCollectionDisplay usage (itemHeight/itemWidth={300}).
+    itemMediaTile: {
+      borderRadius: 8,
+      height: 300,
+      overflow: "hidden",
+      width: 300,
     },
     itemDescription: {
-      color: colors.muted,
-      fontSize: 14,
-      marginTop: spacing.xs,
+      color: colors.ink,
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: spacing.md,
     },
-    itemUrl: {
-      color: colors.accentDark,
-      fontSize: 13,
-      marginTop: spacing.xs,
+    itemList: {
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      marginTop: spacing.md,
+      padding: spacing.sm,
     },
     listRow: {
+      alignItems: "center",
       flexDirection: "row",
-      marginTop: spacing.xs,
+      gap: spacing.sm,
+      paddingVertical: 4,
+    },
+    listMarker: {
+      color: colors.accentDark,
+      fontSize: 24,
+      fontWeight: "900",
+      textAlign: "center",
+      width: 30,
+    },
+    listBullet: {
+      fontSize: 16,
     },
     listRowText: {
       color: colors.ink,
-      fontSize: 14,
-      marginLeft: spacing.xs,
+      flex: 1,
+      fontSize: 15,
+      lineHeight: 22,
     },
     listRowTextChecked: {
       color: colors.muted,
       textDecorationLine: "line-through",
     },
-    folderChip: {
-      alignSelf: "flex-start",
-      backgroundColor: colors.background,
-      borderColor: colors.border,
-      borderRadius: radius.sm,
-      borderWidth: 1,
-      marginBottom: spacing.sm,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs / 2,
+    itemAttachments: {
+      gap: spacing.sm,
+      marginTop: spacing.md,
     },
-    folderChipText: {
-      color: colors.muted,
+    // 300 matches FolderScreen's fullItemAttachmentImage/fullItemAttachmentVideo height.
+    itemAttachmentImage: {
+      borderRadius: 14,
+      height: 300,
+      width: "100%",
+    },
+    itemAttachmentVideo: {
+      borderRadius: 14,
+      height: 300,
+      width: "100%",
+    },
+    // No app installed to actually play video for a public link visitor, so video tiles
+    // show a locked placeholder instead -- same visual language as MediaCollectionDisplay's
+    // lockedTile (src/components/MediaCollectionDisplay.tsx), reused here for consistency.
+    videoLockedTile: {
+      alignItems: "center",
+      backgroundColor: "#000",
+      borderRadius: 8,
+      gap: 6,
+      justifyContent: "center",
+      padding: spacing.sm,
+    },
+    videoLockedText: {
+      color: "#FFF",
       fontSize: 12,
       fontWeight: "700",
+      textAlign: "center",
+    },
+    // Matches src/components/FolderCard.tsx's visual style, minus the press/chevron
+    // affordances -- items here are already listed inline below, not navigated into.
+    folderCard: {
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      flexDirection: "row",
+      marginTop: spacing.lg,
+      padding: spacing.md,
+      shadowColor: "#000",
+      shadowOpacity: 0.05,
+      shadowRadius: 12,
+    },
+    folderCardIcon: {
+      alignItems: "center",
+      borderRadius: 14,
+      height: 46,
+      justifyContent: "center",
+      width: 46,
+    },
+    folderCardEmoji: {
+      fontSize: 22,
+    },
+    folderCardContent: {
+      flex: 1,
+      marginLeft: spacing.md,
+    },
+    folderCardName: {
+      color: colors.ink,
+      fontSize: 17,
+      fontWeight: "800",
+    },
+    folderCardMeta: {
+      color: colors.muted,
+      fontSize: 13,
+      marginTop: 2,
     },
     error: {
       color: colors.danger,

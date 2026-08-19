@@ -1,35 +1,143 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Lock } from "lucide-react-native";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { EmptyState } from "../../components/EmptyState";
-import { fetchPublicFolder, PublicFolderData, PublicFolderItem } from "../../collaboration/folderPublicLinks";
+import { MediaImage } from "../../components/MediaImage";
+import {
+  fetchPublicFolder,
+  PublicFolderData,
+  PublicFolderItem,
+  PublicFolderMediaItem,
+  PublicFolderSummary,
+} from "../../collaboration/folderPublicLinks";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { bulletGlyphForIndent } from "../../utils/itemTypes";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PublicFolderPreview">;
 
-const ItemCard = ({ item, styles }: { item: PublicFolderItem; styles: ReturnType<typeof createStyles> }) => (
-  <View style={styles.itemCard}>
-    {!!item.mediaUrl && <Image source={{ uri: item.mediaUrl }} style={styles.itemImage} resizeMode="cover" />}
-    <Text style={styles.itemTitle}>{item.title}</Text>
-    {!!item.description && <Text style={styles.itemDescription}>{item.description}</Text>}
-    {!!item.sharedText && !item.description && <Text style={styles.itemDescription}>{item.sharedText}</Text>}
-    {!!item.url && (
-      <Text numberOfLines={1} style={styles.itemUrl}>
-        {item.url}
-      </Text>
-    )}
-    {item.listItems.map((listItem) => (
-      <View key={listItem.id} style={styles.listRow}>
-        <Text style={styles.listRowText}>{listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : "•"}</Text>
-        <Text style={[styles.listRowText, listItem.checked && styles.listRowTextChecked]}>{listItem.text}</Text>
-      </View>
-    ))}
+// Mirrors resolveDisplayItems in src/components/MediaCollectionDisplay.tsx, except the URLs
+// here are already-signed (from get-public-folder) rather than storage paths that need
+// client-side signing -- this screen has no Supabase session to sign anything with.
+const resolveDisplayItems = (item: PublicFolderItem): PublicFolderMediaItem[] => {
+  if (item.mediaItems.length) return item.mediaItems;
+  if (item.mediaUrl) return [{ id: item.id, mediaType: "image", url: item.mediaUrl, thumbnailUrl: item.thumbnailUrl }];
+  return [];
+};
+
+const VideoLockedTile = ({ styles, style }: { styles: ReturnType<typeof createStyles>; style: object }) => (
+  <View style={[styles.videoLockedTile, style]}>
+    <Lock color="#FFF" size={22} />
+    <Text style={styles.videoLockedText}>Open Trove to{"\n"}watch this video</Text>
   </View>
 );
+
+const PublicFolderCard = ({
+  folder,
+  itemCount,
+  styles,
+}: {
+  folder: PublicFolderSummary;
+  itemCount: number;
+  styles: ReturnType<typeof createStyles>;
+}) => {
+  const colors = useThemeColors();
+  return (
+    <View style={styles.folderCard}>
+      <View style={[styles.folderCardIcon, { backgroundColor: folder.color ?? colors.border }]}>
+        <Text style={styles.folderCardEmoji}>{folder.icon ?? "📁"}</Text>
+      </View>
+      <View style={styles.folderCardContent}>
+        <Text style={styles.folderCardName} numberOfLines={1}>
+          {folder.name}
+        </Text>
+        <Text style={styles.folderCardMeta}>{itemCount} saved here</Text>
+      </View>
+    </View>
+  );
+};
+
+const ItemCard = ({ item, styles }: { item: PublicFolderItem; styles: ReturnType<typeof createStyles> }) => {
+  const displayItems = resolveDisplayItems(item);
+  const hasStoredMedia = displayItems.length > 0;
+  const shouldShowAttachments = item.attachments.length > 0 && !hasStoredMedia;
+
+  return (
+    <View style={styles.itemCard}>
+      <Text style={styles.itemTitle} numberOfLines={2}>
+        {item.title}
+      </Text>
+
+      {!!item.url && (
+        <Pressable
+          onPress={() => void Linking.openURL(item.url!)}
+          style={({ pressed }) => [styles.itemLink, pressed && styles.itemLinkPressed]}
+        >
+          <Text numberOfLines={2} style={styles.itemLinkText}>
+            {item.url}
+          </Text>
+        </Pressable>
+      )}
+
+      {hasStoredMedia && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.itemMediaRow}
+          style={styles.itemMedia}
+          testID="itemMediaGallery"
+        >
+          {displayItems.map((mediaItem) => (
+            <View key={mediaItem.id} testID={`mediaTile-${mediaItem.id}`}>
+              {mediaItem.mediaType === "video" ? (
+                <VideoLockedTile styles={styles} style={styles.itemMediaTile} />
+              ) : mediaItem.url ? (
+                <MediaImage source={{ uri: mediaItem.url }} style={styles.itemMediaTile} />
+              ) : null}
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {!!item.description && <Text style={styles.itemDescription}>{item.description}</Text>}
+      {!!item.sharedText && !item.description && <Text style={styles.itemDescription}>{item.sharedText}</Text>}
+
+      {item.type === "list" && item.listItems.length > 0 && (
+        <View style={styles.itemList}>
+          {item.listItems.map((listItem) => (
+            <View
+              key={listItem.id}
+              style={[styles.listRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * 24 }]}
+            >
+              {listItem.kind === "check" ? (
+                <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
+              ) : (
+                <Text style={[styles.listMarker, styles.listBullet]}>{bulletGlyphForIndent(listItem.indentLevel)}</Text>
+              )}
+              <Text style={[styles.listRowText, listItem.checked && styles.listRowTextChecked]}>{listItem.text}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {shouldShowAttachments && (
+        <View style={styles.itemAttachments} testID="itemAttachments">
+          {item.attachments.map((attachment) =>
+            attachment.mediaType === "image" ? (
+              <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.itemAttachmentImage} />
+            ) : (
+              <VideoLockedTile key={attachment.id} styles={styles} style={styles.itemAttachmentVideo} />
+            ),
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
 
 export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
@@ -120,11 +228,7 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
           return (
             <View key={folder.id}>
               {folder.id !== data.folder.id && (
-                <View style={styles.folderChip}>
-                  <Text style={styles.folderChipText}>
-                    {folder.icon ?? "📁"} {folder.name}
-                  </Text>
-                </View>
+                <PublicFolderCard folder={folder} itemCount={folderItems.length} styles={styles} />
               )}
               {folderItems.length === 0 ? (
                 folder.id === data.folder.id && <EmptyState title="No items yet" message="This folder is empty." />

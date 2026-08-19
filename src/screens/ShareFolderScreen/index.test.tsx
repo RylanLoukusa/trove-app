@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert } from "react-native";
+import { Alert, Share } from "react-native";
 import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
@@ -13,6 +13,7 @@ import {
   removeFolderShare,
   revokeFolderInvite,
   shareFolderByEmail,
+  updateFolderShare,
 } from "../../collaboration/folderSharing";
 import {
   createPublicLink,
@@ -66,6 +67,7 @@ const mockLoadSavedCollaborators = loadSavedCollaborators as jest.Mock;
 const mockShareFolderByEmail = shareFolderByEmail as jest.Mock;
 const mockRemoveFolderShare = removeFolderShare as jest.Mock;
 const mockRevokeFolderInvite = revokeFolderInvite as jest.Mock;
+const mockUpdateFolderShare = updateFolderShare as jest.Mock;
 const mockLoadPublicLinkStatus = loadPublicLinkStatus as jest.Mock;
 const mockCreatePublicLink = createPublicLink as jest.Mock;
 const mockRevokePublicLink = revokePublicLink as jest.Mock;
@@ -89,14 +91,19 @@ const navigation = {
 const session = { user: { id: "owner-1", email: "owner@b.com", app_metadata: {} } } as unknown as Session;
 const syncFolderForSharing = jest.fn();
 const refreshFromRemote = jest.fn();
+const presentPaywall = jest.fn();
 
-const renderShareFolderScreen = async (folders: Folder[], folderId = "recipes") => {
+const renderShareFolderScreen = async (
+  folders: Folder[],
+  folderId = "recipes",
+  overrides: { isPro?: boolean } = {},
+) => {
   mockUseAuth.mockReturnValue({ session });
   mockUseTrove.mockReturnValue({ folders, refreshFromRemote, syncFolderForSharing });
   mockUseEntitlement.mockReturnValue({
-    isPro: true,
+    isPro: overrides.isPro ?? true,
     isLoading: false,
-    presentPaywall: jest.fn(),
+    presentPaywall,
     restorePurchases: jest.fn(),
     setDevIsPro: jest.fn(),
   });
@@ -144,34 +151,102 @@ describe("ShareFolderScreen", () => {
     expect(screen.getByText("pending@b.com")).toBeTruthy();
   });
 
-  it("shares the folder with an email after syncing it", async () => {
+  it("shows a locked upsell instead of the invite form when not Pro", async () => {
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: false });
+    await waitFor(() => expect(mockLoadFolderSharing).toHaveBeenCalled());
+
+    expect(screen.getByText("Upgrade to Invite Collaborators")).toBeTruthy();
+    expect(screen.queryByTestId("collaboratorEmailInput")).toBeNull();
+    expect(screen.getByText("PRO")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Upgrade to Invite Collaborators"));
+    expect(presentPaywall).toHaveBeenCalledWith("sharing");
+  });
+
+  it("invites a collaborator as editor when Pro", async () => {
     syncFolderForSharing.mockResolvedValue({ ok: true });
     mockShareFolderByEmail.mockResolvedValue({ result: "invite", emailSent: true });
 
-    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })]);
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: true });
     await waitFor(() => expect(mockLoadFolderSharing).toHaveBeenCalled());
 
-    await fireEvent.changeText(screen.getByPlaceholderText("name@example.com"), "friend@b.com");
-    await fireEvent.press(screen.getByText("Share Folder"));
+    expect(screen.queryByText("PRO")).toBeNull();
+
+    await fireEvent.changeText(screen.getByTestId("collaboratorEmailInput"), "friend@b.com");
+    await fireEvent.press(screen.getByText("Invite"));
 
     await waitFor(() => expect(mockShareFolderByEmail).toHaveBeenCalled());
     expect(syncFolderForSharing).toHaveBeenCalledWith("recipes");
     expect(mockShareFolderByEmail).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ email: "friend@b.com", folderId: "recipes", role: "viewer", scope: "folder_only" }),
+      expect.objectContaining({ email: "friend@b.com", folderId: "recipes", role: "editor", scope: "folder_only" }),
     );
+    expect(presentPaywall).not.toHaveBeenCalled();
   });
 
-  it("rejects an invalid email without syncing or calling the API", async () => {
-    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })]);
+  it("adds a person as a free viewer from the Invite Viewers section without Pro", async () => {
+    syncFolderForSharing.mockResolvedValue({ ok: true });
+    mockShareFolderByEmail.mockResolvedValue({ result: "invite", emailSent: true });
+
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: false });
     await waitFor(() => expect(mockLoadFolderSharing).toHaveBeenCalled());
 
-    await fireEvent.changeText(screen.getByPlaceholderText("name@example.com"), "not-an-email");
-    await fireEvent.press(screen.getByText("Share Folder"));
+    await fireEvent.changeText(screen.getByTestId("shareEmailInput"), "friend@b.com");
+    await fireEvent.press(screen.getByText("Add"));
+
+    await waitFor(() => expect(mockShareFolderByEmail).toHaveBeenCalled());
+    expect(mockShareFolderByEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ email: "friend@b.com", folderId: "recipes", role: "viewer" }),
+    );
+    expect(presentPaywall).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid email in the Invite Viewers section without syncing or calling the API", async () => {
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: false });
+    await waitFor(() => expect(mockLoadFolderSharing).toHaveBeenCalled());
+
+    await fireEvent.changeText(screen.getByTestId("shareEmailInput"), "not-an-email");
+    await fireEvent.press(screen.getByText("Add"));
 
     expect(screen.getByText("Enter a valid email address.")).toBeTruthy();
     expect(syncFolderForSharing).not.toHaveBeenCalled();
     expect(mockShareFolderByEmail).not.toHaveBeenCalled();
+  });
+
+  it("gates upgrading an existing viewer to editor behind Pro", async () => {
+    mockLoadFolderSharing.mockResolvedValue({
+      access: [
+        { id: "a2", userId: "friend-1", kind: "direct", role: "viewer", scope: "folder_only", shareId: "share-1", displayName: "Friend Person" },
+      ],
+      invites: [],
+    });
+
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: false });
+    await waitFor(() => expect(screen.getByText("Friend Person")).toBeTruthy());
+
+    await fireEvent.press(screen.getByText("Make editor"));
+
+    expect(presentPaywall).toHaveBeenCalledWith("sharing");
+    expect(mockUpdateFolderShare).not.toHaveBeenCalled();
+  });
+
+  it("allows upgrading an existing viewer to editor when Pro", async () => {
+    mockLoadFolderSharing.mockResolvedValue({
+      access: [
+        { id: "a2", userId: "friend-1", kind: "direct", role: "viewer", scope: "folder_only", shareId: "share-1", displayName: "Friend Person" },
+      ],
+      invites: [],
+    });
+    mockUpdateFolderShare.mockResolvedValue({});
+
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: true });
+    await waitFor(() => expect(screen.getByText("Friend Person")).toBeTruthy());
+
+    await fireEvent.press(screen.getByText("Make editor"));
+
+    expect(presentPaywall).not.toHaveBeenCalled();
+    expect(mockUpdateFolderShare).toHaveBeenCalledWith(expect.anything(), "share-1", { role: "editor" });
   });
 
   it("removes a collaborator's access after confirming", async () => {
@@ -220,7 +295,8 @@ describe("ShareFolderScreen", () => {
     expect(mockRevokeFolderInvite).toHaveBeenCalledWith(expect.anything(), "i1");
   });
 
-  it("creates a public link after syncing the folder", async () => {
+  it("creates and shares a public link after syncing the folder, with no Pro gate", async () => {
+    const shareSpy = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
     syncFolderForSharing.mockResolvedValue({ ok: true });
     mockCreatePublicLink.mockResolvedValue({
       link: {
@@ -233,15 +309,21 @@ describe("ShareFolderScreen", () => {
       },
     });
 
-    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })]);
+    await renderShareFolderScreen([makeFolder({ id: "recipes", name: "Recipes" })], "recipes", { isPro: false });
     await waitFor(() => expect(mockLoadPublicLinkStatus).toHaveBeenCalled());
 
-    await fireEvent.press(screen.getByText("Create link"));
+    await fireEvent.press(screen.getByText("Get Link"));
 
     await waitFor(() => expect(mockCreatePublicLink).toHaveBeenCalled());
     expect(syncFolderForSharing).toHaveBeenCalledWith("recipes");
     expect(mockCreatePublicLink).toHaveBeenCalledWith(expect.anything(), "recipes", "folder_only");
+    await waitFor(() =>
+      expect(shareSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ url: "https://trovecollections.app/shared/token" }),
+      ),
+    );
     expect(await screen.findByText("Revoke")).toBeTruthy();
+    shareSpy.mockRestore();
   });
 
   it("revokes an active public link after confirming", async () => {
@@ -269,15 +351,16 @@ describe("ShareFolderScreen", () => {
     await fireEvent.press(screen.getByText("Revoke"));
 
     expect(mockRevokePublicLink).toHaveBeenCalledWith(expect.anything(), "link-1");
-    await waitFor(() => expect(screen.getByText("Create link")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Get Link")).toBeTruthy());
   });
 
-  it("hides the share panel for non-owner viewers", async () => {
+  it("hides both share sections for non-owner viewers", async () => {
     await renderShareFolderScreen([
       makeFolder({ id: "recipes", name: "Recipes", accessRole: "viewer" }),
     ]);
     await waitFor(() => expect(mockLoadFolderSharing).toHaveBeenCalled());
 
-    expect(screen.queryByText("Share Folder")).toBeNull();
+    expect(screen.queryByText("Invite Collaborators")).toBeNull();
+    expect(screen.queryByText("Invite Viewers")).toBeNull();
   });
 });

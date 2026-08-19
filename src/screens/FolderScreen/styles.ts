@@ -53,20 +53,6 @@ export const createStyles = (colors: ThemeColors) =>
       opacity: 0.72,
       transform: [{ scale: 0.96 }],
     },
-    headerIconButtonWrapper: {
-      position: "relative",
-    },
-    headerIconLockBadge: {
-      alignItems: "center",
-      backgroundColor: colors.ink,
-      borderRadius: 999,
-      height: 18,
-      justifyContent: "center",
-      position: "absolute",
-      right: -4,
-      top: -4,
-      width: 18,
-    },
     purpose: {
       color: colors.muted,
       fontSize: 15,
