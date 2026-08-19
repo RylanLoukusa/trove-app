@@ -2,7 +2,9 @@
 // No Authorization header is required or checked — the token itself is the
 // credential. Every read here uses the service role (bypassing RLS on purpose)
 // but only ever returns an explicit, read-only field whitelist: never owner_id,
-// notes, connections, or tag assignments.
+// notes, or connections. Tag names/colors are included (read-only) since the
+// owner's collaborators/viewers already see them; item notes/connections stay
+// excluded as they can reference private context outside the shared scope.
 
 type LinkScope = "folder_only" | "folder_and_subfolders";
 
@@ -52,6 +54,10 @@ type ItemRow = {
   updated_at: string;
   url: string | null;
 };
+
+type TagOptionRow = { color: string | null; id: string; name: string };
+
+type TagAssignmentRow = { item_id: string; trove_tag_options: TagOptionRow | null };
 
 type RequestBody = { token?: string };
 
@@ -164,7 +170,7 @@ const mapMediaItems = async (
   );
 };
 
-const mapItem = async (row: ItemRow) => {
+const mapItem = async (row: ItemRow, tagsByItemId: Map<string, TagOptionRow[]>) => {
   const { mediaUrl, thumbnailUrl } = await mapMedia(row.media);
   const mediaItems = await mapMediaItems(row.media_items);
 
@@ -192,6 +198,7 @@ const mapItem = async (row: ItemRow) => {
     sharedText: row.shared_text,
     sourcePlatform: row.source_platform,
     sourceUrl: row.source_url,
+    tags: (tagsByItemId.get(row.id) ?? []).map((tag) => ({ id: tag.id, name: tag.name, color: tag.color })),
     thumbnailUrl,
     title: row.title,
     type: row.type,
@@ -283,7 +290,22 @@ Deno.serve(async (request) => {
       { method: "GET" },
     );
 
-    const items = await Promise.all(itemRows.map(mapItem));
+    const tagsByItemId = new Map<string, TagOptionRow[]>();
+    if (itemRows.length > 0) {
+      const itemIds = itemRows.map((row) => row.id);
+      const assignments = await serviceFetch<TagAssignmentRow[]>(
+        `/rest/v1/trove_item_tag_assignments?select=item_id,trove_tag_options(id,name,color)&item_id=in.${inList(itemIds)}`,
+        { method: "GET" },
+      );
+      for (const assignment of assignments) {
+        if (!assignment.trove_tag_options) continue;
+        const existing = tagsByItemId.get(assignment.item_id) ?? [];
+        existing.push(assignment.trove_tag_options);
+        tagsByItemId.set(assignment.item_id, existing);
+      }
+    }
+
+    const items = await Promise.all(itemRows.map((row) => mapItem(row, tagsByItemId)));
 
     return jsonResponse({
       folder: mapFolder(rootFolder),

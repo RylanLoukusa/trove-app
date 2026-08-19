@@ -44,6 +44,12 @@ export type PublicFolderListItem = {
   indentLevel?: number;
 };
 
+export type PublicFolderTag = {
+  id: string;
+  name: string;
+  color?: string;
+};
+
 export type PublicFolderItem = {
   id: string;
   folderId: string;
@@ -59,6 +65,7 @@ export type PublicFolderItem = {
   mediaItems: PublicFolderMediaItem[];
   attachments: PublicFolderAttachment[];
   listItems: PublicFolderListItem[];
+  tags: PublicFolderTag[];
   richText?: string;
   createdAt: string;
   updatedAt: string;
@@ -125,6 +132,16 @@ const isMissingRpcError = (error: unknown, functionName: string): boolean => {
 export const buildPublicFolderLink = (token: string): string =>
   `https://trovecollections.app/shared/${encodeURIComponent(token)}`;
 
+// Mirrors resolveDisplayItems in src/components/MediaCollectionDisplay.tsx, except the
+// URLs here are already-signed (from get-public-folder) rather than storage paths that
+// need client-side signing -- public preview screens have no Supabase session to sign
+// anything with.
+export const resolveDisplayItems = (item: PublicFolderItem): PublicFolderMediaItem[] => {
+  if (item.mediaItems.length) return item.mediaItems;
+  if (item.mediaUrl) return [{ id: item.id, mediaType: "image", url: item.mediaUrl, thumbnailUrl: item.thumbnailUrl }];
+  return [];
+};
+
 export const loadPublicLinkStatus = async (
   supabase: SupabaseClient,
   folderId: string,
@@ -183,10 +200,20 @@ export const revokePublicLink = async (
   return error ? { error: errorMessage(error, "Unable to revoke this link.") } : {};
 };
 
+// The whole scope (root folder + every descendant folder/item the link covers) comes
+// back in one call, so navigating between subfolders/items within an already-loaded
+// link should read from here instead of re-hitting the network on every tap.
+const publicFolderCache = new Map<string, PublicFolderData>();
+
 export const fetchPublicFolder = async (
   supabase: SupabaseClient,
   token: string,
 ): Promise<{ data?: PublicFolderData; error?: string }> => {
+  const cached = publicFolderCache.get(token);
+  if (cached) {
+    return { data: cached };
+  }
+
   const { data, error } = await supabase.functions.invoke("get-public-folder", {
     body: { token },
   });
@@ -200,5 +227,6 @@ export const fetchPublicFolder = async (
     return { error: response?.error ?? "This link is no longer available." };
   }
 
+  publicFolderCache.set(token, response);
   return { data: response };
 };

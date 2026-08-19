@@ -29,6 +29,7 @@ import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { PublicFolderPreviewScreen } from "./src/screens/PublicFolderPreview";
+import { PublicItemDetailScreen } from "./src/screens/PublicItemDetail";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
@@ -202,6 +203,7 @@ function AppNavigator() {
             <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
             <Stack.Screen name="PublicFolderPreview" component={PublicFolderPreviewScreen} />
+            <Stack.Screen name="PublicItemDetail" component={PublicItemDetailScreen} />
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
             <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
@@ -220,6 +222,7 @@ function AppNavigator() {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="AcceptFolderInvite" component={AcceptFolderInviteScreen} />
             <Stack.Screen name="PublicFolderPreview" component={PublicFolderPreviewScreen} />
+            <Stack.Screen name="PublicItemDetail" component={PublicItemDetailScreen} />
           </>
         )}
       </Stack.Navigator>

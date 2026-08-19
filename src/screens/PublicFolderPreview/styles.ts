@@ -54,10 +54,36 @@ export const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.md,
       padding: spacing.md,
     },
+    itemHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+    },
     itemTitle: {
       color: colors.ink,
+      flex: 1,
       fontSize: 18,
       fontWeight: "900",
+    },
+    openItemButton: {
+      alignItems: "center",
+      backgroundColor: colors.background,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 36,
+      justifyContent: "center",
+      width: 36,
+    },
+    openItemButtonPressed: {
+      opacity: 0.72,
+      transform: [{ scale: 0.98 }],
+    },
+    itemTagsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: spacing.md,
     },
     itemLink: {
       backgroundColor: colors.background,
@@ -139,25 +165,9 @@ export const createStyles = (colors: ThemeColors) =>
       height: 300,
       width: "100%",
     },
-    // No app installed to actually play video for a public link visitor, so video tiles
-    // show a locked placeholder instead -- same visual language as MediaCollectionDisplay's
-    // lockedTile (src/components/MediaCollectionDisplay.tsx), reused here for consistency.
-    videoLockedTile: {
-      alignItems: "center",
-      backgroundColor: "#000",
-      borderRadius: 8,
-      gap: 6,
-      justifyContent: "center",
-      padding: spacing.sm,
-    },
-    videoLockedText: {
-      color: "#FFF",
-      fontSize: 12,
-      fontWeight: "700",
-      textAlign: "center",
-    },
-    // Matches src/components/FolderCard.tsx's visual style, minus the press/chevron
-    // affordances -- items here are already listed inline below, not navigated into.
+    // Matches src/components/FolderCard.tsx's visual style -- tapping navigates into the
+    // subfolder, same as the app, just without the edit/manage affordances FolderCard's
+    // parent screen adds separately.
     folderCard: {
       alignItems: "center",
       backgroundColor: colors.surface,
@@ -168,6 +178,14 @@ export const createStyles = (colors: ThemeColors) =>
       shadowColor: "#000",
       shadowOpacity: 0.05,
       shadowRadius: 12,
+    },
+    folderCardPressed: {
+      opacity: 0.72,
+      transform: [{ scale: 0.99 }],
+    },
+    folderCardChevron: {
+      color: colors.muted,
+      fontSize: 28,
     },
     folderCardIcon: {
       alignItems: "center",

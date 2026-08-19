@@ -1,5 +1,5 @@
 import React from "react";
-import { screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { PublicFolderPreviewScreen } from "./index";
 import { fetchPublicFolder } from "../../collaboration/folderPublicLinks";
@@ -8,6 +8,7 @@ import type { RootStackParamList } from "../../navigation/types";
 import { renderScreen } from "../../test-utils/renderScreen";
 
 jest.mock("../../collaboration/folderPublicLinks", () => ({
+  ...jest.requireActual("../../collaboration/folderPublicLinks"),
   fetchPublicFolder: jest.fn(),
 }));
 
@@ -18,14 +19,16 @@ jest.mock("../../lib/supabase", () => ({
 const mockFetchPublicFolder = fetchPublicFolder as jest.Mock;
 const mockGetSupabase = getSupabase as jest.Mock;
 
+const push = jest.fn();
 const navigation = {
   navigate: jest.fn(),
+  push,
   goBack: jest.fn(),
   canGoBack: jest.fn().mockReturnValue(false),
 } as unknown as NativeStackScreenProps<RootStackParamList, "PublicFolderPreview">["navigation"];
 
-const renderPreview = async (token = "tok-1") => {
-  const route = { params: { token } } as unknown as NativeStackScreenProps<
+const renderPreview = async (token = "tok-1", folderId?: string) => {
+  const route = { params: { token, folderId } } as unknown as NativeStackScreenProps<
     RootStackParamList,
     "PublicFolderPreview"
   >["route"];
@@ -53,6 +56,7 @@ describe("PublicFolderPreviewScreen", () => {
             mediaItems: [],
             attachments: [],
             listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -104,6 +108,7 @@ describe("PublicFolderPreviewScreen", () => {
             ],
             attachments: [],
             listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -136,6 +141,7 @@ describe("PublicFolderPreviewScreen", () => {
             mediaItems: [],
             attachments: [{ id: "a1", uri: "https://example.com/clip.mp4", mediaType: "video" }],
             listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -150,7 +156,76 @@ describe("PublicFolderPreviewScreen", () => {
     expect(screen.getByText(/Open Trove to/)).toBeTruthy();
   });
 
-  it("renders subfolders as folder cards with an item count, not a plain chip", async () => {
+  it("shows tags on the item card, non-interactively", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Recipes" },
+        folders: [{ id: "folder-1", name: "Recipes" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Pasta",
+            type: "text",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            tags: [{ id: "tag-1", name: "Dinner", color: "#43664A" }],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Dinner")).toBeTruthy();
+  });
+
+  it("shows subfolders as cards (always, even with no items) and navigates into them on tap", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Trip", icon: "🧳" },
+        folders: [
+          { id: "folder-1", name: "Trip", icon: "🧳" },
+          { id: "folder-2", name: "Packing", icon: "🎒", parentFolderId: "folder-1" },
+          { id: "folder-3", name: "Empty", icon: "📦", parentFolderId: "folder-1" },
+        ],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-2",
+            title: "Passport",
+            type: "text",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_and_subfolders" },
+      },
+    });
+
+    await renderPreview();
+
+    expect(await screen.findByText("Packing")).toBeTruthy();
+    expect(screen.getByText("1 saved here")).toBeTruthy();
+    // Subfolders show even with zero items -- "Empty" has none.
+    expect(screen.getByText("Empty")).toBeTruthy();
+    expect(screen.getByText("0 saved here")).toBeTruthy();
+    // Root-level items list shouldn't include the subfolder's item.
+    expect(screen.queryByText("Passport")).toBeNull();
+
+    await fireEvent.press(screen.getByText("Packing"));
+    expect(push).toHaveBeenCalledWith("PublicFolderPreview", { token: "tok-1", folderId: "folder-2" });
+  });
+
+  it("renders a subfolder's own items when its folderId is the active route param", async () => {
     mockFetchPublicFolder.mockResolvedValue({
       data: {
         folder: { id: "folder-1", name: "Trip", icon: "🧳" },
@@ -167,17 +242,7 @@ describe("PublicFolderPreviewScreen", () => {
             mediaItems: [],
             attachments: [],
             listItems: [],
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-          {
-            id: "item-2",
-            folderId: "folder-2",
-            title: "Chargers",
-            type: "text",
-            mediaItems: [],
-            attachments: [],
-            listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -186,12 +251,40 @@ describe("PublicFolderPreviewScreen", () => {
       },
     });
 
+    await renderPreview("tok-1", "folder-2");
+
+    expect(await screen.findByText("🎒 Packing")).toBeTruthy();
+    expect(screen.getByText("Passport")).toBeTruthy();
+  });
+
+  it("navigates to the item detail screen when the open button is pressed", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Recipes" },
+        folders: [{ id: "folder-1", name: "Recipes" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "Pasta",
+            type: "text",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
     await renderPreview();
 
-    expect(await screen.findByText("Packing")).toBeTruthy();
-    expect(screen.getByText("2 saved here")).toBeTruthy();
-    expect(screen.getByText("Passport")).toBeTruthy();
-    expect(screen.getByText("Chargers")).toBeTruthy();
+    expect(await screen.findByText("Pasta")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Open item"));
+    expect(push).toHaveBeenCalledWith("PublicItemDetail", { token: "tok-1", itemId: "item-1" });
   });
 
   it("renders indented checklist items with the right marker per kind", async () => {
@@ -211,6 +304,7 @@ describe("PublicFolderPreviewScreen", () => {
               { id: "l1", kind: "check", text: "Passport", checked: true, indentLevel: 0 },
               { id: "l2", kind: "bullet", text: "Chargers", checked: false, indentLevel: 1 },
             ],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -240,6 +334,7 @@ describe("PublicFolderPreviewScreen", () => {
             mediaItems: [],
             attachments: [{ id: "a1", uri: "https://example.com/a1.jpg", mediaType: "image" }],
             listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -252,6 +347,7 @@ describe("PublicFolderPreviewScreen", () => {
             mediaItems: [],
             attachments: [{ id: "a2", uri: "https://example.com/a2.jpg", mediaType: "image" }],
             listItems: [],
+            tags: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -267,7 +363,7 @@ describe("PublicFolderPreviewScreen", () => {
     expect(screen.getByTestId("mediaTile-item-2")).toBeTruthy();
   });
 
-  it("shows an empty state for a folder with no items", async () => {
+  it("shows an empty state for a folder with no items or subfolders", async () => {
     mockFetchPublicFolder.mockResolvedValue({
       data: {
         folder: { id: "folder-1", name: "Recipes" },

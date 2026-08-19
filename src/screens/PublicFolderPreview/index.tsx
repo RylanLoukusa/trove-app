@@ -1,16 +1,18 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { Lock } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { EmptyState } from "../../components/EmptyState";
 import { MediaImage } from "../../components/MediaImage";
+import { TagChip } from "../../components/TagChip";
+import { VideoLockedTile } from "../../components/VideoLockedTile";
 import {
   fetchPublicFolder,
   PublicFolderData,
   PublicFolderItem,
-  PublicFolderMediaItem,
   PublicFolderSummary,
+  resolveDisplayItems,
 } from "../../collaboration/folderPublicLinks";
 import { getSupabase } from "../../lib/supabase";
 import { RootStackParamList } from "../../navigation/types";
@@ -20,34 +22,20 @@ import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PublicFolderPreview">;
 
-// Mirrors resolveDisplayItems in src/components/MediaCollectionDisplay.tsx, except the URLs
-// here are already-signed (from get-public-folder) rather than storage paths that need
-// client-side signing -- this screen has no Supabase session to sign anything with.
-const resolveDisplayItems = (item: PublicFolderItem): PublicFolderMediaItem[] => {
-  if (item.mediaItems.length) return item.mediaItems;
-  if (item.mediaUrl) return [{ id: item.id, mediaType: "image", url: item.mediaUrl, thumbnailUrl: item.thumbnailUrl }];
-  return [];
-};
-
-const VideoLockedTile = ({ styles, style }: { styles: ReturnType<typeof createStyles>; style: object }) => (
-  <View style={[styles.videoLockedTile, style]}>
-    <Lock color="#FFF" size={22} />
-    <Text style={styles.videoLockedText}>Open Trove to{"\n"}watch this video</Text>
-  </View>
-);
-
 const PublicFolderCard = ({
   folder,
   itemCount,
+  onPress,
   styles,
 }: {
   folder: PublicFolderSummary;
   itemCount: number;
+  onPress: () => void;
   styles: ReturnType<typeof createStyles>;
 }) => {
   const colors = useThemeColors();
   return (
-    <View style={styles.folderCard}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}>
       <View style={[styles.folderCardIcon, { backgroundColor: folder.color ?? colors.border }]}>
         <Text style={styles.folderCardEmoji}>{folder.icon ?? "📁"}</Text>
       </View>
@@ -57,20 +45,40 @@ const PublicFolderCard = ({
         </Text>
         <Text style={styles.folderCardMeta}>{itemCount} saved here</Text>
       </View>
-    </View>
+      <Text style={styles.folderCardChevron}>›</Text>
+    </Pressable>
   );
 };
 
-const ItemCard = ({ item, styles }: { item: PublicFolderItem; styles: ReturnType<typeof createStyles> }) => {
+const ItemCard = ({
+  item,
+  onOpen,
+  styles,
+}: {
+  item: PublicFolderItem;
+  onOpen: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) => {
+  const colors = useThemeColors();
   const displayItems = resolveDisplayItems(item);
   const hasStoredMedia = displayItems.length > 0;
   const shouldShowAttachments = item.attachments.length > 0 && !hasStoredMedia;
 
   return (
     <View style={styles.itemCard}>
-      <Text style={styles.itemTitle} numberOfLines={2}>
-        {item.title}
-      </Text>
+      <View style={styles.itemHeader}>
+        <Text style={styles.itemTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Pressable
+          accessibilityLabel="Open item"
+          accessibilityRole="button"
+          onPress={onOpen}
+          style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}
+        >
+          <ChevronRight color={colors.accentDark} size={20} strokeWidth={2.6} />
+        </Pressable>
+      </View>
 
       {!!item.url && (
         <Pressable
@@ -94,7 +102,7 @@ const ItemCard = ({ item, styles }: { item: PublicFolderItem; styles: ReturnType
           {displayItems.map((mediaItem) => (
             <View key={mediaItem.id} testID={`mediaTile-${mediaItem.id}`}>
               {mediaItem.mediaType === "video" ? (
-                <VideoLockedTile styles={styles} style={styles.itemMediaTile} />
+                <VideoLockedTile style={styles.itemMediaTile} />
               ) : mediaItem.url ? (
                 <MediaImage source={{ uri: mediaItem.url }} style={styles.itemMediaTile} />
               ) : null}
@@ -130,9 +138,17 @@ const ItemCard = ({ item, styles }: { item: PublicFolderItem; styles: ReturnType
             attachment.mediaType === "image" ? (
               <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.itemAttachmentImage} />
             ) : (
-              <VideoLockedTile key={attachment.id} styles={styles} style={styles.itemAttachmentVideo} />
+              <VideoLockedTile key={attachment.id} style={styles.itemAttachmentVideo} />
             ),
           )}
+        </View>
+      )}
+
+      {item.tags.length > 0 && (
+        <View style={styles.itemTagsRow}>
+          {item.tags.map((tag) => (
+            <TagChip key={tag.id} label={tag.name} color={tag.color} />
+          ))}
         </View>
       )}
     </View>
@@ -179,15 +195,24 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
     };
   }, [token]);
 
-  const itemsByFolderId = useMemo(() => {
-    const map = new Map<string, PublicFolderItem[]>();
+  const activeFolderId = route.params.folderId ?? data?.folder.id;
+  const activeFolder = data?.folders.find((folder) => folder.id === activeFolderId);
+
+  const subfolders = useMemo(
+    () => (data ? data.folders.filter((folder) => folder.parentFolderId === activeFolderId) : []),
+    [data, activeFolderId],
+  );
+  const itemCountByFolderId = useMemo(() => {
+    const map = new Map<string, number>();
     data?.items.forEach((item) => {
-      const list = map.get(item.folderId) ?? [];
-      list.push(item);
-      map.set(item.folderId, list);
+      map.set(item.folderId, (map.get(item.folderId) ?? 0) + 1);
     });
     return map;
   }, [data]);
+  const folderItems = useMemo(
+    () => (data ? data.items.filter((item) => item.folderId === activeFolderId) : []),
+    [data, activeFolderId],
+  );
 
   if (isLoading) {
     return (
@@ -200,7 +225,7 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
     );
   }
 
-  if (error || !data) {
+  if (error || !data || !activeFolder) {
     return (
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
@@ -217,27 +242,32 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Shared folder</Text>
         <Text style={styles.title}>
-          {data.folder.icon ?? "📁"} {data.folder.name}
+          {activeFolder.icon ?? "📁"} {activeFolder.name}
         </Text>
-        {!!data.folder.purpose && <Text style={styles.purpose}>{data.folder.purpose}</Text>}
+        {!!activeFolder.purpose && <Text style={styles.purpose}>{activeFolder.purpose}</Text>}
 
-        {data.folders.map((folder) => {
-          const folderItems = itemsByFolderId.get(folder.id) ?? [];
-          if (folder.id !== data.folder.id && folderItems.length === 0) return null;
+        {subfolders.map((subfolder) => (
+          <PublicFolderCard
+            key={subfolder.id}
+            folder={subfolder}
+            itemCount={itemCountByFolderId.get(subfolder.id) ?? 0}
+            onPress={() => navigation.push("PublicFolderPreview", { token, folderId: subfolder.id })}
+            styles={styles}
+          />
+        ))}
 
-          return (
-            <View key={folder.id}>
-              {folder.id !== data.folder.id && (
-                <PublicFolderCard folder={folder} itemCount={folderItems.length} styles={styles} />
-              )}
-              {folderItems.length === 0 ? (
-                folder.id === data.folder.id && <EmptyState title="No items yet" message="This folder is empty." />
-              ) : (
-                folderItems.map((item) => <ItemCard key={item.id} item={item} styles={styles} />)
-              )}
-            </View>
-          );
-        })}
+        {subfolders.length === 0 && folderItems.length === 0 ? (
+          <EmptyState title="No items yet" message="This folder is empty." />
+        ) : (
+          folderItems.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              onOpen={() => navigation.push("PublicItemDetail", { token, itemId: item.id })}
+              styles={styles}
+            />
+          ))
+        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Shared read-only via Trove</Text>

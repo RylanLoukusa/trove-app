@@ -148,7 +148,7 @@ describe("fetchPublicFolder", () => {
     const invoke = jest.fn().mockResolvedValue({ data: null, error: { message: "network down" } });
     const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];
 
-    const result = await fetchPublicFolder(supabase, "tok-1");
+    const result = await fetchPublicFolder(supabase, "tok-2");
 
     expect(result.error).toBe("network down");
     expect(result.data).toBeUndefined();
@@ -158,9 +158,26 @@ describe("fetchPublicFolder", () => {
     const invoke = jest.fn().mockResolvedValue({ data: { error: "This link has been revoked." }, error: null });
     const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];
 
-    const result = await fetchPublicFolder(supabase, "tok-1");
+    const result = await fetchPublicFolder(supabase, "tok-3");
 
     expect(result.error).toBe("This link has been revoked.");
     expect(result.data).toBeUndefined();
+  });
+
+  it("caches a successful response so repeated calls with the same token don't refetch", async () => {
+    const payload = {
+      folder: { id: "folder-1", name: "Recipes" },
+      folders: [{ id: "folder-1", name: "Recipes" }],
+      items: [],
+      link: { scope: "folder_only" as const },
+    };
+    const invoke = jest.fn().mockResolvedValue({ data: payload, error: null });
+    const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];
+
+    await fetchPublicFolder(supabase, "tok-4");
+    const second = await fetchPublicFolder(supabase, "tok-4");
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(second.data).toEqual(payload);
   });
 });
