@@ -105,6 +105,13 @@ export const createStyles = (colors: ThemeColors) =>
       gap: 10,
       paddingRight: spacing.md,
     },
+    // Matches MediaCollectionDisplay's centerContent behavior: a single image centers
+    // instead of hugging the left edge like a scrollable multi-image row does.
+    itemMediaRowCentered: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingRight: 0,
+    },
     // 300x300 matches FolderScreen's MediaCollectionDisplay usage (itemHeight/itemWidth={300}).
     itemMediaTile: {
       borderRadius: 8,

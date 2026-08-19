@@ -95,7 +95,7 @@ const ItemCard = ({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.itemMediaRow}
+          contentContainerStyle={[styles.itemMediaRow, displayItems.length === 1 && styles.itemMediaRowCentered]}
           style={styles.itemMedia}
           testID="itemMediaGallery"
         >
@@ -246,18 +246,24 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
         </Text>
         {!!activeFolder.purpose && <Text style={styles.purpose}>{activeFolder.purpose}</Text>}
 
-        {subfolders.map((subfolder) => (
-          <PublicFolderCard
-            key={subfolder.id}
-            folder={subfolder}
-            itemCount={itemCountByFolderId.get(subfolder.id) ?? 0}
-            onPress={() => navigation.push("PublicFolderPreview", { token, folderId: subfolder.id })}
-            styles={styles}
-          />
-        ))}
+        <Text style={styles.section}>Subfolders</Text>
+        {subfolders.length === 0 ? (
+          <EmptyState title="No subfolders." message="This folder has no subfolders." />
+        ) : (
+          subfolders.map((subfolder) => (
+            <PublicFolderCard
+              key={subfolder.id}
+              folder={subfolder}
+              itemCount={itemCountByFolderId.get(subfolder.id) ?? 0}
+              onPress={() => navigation.push("PublicFolderPreview", { token, folderId: subfolder.id })}
+              styles={styles}
+            />
+          ))
+        )}
 
-        {subfolders.length === 0 && folderItems.length === 0 ? (
-          <EmptyState title="No items yet" message="This folder is empty." />
+        <Text style={styles.section}>Items</Text>
+        {folderItems.length === 0 ? (
+          <EmptyState title="No items here yet." message="This folder is empty." />
         ) : (
           folderItems.map((item) => (
             <ItemCard

@@ -156,7 +156,7 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.mediaRow}
+            contentContainerStyle={[styles.mediaRow, displayItems.length === 1 && styles.mediaRowCentered]}
             style={styles.mediaPreview}
           >
             {displayItems.map((mediaItem) =>

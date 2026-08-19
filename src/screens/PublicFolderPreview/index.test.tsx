@@ -363,7 +363,7 @@ describe("PublicFolderPreviewScreen", () => {
     expect(screen.getByTestId("mediaTile-item-2")).toBeTruthy();
   });
 
-  it("shows an empty state for a folder with no items or subfolders", async () => {
+  it("always shows the Subfolders and Items section headers, with empty states when there's nothing", async () => {
     mockFetchPublicFolder.mockResolvedValue({
       data: {
         folder: { id: "folder-1", name: "Recipes" },
@@ -375,6 +375,62 @@ describe("PublicFolderPreviewScreen", () => {
 
     await renderPreview();
 
-    expect(await screen.findByText("No items yet")).toBeTruthy();
+    expect(await screen.findByText("Subfolders")).toBeTruthy();
+    expect(screen.getByText("Items")).toBeTruthy();
+    expect(screen.getByText("No subfolders.")).toBeTruthy();
+    expect(screen.getByText("No items here yet.")).toBeTruthy();
+  });
+
+  it("centers a single image but left-aligns a multi-image gallery", async () => {
+    mockFetchPublicFolder.mockResolvedValue({
+      data: {
+        folder: { id: "folder-1", name: "Recipes" },
+        folders: [{ id: "folder-1", name: "Recipes" }],
+        items: [
+          {
+            id: "item-1",
+            folderId: "folder-1",
+            title: "One photo",
+            type: "image",
+            mediaUrl: "https://example.com/1.jpg",
+            mediaItems: [],
+            attachments: [],
+            listItems: [],
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "item-2",
+            folderId: "folder-1",
+            title: "Two photos",
+            type: "media",
+            mediaItems: [
+              { id: "m1", mediaType: "image", url: "https://example.com/1.jpg" },
+              { id: "m2", mediaType: "image", url: "https://example.com/2.jpg" },
+            ],
+            attachments: [],
+            listItems: [],
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        link: { scope: "folder_only" },
+      },
+    });
+
+    await renderPreview();
+
+    await waitFor(() => expect(screen.getByText("One photo")).toBeTruthy());
+    const galleries = screen.getAllByTestId("itemMediaGallery");
+    const flatten = (style: unknown) => (Array.isArray(style) ? style.flat(Infinity) : [style]);
+
+    expect(flatten(galleries[0].props.contentContainerStyle)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ justifyContent: "center" })]),
+    );
+    expect(flatten(galleries[1].props.contentContainerStyle)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ justifyContent: "center" })]),
+    );
   });
 });

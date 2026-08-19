@@ -60,6 +60,11 @@ export const createStyles = (colors: ThemeColors) =>
       gap: 10,
       paddingRight: spacing.md,
     },
+    mediaRowCentered: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingRight: 0,
+    },
     mediaTile: {
       borderRadius: 8,
       height: 400,
