@@ -772,10 +772,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, error: "Sign in to sync folders before sharing." };
     }
 
-    if (requiresProForSync(isPro)) {
-      return { ok: false, error: "Sharing folders requires Trove Pro." };
-    }
-
+    // Viewer access (email invites, public links) is free -- only editor
+    // collaboration is Pro-gated, via requiresProForSharing at the call sites
+    // in ShareFolderScreen. Don't require Pro here or that gate is moot.
     const supabase = getSupabase();
     if (!supabase) {
       return { ok: false, error: "Supabase not configured." };

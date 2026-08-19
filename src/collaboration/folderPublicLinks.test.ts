@@ -78,27 +78,30 @@ describe("createPublicLink", () => {
       folder_id: "folder-1",
       token: "tok-1",
       scope: "folder_and_subfolders",
+      show_owner_name: true,
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
     };
     const rpc = jest.fn().mockResolvedValue({ data: [row], error: null });
     const supabase = { rpc } as unknown as Parameters<typeof createPublicLink>[0];
 
-    const result = await createPublicLink(supabase, "folder-1", "folder_and_subfolders");
+    const result = await createPublicLink(supabase, "folder-1", "folder_and_subfolders", true);
 
     expect(rpc).toHaveBeenCalledWith("trove_create_folder_public_link", {
       target_folder_id: "folder-1",
       target_scope: "folder_and_subfolders",
+      target_show_owner_name: true,
     });
     expect(result.link?.id).toBe("link-1");
     expect(result.link?.scope).toBe("folder_and_subfolders");
+    expect(result.link?.showOwnerName).toBe(true);
   });
 
   it("returns an error when the RPC fails", async () => {
     const rpc = jest.fn().mockResolvedValue({ data: null, error: { message: "Only the folder owner can create a shareable link." } });
     const supabase = { rpc } as unknown as Parameters<typeof createPublicLink>[0];
 
-    const result = await createPublicLink(supabase, "folder-1", "folder_only");
+    const result = await createPublicLink(supabase, "folder-1", "folder_only", false);
 
     expect(result.error).toBe("Only the folder owner can create a shareable link.");
     expect(result.link).toBeUndefined();

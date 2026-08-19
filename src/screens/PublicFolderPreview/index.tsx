@@ -240,7 +240,9 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Shared folder</Text>
+        <Text style={styles.eyebrow}>
+          {!!data.ownerName && `${data.ownerName}'s `}Shared folder
+        </Text>
         <Text style={styles.title}>
           {activeFolder.icon ?? "📁"} {activeFolder.name}
         </Text>

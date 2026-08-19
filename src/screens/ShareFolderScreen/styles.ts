@@ -118,6 +118,21 @@ export const createStyles = (colors: ThemeColors) =>
     fontWeight: "900",
     marginTop: spacing.md,
   },
+  checkboxRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  checkboxGlyph: {
+    color: colors.accentDark,
+    fontSize: 20,
+  },
+  checkboxLabel: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: "600",
+  },
   collaboratorRow: {
     gap: spacing.sm,
     paddingRight: spacing.sm,

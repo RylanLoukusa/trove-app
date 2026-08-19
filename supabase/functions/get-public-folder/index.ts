@@ -5,14 +5,22 @@
 // notes, or connections. Tag names/colors are included (read-only) since the
 // owner's collaborators/viewers already see them; item notes/connections stay
 // excluded as they can reference private context outside the shared scope.
+// The one deliberate exception: if the link's show_owner_name flag is set (an
+// opt-in the owner chooses at link-creation time, default off), their profile
+// display_name is resolved server-side and returned as `ownerName` -- owner_id
+// itself is still never sent to the client.
 
 type LinkScope = "folder_only" | "folder_and_subfolders";
 
 type LinkRow = {
   folder_id: string;
+  owner_id: string;
   revoked_at: string | null;
   scope: LinkScope;
+  show_owner_name: boolean;
 };
+
+type ProfileRow = { display_name: string | null };
 
 type FolderRow = {
   color: string | null;
@@ -220,6 +228,7 @@ const mapFolder = (row: FolderRow) => ({
   id: row.id,
   name: row.name,
   parentFolderId: row.parent_folder_id,
+  purpose: row.purpose,
 });
 
 Deno.serve(async (request) => {
@@ -251,7 +260,7 @@ Deno.serve(async (request) => {
     }
 
     const links = await serviceFetch<LinkRow[]>(
-      `/rest/v1/trove_folder_public_links?select=folder_id,scope,revoked_at&token=eq.${encodeURIComponent(token)}&limit=1`,
+      `/rest/v1/trove_folder_public_links?select=folder_id,scope,revoked_at,owner_id,show_owner_name&token=eq.${encodeURIComponent(token)}&limit=1`,
       { method: "GET" },
     );
     const link = links[0];
@@ -262,6 +271,15 @@ Deno.serve(async (request) => {
 
     if (link.revoked_at) {
       return jsonResponse({ error: "This link has been revoked." }, 410);
+    }
+
+    let ownerName: string | null = null;
+    if (link.show_owner_name) {
+      const profiles = await serviceFetch<ProfileRow[]>(
+        `/rest/v1/profiles?select=display_name&id=eq.${encodeURIComponent(link.owner_id)}&limit=1`,
+        { method: "GET" },
+      );
+      ownerName = profiles[0]?.display_name || null;
     }
 
     const rootFolders = await serviceFetch<FolderRow[]>(
@@ -316,6 +334,7 @@ Deno.serve(async (request) => {
       folders: folders.map(mapFolder),
       items,
       link: { scope: link.scope },
+      ownerName,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load this shared folder.";

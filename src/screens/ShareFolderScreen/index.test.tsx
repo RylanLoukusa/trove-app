@@ -316,7 +316,7 @@ describe("ShareFolderScreen", () => {
 
     await waitFor(() => expect(mockCreatePublicLink).toHaveBeenCalled());
     expect(syncFolderForSharing).toHaveBeenCalledWith("recipes");
-    expect(mockCreatePublicLink).toHaveBeenCalledWith(expect.anything(), "recipes", "folder_only");
+    expect(mockCreatePublicLink).toHaveBeenCalledWith(expect.anything(), "recipes", "folder_only", false);
     await waitFor(() =>
       expect(shareSpy).toHaveBeenCalledWith(
         expect.objectContaining({ url: "https://trovecollections.app/shared/token" }),

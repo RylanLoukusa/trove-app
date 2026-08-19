@@ -2,6 +2,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -51,6 +52,15 @@ import { createStyles } from "./styles";
 type Props = NativeStackScreenProps<RootStackParamList, "ShareFolder">;
 
 type ShareOutcome = { error?: string; message?: string; title?: string };
+
+// iOS's share sheet treats `message` and `url` as separate items, so some targets
+// (e.g. the "Copy" action) concatenate both -- if the link were embedded in message
+// too, it'd appear twice. Android's Share module ignores `url` entirely, so the
+// link has to live in `message` there or it never gets shared at all.
+const shareTextWithLink = (text: string, url: string): Promise<{ action: string; activityType?: string | null }> =>
+  Share.share(
+    Platform.OS === "android" ? { message: `${text}: ${url}` } : { message: text, url },
+  );
 
 const AccessListSkeleton = () => {
   const colors = useThemeColors();
@@ -253,6 +263,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const [invites, setInvites] = useState<FolderShareInvite[]>([]);
   const [publicLink, setPublicLink] = useState<FolderPublicLink | undefined>(undefined);
   const [publicLinkScope, setPublicLinkScope] = useState<PublicLinkScope>("folder_only");
+  const [publicLinkShowOwnerName, setPublicLinkShowOwnerName] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPublicLinkSaving, setIsPublicLinkSaving] = useState(false);
@@ -573,10 +584,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
   const onShareInviteLink = useCallback(
     async (invite: FolderShareInvite): Promise<void> => {
       const link = buildFolderInviteLink(invite.token);
-      await Share.share({
-        message: `You're invited to a shared folder in Trove: ${link}`,
-        url: link,
-      });
+      await shareTextWithLink("You're invited to a shared folder in Trove", link);
     },
     [],
   );
@@ -603,7 +611,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
         return;
       }
 
-      const result = await createPublicLink(supabase, folder.id, publicLinkScope);
+      const result = await createPublicLink(supabase, folder.id, publicLinkScope, publicLinkShowOwnerName);
       if (result.error) {
         setIsPublicLinkSaving(false);
         setShareError(result.error);
@@ -618,12 +626,9 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
 
     if (link) {
       const url = buildPublicFolderLink(link.token);
-      await Share.share({
-        message: `View "${folder.name}" in Trove: ${url}`,
-        url,
-      });
+      await shareTextWithLink(`View "${folder.name}" in Trove`, url);
     }
-  }, [folder, publicLink, publicLinkScope, session?.user, syncFolderForSharing]);
+  }, [folder, publicLink, publicLinkScope, publicLinkShowOwnerName, session?.user, syncFolderForSharing]);
 
   const onRevokePublicLink = useCallback((): void => {
     if (!publicLink) return;
@@ -814,6 +819,10 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
               <>
                 <Text style={styles.label}>Scope</Text>
                 <Text style={styles.accessMeta}>{scopeLabel(publicLink.scope)}</Text>
+                <Text style={styles.label}>Your name</Text>
+                <Text style={styles.accessMeta}>
+                  {publicLink.showOwnerName ? "Shown on this link" : "Hidden on this link"}
+                </Text>
                 <View style={styles.inlineActions}>
                   <AppButton
                     disabled={isPublicLinkSaving}
@@ -837,6 +846,14 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
               <>
                 <Text style={styles.label}>Scope</Text>
                 <ChoicePills options={scopeOptions} selected={publicLinkScope} onSelect={setPublicLinkScope} />
+                <Pressable
+                  onPress={() => setPublicLinkShowOwnerName((value) => !value)}
+                  style={styles.checkboxRow}
+                  testID="publicLinkShowOwnerNameCheckbox"
+                >
+                  <Text style={styles.checkboxGlyph}>{publicLinkShowOwnerName ? "☑" : "☐"}</Text>
+                  <Text style={styles.checkboxLabel}>Show my name on this link</Text>
+                </Pressable>
                 <AppButton
                   disabled={isPublicLinkSaving}
                   variant="secondary"

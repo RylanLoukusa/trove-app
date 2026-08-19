@@ -9,6 +9,7 @@ export type FolderPublicLink = {
   folderId: string;
   token: string;
   scope: PublicLinkScope;
+  showOwnerName: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -76,6 +77,7 @@ export type PublicFolderData = {
   folders: PublicFolderSummary[];
   items: PublicFolderItem[];
   link: { scope: PublicLinkScope };
+  ownerName: string | null;
 };
 
 type PublicLinkRow = {
@@ -83,6 +85,7 @@ type PublicLinkRow = {
   folder_id: string;
   token: string;
   scope: PublicLinkScope;
+  show_owner_name: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -92,6 +95,7 @@ const mapLink = (row: PublicLinkRow): FolderPublicLink => ({
   folderId: row.folder_id,
   token: row.token,
   scope: row.scope,
+  showOwnerName: row.show_owner_name,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -148,7 +152,7 @@ export const loadPublicLinkStatus = async (
 ): Promise<{ error?: string; link?: FolderPublicLink }> => {
   const { data, error } = await supabase
     .from("trove_folder_public_links")
-    .select("id, folder_id, token, scope, created_at, updated_at")
+    .select("id, folder_id, token, scope, show_owner_name, created_at, updated_at")
     .eq("folder_id", folderId)
     .is("revoked_at", null)
     .maybeSingle();
@@ -171,10 +175,12 @@ export const createPublicLink = async (
   supabase: SupabaseClient,
   folderId: string,
   scope: PublicLinkScope,
+  showOwnerName: boolean,
 ): Promise<{ error?: string; link?: FolderPublicLink }> => {
   const { data, error } = await supabase.rpc("trove_create_folder_public_link", {
     target_folder_id: folderId,
     target_scope: scope,
+    target_show_owner_name: showOwnerName,
   });
 
   if (error) {
