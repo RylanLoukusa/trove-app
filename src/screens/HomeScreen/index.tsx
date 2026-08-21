@@ -195,6 +195,7 @@ export const HomeScreen = ({ navigation }: Props) => {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Upgrade to Trove Pro"
+              hitSlop={8}
               onPress={onPressUpgrade}
               style={({ pressed }) => [styles.upgradePill, pressed && styles.upgradePillPressed]}
             >

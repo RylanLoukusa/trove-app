@@ -227,6 +227,7 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
         mediaItems={item.mediaItems}
         itemHeight={400}
         itemWidth={320}
+        mediaLabel={item.title}
         onPressItem={setViewerIndex}
         videoLocked={videoLocked}
         style={styles.mediaPreview}
@@ -270,7 +271,12 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
         <View style={styles.attachmentBlock}>
           {item.attachments?.map((attachment) =>
             attachment.mediaType === "image" ? (
-              <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
+              <MediaImage
+                key={attachment.id}
+                source={{ uri: attachment.uri }}
+                style={styles.attachmentImage}
+                accessibilityLabel={attachment.caption || `Photo attached to ${item.title}`}
+              />
             ) : (
               <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.attachmentVideo} />
             ),

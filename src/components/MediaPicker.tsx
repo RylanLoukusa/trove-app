@@ -103,10 +103,14 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
     <View style={style}>
       {isMulti && !!attachments?.length && (
         <View style={{ gap: 8, marginBottom: 12 }}>
-          {attachments.map((attachment) => (
+          {attachments.map((attachment, index) => (
             <View key={attachment.id}>
               {attachment.mediaType === "image" ? (
-                <MediaImage source={{ uri: attachment.uri }} style={{ width: "100%", height: 160, borderRadius: 8 }} />
+                <MediaImage
+                  source={{ uri: attachment.uri }}
+                  style={{ width: "100%", height: 160, borderRadius: 8 }}
+                  accessibilityLabel={`Attached photo ${index + 1} of ${attachments.length}`}
+                />
               ) : (
                 <VideoPreview uri={attachment.uri} style={{ width: "100%", height: 160 }} />
               )}
@@ -117,7 +121,11 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
       )}
 
       {!isMulti && selectedUri && mediaType === "image" && (
-        <MediaImage source={{ uri: selectedUri }} style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12 }} />
+        <MediaImage
+          source={{ uri: selectedUri }}
+          style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12 }}
+          accessibilityLabel="Selected photo"
+        />
       )}
 
       {!isMulti && selectedUri && mediaType === "video" && (

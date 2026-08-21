@@ -447,6 +447,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           Title <Text style={styles.requiredMarker}>*</Text>
         </Text>
         <TextInput
+          accessibilityLabel="Title"
           ref={titleInputRef}
           style={[styles.input, titleError && styles.inputError]}
           value={title}
@@ -498,6 +499,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           <View ref={registerAnchor("note", spacing.md)}>
             <Text style={styles.label}>Note</Text>
             <TextInput
+              accessibilityLabel="Note"
               style={[styles.input, styles.textArea]}
               multiline
               value={noteText}
@@ -513,6 +515,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           <>
             <Text style={styles.label}>Link</Text>
             <TextInput
+              accessibilityLabel="Link"
               style={[styles.input, styles.textArea]}
               multiline
               value={linkText}
@@ -606,6 +609,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           <>
             <Text style={styles.label}>Source URL</Text>
             <TextInput
+              accessibilityLabel="Source URL"
               style={styles.input}
               value={sourceUrl}
               onChangeText={setSourceUrl}
@@ -622,6 +626,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           <>
             <Text style={styles.label}>Shared text</Text>
             <TextInput
+              accessibilityLabel="Shared text"
               style={[styles.input, styles.textArea]}
               multiline
               value={sharedText}

@@ -68,6 +68,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
         </View>
         <Text style={styles.label}>Paste a thought, URL, or media URI</Text>
         <TextInput
+          accessibilityLabel="Paste a thought, URL, or media URI"
           style={styles.input}
           multiline
           placeholder="Try the new ramen place downtown"

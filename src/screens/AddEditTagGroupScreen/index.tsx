@@ -72,6 +72,7 @@ const TagOptionRow = React.memo(function TagOptionRow({
         style={[styles.colorSwatch, option.color ? { backgroundColor: option.color } : styles.colorSwatchEmpty]}
       />
       <TextInput
+        accessibilityLabel="Option name"
         ref={registerInputRef}
         style={styles.optionInput}
         value={option.name}
@@ -313,6 +314,7 @@ export const AddEditTagGroupScreen = ({ navigation, route }: Props) => {
 
           <Text style={styles.label}>Name</Text>
           <TextInput
+            accessibilityLabel="Name"
             style={[styles.input, nameError && styles.inputError]}
             value={name}
             onChangeText={(value) => {

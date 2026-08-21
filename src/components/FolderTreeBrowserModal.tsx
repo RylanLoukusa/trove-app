@@ -52,6 +52,7 @@ export const FolderTreeBrowserModal = ({ visible, folders, onClose, onSelectFold
         </View>
 
         <TextInput
+          accessibilityLabel="Search folders"
           autoCorrect={false}
           onChangeText={setQuery}
           placeholder="Search folders..."

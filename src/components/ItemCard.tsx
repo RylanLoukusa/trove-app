@@ -33,10 +33,14 @@ export const ItemCard = ({ item, folderPath, tagOptions = [], onPress }: Props) 
 
   return (
     <Pressable
+      accessibilityLabel={item.title || "Untitled item"}
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }: { pressed: boolean }) => [styles.card, pressed && styles.pressed]}
     >
-      <Text style={styles.icon}>{typeIcon[normalizeItemType(item.type)]}</Text>
+      <Text style={styles.icon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {typeIcon[normalizeItemType(item.type)]}
+      </Text>
       <View style={styles.content}>
         <Text style={styles.title}>{item.title}</Text>
         {!!folderPath && <Text style={styles.path}>{folderPath}</Text>}
@@ -71,6 +75,7 @@ export const ItemCard = ({ item, folderPath, tagOptions = [], onPress }: Props) 
             mediaItems={item.mediaItems}
             itemHeight={74}
             itemWidth={74}
+            mediaLabel={item.title}
             nativeVideoControls={false}
             style={styles.mediaStrip}
           />

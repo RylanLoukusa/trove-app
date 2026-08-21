@@ -275,7 +275,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
     },
     nextButton: {
-      backgroundColor: colors.accentDark,
+      backgroundColor: colors.buttonPrimaryBg,
       borderRadius: 999,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,

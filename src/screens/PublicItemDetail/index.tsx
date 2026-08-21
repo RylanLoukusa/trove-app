@@ -129,13 +129,13 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
       <ScreenTopBar navigation={navigation} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.type}>{getPublicItemTypeLabel(item.type).toUpperCase()}</Text>
-        <Text style={styles.title}>{item.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
         <Text style={styles.path}>{buildFolderPathLabel(data.folders, item.folderId)}</Text>
 
         {!!item.url && (
           <View style={styles.preview}>
-            <Text style={styles.previewTitle}>Link preview</Text>
-            <Text style={styles.url} onPress={() => void Linking.openURL(item.url!)}>
+            <Text style={styles.previewTitle} accessibilityRole="header">Link preview</Text>
+            <Text style={styles.url} onPress={() => void Linking.openURL(item.url!)} accessibilityRole="link">
               {item.url}
             </Text>
           </View>
@@ -143,10 +143,10 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
 
         {!!item.sourceUrl && item.sourceUrl !== item.url && (
           <View style={styles.preview}>
-            <Text style={styles.previewTitle}>
+            <Text style={styles.previewTitle} accessibilityRole="header">
               {item.sourcePlatform ? `Original on ${item.sourcePlatform}` : "Original source"}
             </Text>
-            <Text style={styles.url} onPress={() => void Linking.openURL(item.sourceUrl!)}>
+            <Text style={styles.url} onPress={() => void Linking.openURL(item.sourceUrl!)} accessibilityRole="link">
               {item.sourceUrl}
             </Text>
           </View>
@@ -159,11 +159,18 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
             contentContainerStyle={[styles.mediaRow, displayItems.length === 1 && styles.mediaRowCentered]}
             style={styles.mediaPreview}
           >
-            {displayItems.map((mediaItem) =>
+            {displayItems.map((mediaItem, index) =>
               mediaItem.mediaType === "video" ? (
                 <VideoLockedTile key={mediaItem.id} style={styles.mediaTile} />
               ) : mediaItem.url ? (
-                <MediaImage key={mediaItem.id} source={{ uri: mediaItem.url }} style={styles.mediaTile} />
+                <MediaImage
+                  key={mediaItem.id}
+                  source={{ uri: mediaItem.url }}
+                  style={styles.mediaTile}
+                  accessibilityLabel={
+                    displayItems.length > 1 ? `${item.title}, photo ${index + 1} of ${displayItems.length}` : item.title
+                  }
+                />
               ) : null,
             )}
           </ScrollView>
@@ -186,6 +193,10 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
               <View
                 key={listItem.id}
                 style={[styles.listRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * 24 }]}
+                accessible
+                accessibilityLabel={listItem.text}
+                accessibilityRole={listItem.kind === "check" ? "checkbox" : undefined}
+                accessibilityState={listItem.kind === "check" ? { checked: !!listItem.checked } : undefined}
               >
                 {listItem.kind === "check" ? (
                   <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
@@ -202,7 +213,12 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
           <View style={styles.attachmentBlock}>
             {item.attachments.map((attachment) =>
               attachment.mediaType === "image" ? (
-                <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
+                <MediaImage
+                  key={attachment.id}
+                  source={{ uri: attachment.uri }}
+                  style={styles.attachmentImage}
+                  accessibilityLabel={attachment.caption || `Photo attached to ${item.title}`}
+                />
               ) : (
                 <VideoLockedTile key={attachment.id} style={styles.attachmentVideo} />
               ),
@@ -214,7 +230,7 @@ export const PublicItemDetailScreen = ({ navigation, route }: Props) => {
 
         {item.tags.length > 0 && (
           <>
-            <Text style={styles.tagGroupLabel}>Tags</Text>
+            <Text style={styles.tagGroupLabel} accessibilityRole="header">Tags</Text>
             <View style={styles.tagRow}>
               {item.tags.map((tag) => (
                 <TagChip key={tag.id} label={tag.name} color={tag.color} />

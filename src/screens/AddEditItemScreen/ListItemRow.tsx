@@ -97,7 +97,14 @@ export const ListItemRow = ({
 
       <View style={[styles.listRowContent, { marginLeft: indentMarginLeft }]}>
         {listItem.kind === "check" ? (
-          <Pressable onPress={onToggleChecked} style={styles.listMarker}>
+          <Pressable
+            accessibilityLabel={listItem.checked ? "Mark item incomplete" : "Mark item complete"}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: !!listItem.checked }}
+            hitSlop={8}
+            onPress={onToggleChecked}
+            style={styles.listMarker}
+          >
             <Text style={styles.listMarkerText}>{listItem.checked ? "☑" : "☐"}</Text>
           </Pressable>
         ) : (
@@ -106,6 +113,7 @@ export const ListItemRow = ({
           </View>
         )}
         <TextInput
+          accessibilityLabel={listItem.kind === "check" ? "Checklist item" : "Bullet item"}
           ref={registerInputRef}
           style={styles.listInput}
           value={listItem.text}
@@ -116,13 +124,27 @@ export const ListItemRow = ({
           blurOnSubmit={false}
           onSubmitEditing={onSubmitEditing}
         />
-        <Pressable disabled={!canOutdent} onPress={onOutdent} style={styles.listIndentButton}>
+        <Pressable
+          accessibilityLabel="Decrease indent"
+          accessibilityRole="button"
+          disabled={!canOutdent}
+          hitSlop={8}
+          onPress={onOutdent}
+          style={styles.listIndentButton}
+        >
           <ListIndentDecrease size={18} color={colors.accentDark} opacity={canOutdent ? 1 : 0.35} />
         </Pressable>
-        <Pressable disabled={!canIndent} onPress={onIndent} style={styles.listIndentButton}>
+        <Pressable
+          accessibilityLabel="Increase indent"
+          accessibilityRole="button"
+          disabled={!canIndent}
+          hitSlop={8}
+          onPress={onIndent}
+          style={styles.listIndentButton}
+        >
           <ListIndentIncrease size={18} color={colors.accentDark} opacity={canIndent ? 1 : 0.35} />
         </Pressable>
-        <Pressable onPress={onRemove} style={styles.listIndentButton}>
+        <Pressable accessibilityLabel="Remove row" accessibilityRole="button" hitSlop={8} onPress={onRemove} style={styles.listIndentButton}>
           <Trash2 size={18} color={colors.danger} />
         </Pressable>
       </View>

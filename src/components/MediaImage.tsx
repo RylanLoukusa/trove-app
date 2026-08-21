@@ -7,9 +7,10 @@ type MediaImageProps = {
   source: { uri: string };
   skeletonRadius?: number;
   style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
 };
 
-export const MediaImage = ({ source, skeletonRadius = radius.sm, style }: MediaImageProps) => {
+export const MediaImage = ({ source, skeletonRadius = radius.sm, style, accessibilityLabel }: MediaImageProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,6 +24,8 @@ export const MediaImage = ({ source, skeletonRadius = radius.sm, style }: MediaI
         source={source}
         style={[styles.image, isLoading && styles.hidden]}
         onLoadEnd={() => setIsLoading(false)}
+        accessible={!!accessibilityLabel}
+        accessibilityLabel={accessibilityLabel}
       />
     </View>
   );

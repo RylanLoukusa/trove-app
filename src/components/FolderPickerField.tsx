@@ -101,6 +101,7 @@ export const FolderPickerField = ({ folders, selectedFolderId, onSelectFolder }:
           </View>
 
           <TextInput
+            accessibilityLabel="Search folders"
             autoCorrect={false}
             onChangeText={setQuery}
             placeholder="Search folders..."

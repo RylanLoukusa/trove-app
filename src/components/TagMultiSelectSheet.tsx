@@ -60,6 +60,7 @@ export const TagMultiSelectSheet = ({
         </View>
 
         <TextInput
+          accessibilityLabel={`Search ${title.toLowerCase()}`}
           autoCorrect={false}
           onChangeText={setQuery}
           onSubmitEditing={canCreate ? submitCreate : undefined}

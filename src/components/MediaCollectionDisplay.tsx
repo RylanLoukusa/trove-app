@@ -13,6 +13,8 @@ type Props = {
   mediaItems?: MediaCollectionItem[];
   itemHeight: number;
   itemWidth: number;
+  /** Base accessible name for image tiles, e.g. the item's title. Combined with the tile's position when there's more than one. */
+  mediaLabel?: string;
   nativeVideoControls?: boolean;
   onPressItem?: (index: number) => void;
   /** When true, video tiles show a locked placeholder instead of playing (non-Pro viewer of shared video). */
@@ -48,12 +50,13 @@ export const useResolvedMediaUrl = (item: DisplayItem): { url: string | null; is
 type StoredMediaTileProps = {
   item: DisplayItem;
   height: number;
+  label?: string;
   nativeVideoControls: boolean;
   videoLocked: boolean;
   width: number;
 };
 
-const StoredMediaTile = ({ item, height, nativeVideoControls, videoLocked, width }: StoredMediaTileProps) => {
+const StoredMediaTile = ({ item, height, label, nativeVideoControls, videoLocked, width }: StoredMediaTileProps) => {
   const { url: displayUrl, isLoading } = useResolvedMediaUrl(item);
 
   if (item.mediaType === "video" && videoLocked) {
@@ -77,7 +80,7 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, videoLocked, width
       );
     }
 
-    return <MediaImage source={{ uri: displayUrl }} style={[styles.image, { height, width }]} />;
+    return <MediaImage source={{ uri: displayUrl }} style={[styles.image, { height, width }]} accessibilityLabel={label} />;
   }
 
   if (isLoading) {
@@ -87,7 +90,7 @@ const StoredMediaTile = ({ item, height, nativeVideoControls, videoLocked, width
   return null;
 };
 
-export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, nativeVideoControls = true, onPressItem, videoLocked = false, style }: Props) => {
+export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems, itemHeight, itemWidth, mediaLabel, nativeVideoControls = true, onPressItem, videoLocked = false, style }: Props) => {
   const displayItems = useMemo<DisplayItem[]>(() => resolveDisplayItems(media, mediaItems), [media, mediaItems]);
 
   if (!displayItems.length) return null;
@@ -100,10 +103,16 @@ export const MediaCollectionDisplay = ({ centerContent = true, media, mediaItems
       style={style}
     >
       {displayItems.map((item, index) => {
+        const label = mediaLabel
+          ? displayItems.length > 1
+            ? `${mediaLabel}, photo ${index + 1} of ${displayItems.length}`
+            : mediaLabel
+          : undefined;
         const tile = (
           <StoredMediaTile
             item={item}
             height={itemHeight}
+            label={label}
             nativeVideoControls={nativeVideoControls}
             videoLocked={videoLocked}
             width={itemWidth}

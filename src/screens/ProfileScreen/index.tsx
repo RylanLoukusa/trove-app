@@ -162,7 +162,12 @@ export const ProfileScreen = ({ navigation }: Props) => {
             <View style={styles.header}>
               <View style={styles.avatar}>
                 {profile?.avatarUrl ? (
-                  <MediaImage source={{ uri: profile.avatarUrl }} skeletonRadius={44} style={styles.avatarImage} />
+                  <MediaImage
+                    source={{ uri: profile.avatarUrl }}
+                    skeletonRadius={44}
+                    style={styles.avatarImage}
+                    accessibilityLabel="Your profile photo"
+                  />
                 ) : (
                   <Text style={styles.avatarText}>{initials}</Text>
                 )}
@@ -175,6 +180,7 @@ export const ProfileScreen = ({ navigation }: Props) => {
 
             <Text style={styles.label}>Display name</Text>
             <TextInput
+              accessibilityLabel="Display name"
               autoCapitalize="words"
               onChangeText={(value) => {
                 setDisplayName(value);

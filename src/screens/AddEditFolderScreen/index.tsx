@@ -236,6 +236,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         <View ref={registerAnchor("name", spacing.md)}>
         <Text style={styles.label}>Name</Text>
         <TextInput
+          accessibilityLabel="Name"
           style={styles.input}
           value={name}
           onChangeText={setName}
@@ -247,6 +248,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         <View ref={registerAnchor("purpose", spacing.md)}>
         <Text style={styles.label}>Purpose</Text>
         <TextInput
+          accessibilityLabel="Purpose"
           multiline
           onChangeText={setPurpose}
           placeholder="Things that belong together here..."
@@ -283,6 +285,8 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             <View style={styles.iconPickerHeader}>
               <Pressable
                 accessibilityLabel={isIconPickerExpanded ? "Collapse emoji picker" : "Expand emoji picker"}
+                accessibilityRole="button"
+                hitSlop={8}
                 onPress={() => setIsIconPickerExpanded((current) => !current)}
                 style={({ pressed }) => [styles.iconPickerSizeButton, pressed && styles.iconPickerPressed]}
               >
@@ -415,6 +419,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           </View>
 
           <TextInput
+            accessibilityLabel="Search folders"
             autoCorrect={false}
             onChangeText={setParentSearch}
             placeholder="Search folders..."

@@ -258,6 +258,7 @@ export const SearchScreen = ({ navigation, route }: Props) => {
           <>
             <Text style={styles.title}>Search</Text>
             <TextInput
+              accessibilityLabel="Search"
               style={styles.input}
               value={query}
               onChangeText={setQuery}

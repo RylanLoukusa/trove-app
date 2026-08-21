@@ -22,10 +22,12 @@ type Props = {
 
 type MediaThumbnailProps = {
   item: MediaCollectionItem;
+  position: number;
+  total: number;
   onRemove: (itemId: string) => void;
 };
 
-const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
+const MediaThumbnail = ({ item, position, total, onRemove }: MediaThumbnailProps) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -53,7 +55,12 @@ const MediaThumbnail = ({ item, onRemove }: MediaThumbnailProps) => {
           </View>
         </View>
       ) : (
-        <MediaImage source={{ uri }} skeletonRadius={14} style={styles.thumbnailImage} />
+        <MediaImage
+          source={{ uri }}
+          skeletonRadius={14}
+          style={styles.thumbnailImage}
+          accessibilityLabel={`Selected photo ${position} of ${total}`}
+        />
       )}
       <Pressable
         accessibilityLabel="Remove media"
@@ -142,8 +149,8 @@ export const MediaCollectionPicker = ({ items, onChange, style }: Props) => {
           showsHorizontalScrollIndicator={false}
           style={styles.thumbnailScroller}
         >
-          {items.map((item) => (
-            <MediaThumbnail key={item.id} item={item} onRemove={removeItem} />
+          {items.map((item, index) => (
+            <MediaThumbnail key={item.id} item={item} position={index + 1} total={items.length} onRemove={removeItem} />
           ))}
         </ScrollView>
       )}

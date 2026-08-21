@@ -211,7 +211,13 @@ export const LoginScreen = ({ navigation }: Props) => {
     <View style={styles.screen}>
       {isEmailAuthFlow ? (
         <View style={[styles.emailFlowTopBar, { paddingTop: insets.top + spacing.xl }]}>
-          <Pressable onPress={onPressChooserMode} style={({ pressed }) => [styles.emailFlowBackButton, pressed && styles.inlineLinkPressed]}>
+          <Pressable
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onPressChooserMode}
+            style={({ pressed }) => [styles.emailFlowBackButton, pressed && styles.inlineLinkPressed]}
+          >
             <ChevronLeft color={colors.muted} size={20} />
             <Text style={styles.emailFlowBackText}>Back</Text>
           </Pressable>
@@ -269,6 +275,7 @@ export const LoginScreen = ({ navigation }: Props) => {
               <Text style={styles.formTitle}>Reset password</Text>
               <Text style={styles.label}>Email</Text>
               <TextInput
+                accessibilityLabel="Email"
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -292,6 +299,7 @@ export const LoginScreen = ({ navigation }: Props) => {
               <Text style={styles.formTitle}>{authMode === "signUp" ? "Create account" : "Email sign in"}</Text>
               <Text style={styles.label}>Email</Text>
               <TextInput
+                accessibilityLabel="Email"
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -310,6 +318,7 @@ export const LoginScreen = ({ navigation }: Props) => {
                 ) : null}
               </View>
               <TextInput
+                accessibilityLabel="Password"
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}

@@ -61,6 +61,7 @@ export const ResetPasswordScreen = ({ navigation }: Props) => {
 
         <Text style={styles.label}>New password</Text>
         <TextInput
+          accessibilityLabel="New password"
           autoCapitalize="none"
           autoCorrect={false}
           onChangeText={setPassword}
@@ -73,6 +74,7 @@ export const ResetPasswordScreen = ({ navigation }: Props) => {
 
         <Text style={styles.label}>Confirm password</Text>
         <TextInput
+          accessibilityLabel="Confirm password"
           autoCapitalize="none"
           autoCorrect={false}
           onChangeText={setConfirmPassword}

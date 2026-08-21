@@ -85,6 +85,7 @@ const CommentComposer = ({
   return (
     <View style={styles.composer}>
       <TextInput
+        accessibilityLabel={placeholder}
         autoFocus={autoFocus}
         editable={!disabled && !isSubmitting}
         multiline
@@ -203,7 +204,8 @@ const EmojiReactionPicker = ({ comment, onSelectReaction }: EmojiReactionPickerP
   return (
     <View style={[styles.reactionPicker, isExpanded && styles.reactionPickerExpanded]}>
       <Pressable
-        accessibilityLabel={isExpanded ? "Collapse emoji picker" : "Expand emoji picker"}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         onPress={() => setIsExpanded((current) => !current)}
         style={({ pressed }) => [styles.reactionPickerHandleButton, pressed && styles.pressed]}
       >
@@ -213,6 +215,8 @@ const EmojiReactionPicker = ({ comment, onSelectReaction }: EmojiReactionPickerP
       <View style={styles.reactionPickerHeader}>
         <Pressable
           accessibilityLabel={isExpanded ? "Collapse emoji picker" : "Expand emoji picker"}
+          accessibilityRole="button"
+          hitSlop={8}
           onPress={() => setIsExpanded((current) => !current)}
           style={({ pressed }) => [styles.reactionPickerSizeButton, pressed && styles.pressed]}
         >
@@ -342,7 +346,12 @@ const ReactionRosterSheet = ({ comment, onClose }: ReactionRosterSheetProps) => 
         {visibleDetails.map((detail) => (
           <View key={`${detail.userId}:${detail.reaction}`} style={styles.reactionRosterRow}>
             {detail.user.avatarUrl ? (
-              <MediaImage source={{ uri: detail.user.avatarUrl }} skeletonRadius={16} style={styles.reactionRosterAvatar} />
+              <MediaImage
+                source={{ uri: detail.user.avatarUrl }}
+                skeletonRadius={16}
+                style={styles.reactionRosterAvatar}
+                accessibilityLabel={`${detail.user.displayName || detail.user.email || "Someone"}'s profile photo`}
+              />
             ) : (
               <View style={styles.reactionRosterAvatarFallback}>
                 <Text style={styles.reactionRosterAvatarText}>{initialsForAuthor(detail.user)}</Text>
@@ -462,6 +471,8 @@ const CommentRow = ({
 
           <View style={styles.commentActions}>
             <Pressable
+              accessibilityRole="button"
+              hitSlop={8}
               onPress={() => setIsReactionPickerOpen((current) => !current)}
               style={({ pressed }) => [styles.actionButton, isReactionPickerOpen && styles.actionButtonActive, pressed && styles.pressed]}
             >

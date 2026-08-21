@@ -11,6 +11,11 @@ export type ThemeColors = {
   blue: string;
   skeleton: string;
   onAccent: string;
+  // Solid-fill button backgrounds. Kept separate from accentDark/danger (which
+  // are also used as small text/icon colors, where a darker shade would hurt
+  // rather than help contrast) so onAccent text on top always clears 4.5:1.
+  buttonPrimaryBg: string;
+  buttonDangerBg: string;
 };
 
 export const lightColors: ThemeColors = {
@@ -26,6 +31,8 @@ export const lightColors: ThemeColors = {
   blue: "#6F8FAF",
   skeleton: "#E7DDD1",
   onAccent: "#FFFFFF",
+  buttonPrimaryBg: "#43664A",
+  buttonDangerBg: "#B85B53",
 };
 
 export const darkColors: ThemeColors = {
@@ -41,6 +48,10 @@ export const darkColors: ThemeColors = {
   blue: "#8FADC8",
   skeleton: "#2E2921",
   onAccent: "#FFFFFF",
+  // Darker than accentDark/danger specifically so white button text clears WCAG 4.5:1
+  // (accentDark/danger themselves measure only 3.60:1 / 2.90:1 with white on top).
+  buttonPrimaryBg: "#607C63",
+  buttonDangerBg: "#C94B3E",
 };
 
 // Default/light export kept for any callers outside a component tree (e.g. static

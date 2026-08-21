@@ -727,6 +727,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
 
                 <Text style={styles.label}>Invite by email</Text>
                 <TextInput
+                  accessibilityLabel="Invite by email"
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
@@ -784,6 +785,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
               />
             )}
             <TextInput
+              accessibilityLabel="Add viewer by email"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"

@@ -35,7 +35,12 @@ const PublicFolderCard = ({
 }) => {
   const colors = useThemeColors();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}>
+    <Pressable
+      accessibilityLabel={`${folder.name}, ${itemCount} saved here`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}
+    >
       <View style={[styles.folderCardIcon, { backgroundColor: folder.color ?? colors.border }]}>
         <Text style={styles.folderCardEmoji}>{folder.icon ?? "📁"}</Text>
       </View>
@@ -45,7 +50,9 @@ const PublicFolderCard = ({
         </Text>
         <Text style={styles.folderCardMeta}>{itemCount} saved here</Text>
       </View>
-      <Text style={styles.folderCardChevron}>›</Text>
+      <Text style={styles.folderCardChevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        ›
+      </Text>
     </Pressable>
   );
 };
@@ -67,12 +74,13 @@ const ItemCard = ({
   return (
     <View style={styles.itemCard}>
       <View style={styles.itemHeader}>
-        <Text style={styles.itemTitle} numberOfLines={2}>
+        <Text style={styles.itemTitle} numberOfLines={2} accessibilityRole="header">
           {item.title}
         </Text>
         <Pressable
           accessibilityLabel="Open item"
           accessibilityRole="button"
+          hitSlop={8}
           onPress={onOpen}
           style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}
         >
@@ -82,6 +90,7 @@ const ItemCard = ({
 
       {!!item.url && (
         <Pressable
+          accessibilityRole="link"
           onPress={() => void Linking.openURL(item.url!)}
           style={({ pressed }) => [styles.itemLink, pressed && styles.itemLinkPressed]}
         >
@@ -99,12 +108,18 @@ const ItemCard = ({
           style={styles.itemMedia}
           testID="itemMediaGallery"
         >
-          {displayItems.map((mediaItem) => (
+          {displayItems.map((mediaItem, index) => (
             <View key={mediaItem.id} testID={`mediaTile-${mediaItem.id}`}>
               {mediaItem.mediaType === "video" ? (
                 <VideoLockedTile style={styles.itemMediaTile} />
               ) : mediaItem.url ? (
-                <MediaImage source={{ uri: mediaItem.url }} style={styles.itemMediaTile} />
+                <MediaImage
+                  source={{ uri: mediaItem.url }}
+                  style={styles.itemMediaTile}
+                  accessibilityLabel={
+                    displayItems.length > 1 ? `${item.title}, photo ${index + 1} of ${displayItems.length}` : item.title
+                  }
+                />
               ) : null}
             </View>
           ))}
@@ -120,6 +135,10 @@ const ItemCard = ({
             <View
               key={listItem.id}
               style={[styles.listRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * 24 }]}
+              accessible
+              accessibilityLabel={listItem.text}
+              accessibilityRole={listItem.kind === "check" ? "checkbox" : undefined}
+              accessibilityState={listItem.kind === "check" ? { checked: !!listItem.checked } : undefined}
             >
               {listItem.kind === "check" ? (
                 <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
@@ -136,7 +155,12 @@ const ItemCard = ({
         <View style={styles.itemAttachments} testID="itemAttachments">
           {item.attachments.map((attachment) =>
             attachment.mediaType === "image" ? (
-              <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.itemAttachmentImage} />
+              <MediaImage
+                key={attachment.id}
+                source={{ uri: attachment.uri }}
+                style={styles.itemAttachmentImage}
+                accessibilityLabel={attachment.caption || `Photo attached to ${item.title}`}
+              />
             ) : (
               <VideoLockedTile key={attachment.id} style={styles.itemAttachmentVideo} />
             ),
@@ -243,12 +267,12 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
         <Text style={styles.eyebrow}>
           {!!data.ownerName && `${data.ownerName}'s `}Shared folder
         </Text>
-        <Text style={styles.title}>
+        <Text style={styles.title} accessibilityRole="header">
           {activeFolder.icon ?? "📁"} {activeFolder.name}
         </Text>
         {!!activeFolder.purpose && <Text style={styles.purpose}>{activeFolder.purpose}</Text>}
 
-        <Text style={styles.section}>Subfolders</Text>
+        <Text style={styles.section} accessibilityRole="header">Subfolders</Text>
         {subfolders.length === 0 ? (
           <EmptyState title="No subfolders." message="This folder has no subfolders." />
         ) : (
@@ -263,7 +287,7 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
           ))
         )}
 
-        <Text style={styles.section}>Items</Text>
+        <Text style={styles.section} accessibilityRole="header">Items</Text>
         {folderItems.length === 0 ? (
           <EmptyState title="No items here yet." message="This folder is empty." />
         ) : (

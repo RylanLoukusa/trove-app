@@ -131,6 +131,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOp
           mediaItems={item.mediaItems}
           itemHeight={300}
           itemWidth={300}
+          mediaLabel={item.title}
           style={styles.fullItemMedia}
         />
 
@@ -166,7 +167,12 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOp
           <View style={styles.fullItemAttachments}>
             {item.attachments?.map((attachment) =>
               attachment.mediaType === "image" ? (
-                <MediaImage key={attachment.id} source={{ uri: attachment.uri }} style={styles.fullItemAttachmentImage} />
+                <MediaImage
+                  key={attachment.id}
+                  source={{ uri: attachment.uri }}
+                  style={styles.fullItemAttachmentImage}
+                  accessibilityLabel={attachment.caption || `Photo attached to ${item.title}`}
+                />
               ) : (
                 <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.fullItemAttachmentVideo} />
               ),
@@ -391,6 +397,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
                 accessibilityLabel="Edit folder"
                 accessibilityRole="button"
                 onPress={onPressEditFolder}
+                hitSlop={8}
                 style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
               >
                 <Pencil color={colors.accentDark} size={18} strokeWidth={2.4} />
