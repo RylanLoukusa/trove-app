@@ -97,16 +97,21 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     navigation.navigate("AddEditItem", { itemId: item.id });
   }, [canEditCurrentItem, item, navigation]);
 
-  const handleNavigateToIndex = useCallback((index: number): void => {
-    pagerRef.current?.scrollToIndex({ index, animated: true });
-  }, []);
+  const handleNavigateToIndex = useCallback(
+    (index: number): void => {
+      pagerRef.current?.scrollToIndex({ index, animated: true });
+      const target = folderItems[index];
+      if (target) navigation.setParams({ itemId: target.id, newList: false });
+    },
+    [folderItems, navigation],
+  );
 
   const handleMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
       const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
       const settledItem = folderItems[newIndex];
       if (settledItem && settledItem.id !== route.params.itemId) {
-        navigation.setParams({ itemId: settledItem.id });
+        navigation.setParams({ itemId: settledItem.id, newList: false });
       }
     },
     [folderItems, navigation, route.params.itemId, width],
@@ -220,6 +225,9 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           keyExtractor={(pageItem) => pageItem.id}
           horizontal
           pagingEnabled
+          // On a list, sideways swipes belong to its lines (check off, Move,
+          // Delete); Prev and Next still step through the folder.
+          scrollEnabled={item?.type !== "list"}
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={itemIndex >= 0 ? itemIndex : 0}
           getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}

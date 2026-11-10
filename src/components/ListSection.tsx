@@ -5,6 +5,7 @@ import { Eraser, ListPlus, Sparkles } from "lucide-react-native";
 import { ChoiceSheet } from "./ChoiceSheet";
 import { FocusListPicker, FocusPickerList } from "./FocusListPicker";
 import { ListEntriesView } from "./ListEntriesView";
+import type { MoveTarget } from "./MoveToListSheet";
 import { useTrove } from "../storage/storage";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
@@ -19,6 +20,7 @@ import {
   sortEntries,
 } from "../utils/listEntries";
 import { focusRuleLabels, matchesFocusRule, priorityOptionsFor } from "../utils/listView";
+import { getFolderPathLabel } from "../utils/folderTree";
 
 type Props = {
   item: SavedItem;
@@ -48,6 +50,7 @@ export const ListSection = ({ item, focusAddSignal }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
+    folders,
     items,
     listEntries,
     tagGroups,
@@ -55,6 +58,8 @@ export const ListSection = ({ item, focusAddSignal }: Props) => {
     updateItem,
     updateListEntry,
     insertListEntries,
+    relocateListEntries,
+    restoreListEntries,
     moveListEntry,
     deleteListEntry,
     addToFocusList,
@@ -175,6 +180,32 @@ export const ListSection = ({ item, focusAddSignal }: Props) => {
     return result;
   }, [focusMembership, isFocus, itemsById, referenceSources]);
 
+  // Regular lists you can edit, other than this one, to move lines to.
+  const moveTargets = useMemo<MoveTarget[]>(
+    () =>
+      items
+        .filter(
+          (candidate) =>
+            candidate.type === "list" && !isFocusList(candidate) && candidate.id !== item.id && canEditItem(candidate.id),
+        )
+        .map((list) => ({ id: list.id, title: list.title, folderLabel: getFolderPathLabel(folders, list.folderId) })),
+    [canEditItem, folders, item.id, items],
+  );
+
+  const onMoveEntries = useCallback(
+    (entryIds: string[], listId: string) => {
+      const previous = relocateListEntries(entryIds.map((entryId) => ({ entryId: targetOf(entryId), listId })));
+      if (previous.length === 0) return null;
+      return {
+        listTitle: itemsById.get(listId)?.title ?? "list",
+        undo: () => {
+          relocateListEntries(previous);
+        },
+      };
+    },
+    [itemsById, relocateListEntries, targetOf],
+  );
+
   const pickerLists = useMemo<FocusPickerList[]>(() => {
     if (!isFocus) return [];
     return items
@@ -290,6 +321,14 @@ export const ListSection = ({ item, focusAddSignal }: Props) => {
           if (targetIds.has(entryId)) removeFromFocusList(item.id, entryId);
           else deleteListEntry(entryId);
         }}
+        moveTargets={moveTargets}
+        onMoveEntries={onMoveEntries}
+        onRestoreEntries={(restored) => {
+          restoreListEntries(restored);
+        }}
+        onAddToFocusList={
+          focusLists.length ? (entryIds, focusListId) => addToFocusList(focusListId, entryIds.map(targetOf)) : undefined
+        }
         captions={captions}
         referenceSources={referenceSources}
         ruleEntryIds={autoIds}

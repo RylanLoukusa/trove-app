@@ -106,6 +106,14 @@ type TroveContextValue = TroveData & {
     afterEntryId: string | null,
     inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel">>>,
   ) => ListEntry[];
+  // Moves lines to other lists. A focus-list line that stands for a line on
+  // another list moves that original. Without a position a line goes to the
+  // end of its new list. Returns where each moved line was, for Undo.
+  relocateListEntries: (
+    moves: Array<{ entryId: string; listId: string; position?: string }>,
+  ) => Array<{ entryId: string; listId: string; position: string }>;
+  // Puts deleted lines back exactly as they were (Undo after a delete).
+  restoreListEntries: (entries: ListEntry[]) => number;
   // Places the entry between two neighbours (either may be null for the ends).
   moveListEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => boolean;
   deleteListEntry: (entryId: string) => boolean;
@@ -844,6 +852,67 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return created;
   }, [activeUserId, canEditListRecord, markLocalChangePending]);
 
+  const relocateListEntries = useCallback<TroveContextValue["relocateListEntries"]>((moves) => {
+    const { items, listEntries } = dataRef.current;
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    const entriesById = new Map(listEntries.map((entry) => [entry.id, entry]));
+    const previous: Array<{ entryId: string; listId: string; position: string }> = [];
+    const updates = new Map<string, Pick<ListEntry, "listId" | "position" | "ownerId">>();
+    // Last position handed out per target list, so several moves stack in order.
+    const lastPosition = new Map<string, string | null>();
+    let denied = false;
+
+    moves.forEach((move) => {
+      const requested = entriesById.get(move.entryId);
+      const entry = requested?.refEntryId ? entriesById.get(requested.refEntryId) : requested;
+      const target = itemsById.get(move.listId);
+      if (!entry || !target || target.type !== "list" || isFocusList(target) || updates.has(entry.id)) return;
+      if (entry.listId === target.id && !move.position) return;
+      if (!canEditListRecord(entry.listId) || !canEditListRecord(target.id)) {
+        denied = true;
+        return;
+      }
+      let position = move.position;
+      if (!position || !isValidPosition(position)) {
+        if (!lastPosition.has(target.id)) {
+          const siblings = sortEntries(listEntries.filter((candidate) => candidate.listId === target.id));
+          lastPosition.set(target.id, siblings[siblings.length - 1]?.position ?? null);
+        }
+        position = generatePositionBetween(lastPosition.get(target.id) ?? null, null);
+        lastPosition.set(target.id, position);
+      }
+      previous.push({ entryId: entry.id, listId: entry.listId, position: entry.position });
+      updates.set(entry.id, { listId: target.id, position, ownerId: target.ownerId ?? entry.ownerId });
+    });
+
+    if (denied) Alert.alert("Cannot move item", "You need edit access to both lists to move a line.");
+    if (updates.size === 0) return [];
+    const timestamp = new Date().toISOString();
+    setData((current) => ({
+      ...current,
+      listEntries: current.listEntries.map((candidate) => {
+        const update = updates.get(candidate.id);
+        return update ? { ...candidate, ...update, updatedAt: timestamp } : candidate;
+      }),
+    }));
+    markLocalChangePending();
+    return previous;
+  }, [canEditListRecord, markLocalChangePending]);
+
+  const restoreListEntries = useCallback<TroveContextValue["restoreListEntries"]>((entries) => {
+    const { listEntries } = dataRef.current;
+    const existing = new Set(listEntries.map((entry) => entry.id));
+    const restorable = entries.filter((entry) => !existing.has(entry.id) && canEditListRecord(entry.listId));
+    if (restorable.length === 0) return 0;
+    const timestamp = new Date().toISOString();
+    setData((current) => ({
+      ...current,
+      listEntries: [...current.listEntries, ...restorable.map((entry) => ({ ...entry, updatedAt: timestamp }))],
+    }));
+    markLocalChangePending();
+    return restorable.length;
+  }, [canEditListRecord, markLocalChangePending]);
+
   const moveListEntry = useCallback<TroveContextValue["moveListEntry"]>((entryId, afterEntryId, beforeEntryId) => {
     const entries = dataRef.current.listEntries;
     const entry = entries.find((candidate) => candidate.id === entryId);
@@ -1341,6 +1410,8 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       updateListEntry,
       createListEntry,
       insertListEntries,
+      relocateListEntries,
+      restoreListEntries,
       moveListEntry,
       deleteListEntry,
       addToFocusList,
@@ -1377,6 +1448,8 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       updateListEntry,
       createListEntry,
       insertListEntries,
+      relocateListEntries,
+      restoreListEntries,
       moveListEntry,
       deleteListEntry,
       addToFocusList,
