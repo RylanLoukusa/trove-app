@@ -51,7 +51,12 @@ import { createId } from "../utils/id";
 import { requiresProForSync } from "../utils/limits";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
 import { normalizeTroveData } from "../utils/itemTypes";
-import { applyListItemsToEntries, hydrateItemsWithEntries } from "../utils/listEntries";
+import {
+  applyListItemsToEntries,
+  generatePositionBetween,
+  hydrateItemsWithEntries,
+  sortEntries,
+} from "../utils/listEntries";
 
 const STORAGE_KEY_PREFIX = "trove:data:v1";
 const emptyData: TroveData = { folders: [], items: [], listEntries: [], tagGroups: [], tagOptions: [] };
@@ -84,6 +89,13 @@ type TroveContextValue = TroveData & {
     entryId: string,
     updates: Partial<Pick<ListEntry, "text" | "checked" | "kind" | "indentLevel" | "notes" | "dueDate" | "tagOptionIds">>,
   ) => boolean;
+  createListEntry: (
+    listId: string,
+    input: Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "dueDate" | "tagOptionIds">>,
+  ) => ListEntry | null;
+  // Places the entry between two neighbours (either may be null for the ends).
+  moveListEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => boolean;
+  deleteListEntry: (entryId: string) => boolean;
   createTagGroup: (
     input: Pick<TagGroup, "name"> & Partial<Pick<TagGroup, "selectionMode" | "allowInlineCreate" | "isSystem" | "sortOrder">>,
   ) => TagGroup;
@@ -714,6 +726,80 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [markLocalChangePending]);
 
+  const canEditListRecord = useCallback((listId?: string): boolean => {
+    const list = dataRef.current.items.find((candidate) => candidate.id === listId);
+    const folder = dataRef.current.folders.find((candidate) => candidate.id === list?.folderId);
+    return !!list && canEditItemRecord(list, folder);
+  }, []);
+
+  const createListEntry = useCallback<TroveContextValue["createListEntry"]>((listId, input) => {
+    const list = dataRef.current.items.find((candidate) => candidate.id === listId);
+    if (!list || !canEditListRecord(listId)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return null;
+    }
+
+    const siblings = sortEntries(dataRef.current.listEntries.filter((entry) => entry.listId === listId));
+    const timestamp = new Date().toISOString();
+    const entry: ListEntry = {
+      id: createId("entry"),
+      listId,
+      kind: input.kind ?? siblings[siblings.length - 1]?.kind ?? "check",
+      text: input.text.trim(),
+      checked: false,
+      indentLevel: 0,
+      position: generatePositionBetween(siblings[siblings.length - 1]?.position ?? null, null),
+      dueDate: input.dueDate,
+      tagOptionIds: input.tagOptionIds ?? [],
+      ownerId: list.ownerId ?? activeUserId ?? undefined,
+      createdBy: activeUserId ?? undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    setData((current) => ({ ...current, listEntries: [...current.listEntries, entry] }));
+    markLocalChangePending();
+    return entry;
+  }, [activeUserId, canEditListRecord, markLocalChangePending]);
+
+  const moveListEntry = useCallback<TroveContextValue["moveListEntry"]>((entryId, afterEntryId, beforeEntryId) => {
+    const entries = dataRef.current.listEntries;
+    const entry = entries.find((candidate) => candidate.id === entryId);
+    if (!entry || !canEditListRecord(entry.listId)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return false;
+    }
+
+    const after = entries.find((candidate) => candidate.id === afterEntryId && candidate.listId === entry.listId);
+    const before = entries.find((candidate) => candidate.id === beforeEntryId && candidate.listId === entry.listId);
+    const lower = after?.position ?? null;
+    let upper = before?.position ?? null;
+    if (lower !== null && upper !== null && lower >= upper) upper = null;
+    if ((lower === null || entry.position > lower) && (upper === null || entry.position < upper)) return true;
+
+    const timestamp = new Date().toISOString();
+    const position = generatePositionBetween(lower, upper);
+    setData((current) => ({
+      ...current,
+      listEntries: current.listEntries.map((candidate) =>
+        candidate.id === entryId ? { ...candidate, position, updatedAt: timestamp } : candidate,
+      ),
+    }));
+    markLocalChangePending();
+    return true;
+  }, [canEditListRecord, markLocalChangePending]);
+
+  const deleteListEntry = useCallback<TroveContextValue["deleteListEntry"]>((entryId) => {
+    const entry = dataRef.current.listEntries.find((candidate) => candidate.id === entryId);
+    if (!entry || !canEditListRecord(entry.listId)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return false;
+    }
+
+    setData((current) => ({ ...current, listEntries: current.listEntries.filter((candidate) => candidate.id !== entryId) }));
+    markLocalChangePending();
+    return true;
+  }, [canEditListRecord, markLocalChangePending]);
+
   const canManageFolder = useCallback<TroveContextValue["canManageFolder"]>((folderId) => {
     if (!folderId) return true;
     return canManageFolderRecord(dataRef.current.folders.find((folder) => folder.id === folderId));
@@ -1071,6 +1157,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       updateItem,
       deleteItem,
       updateListEntry,
+      createListEntry,
+      moveListEntry,
+      deleteListEntry,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,
@@ -1099,6 +1188,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       updateItem,
       deleteItem,
       updateListEntry,
+      createListEntry,
+      moveListEntry,
+      deleteListEntry,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,

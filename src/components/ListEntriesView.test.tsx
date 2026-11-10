@@ -1,0 +1,129 @@
+import React from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
+
+import { ListEntriesView } from "./ListEntriesView";
+import { renderScreen } from "../test-utils/renderScreen";
+import type { ListEntry, TagOption } from "../types/models";
+
+const high: TagOption = { id: "high", groupId: "priority", name: "High", color: "#D98A8A", sortOrder: 2, createdAt: "", updatedAt: "" };
+const low: TagOption = { ...high, id: "low", name: "Low", sortOrder: 0 };
+
+const entry = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
+  id,
+  listId: "list-1",
+  kind: "check",
+  text: id,
+  checked: false,
+  indentLevel: 0,
+  position: id,
+  tagOptionIds: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  ...overrides,
+});
+
+const handlers = {
+  onToggleEntry: jest.fn(),
+  onUpdateEntry: jest.fn(),
+  onMoveEntry: jest.fn(),
+  onAddEntry: jest.fn(),
+  onDeleteEntry: jest.fn(),
+};
+
+const renderList = (entries: ListEntry[], canEdit = true) =>
+  renderScreen(
+    <ListEntriesView listId="list-1" entries={entries} priorityOptions={[low, high]} canEdit={canEdit} {...handlers} />,
+  );
+
+const visibleTexts = () =>
+  screen.getAllByRole("button", { name: /^Edit / }).map((button) => button.props.accessibilityLabel.replace(/^Edit /, ""));
+
+describe("ListEntriesView", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+  });
+
+  it("puts completed items at the bottom by default and shows progress", async () => {
+    await renderList([entry("Florist", { checked: true }), entry("Cake")]);
+
+    expect(visibleTexts()).toEqual(["Cake", "Florist"]);
+    expect(screen.getByText("1 of 2 done")).toBeTruthy();
+  });
+
+  it("sorts by priority when chosen and remembers it for the list", async () => {
+    await renderList([entry("a", { text: "Cake" }), entry("b", { text: "Florist", tagOptionIds: ["high"] })]);
+
+    await fireEvent.press(screen.getByLabelText("Sort by My order"));
+    await fireEvent.press(screen.getByText("Priority"));
+
+    expect(visibleTexts()).toEqual(["Florist", "Cake"]);
+    expect(screen.getByText("High")).toBeTruthy();
+    await waitFor(async () =>
+      expect(JSON.parse((await AsyncStorage.getItem("trove:listView:list-1"))!)).toMatchObject({ sortMode: "priority" }),
+    );
+    // Reordering by drag is only offered in your own order.
+    expect(screen.queryByLabelText("Drag to reorder")).toBeNull();
+  });
+
+  it("hides completed items and offers to show them again", async () => {
+    await renderList([entry("Florist", { checked: true }), entry("Cake")]);
+
+    await fireEvent.press(screen.getByLabelText("Completed items: Move to bottom"));
+    await fireEvent.press(screen.getByText("Hide"));
+
+    expect(visibleTexts()).toEqual(["Cake"]);
+    await fireEvent.press(screen.getByText("1 completed item hidden · Show"));
+    expect(visibleTexts()).toEqual(["Cake", "Florist"]);
+  });
+
+  it("adds an item from the quick add field", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent.changeText(screen.getByLabelText("Add an item to this list"), "  Venue ");
+    await fireEvent(screen.getByLabelText("Add an item to this list"), "submitEditing");
+
+    expect(handlers.onAddEntry).toHaveBeenCalledWith("Venue");
+  });
+
+  it("checks an item off", async () => {
+    const cake = entry("Cake");
+    await renderList([cake]);
+
+    await fireEvent.press(screen.getByLabelText("Mark checklist item complete"));
+
+    expect(handlers.onToggleEntry).toHaveBeenCalledWith(cake);
+  });
+
+  it("sets a due date and priority from the item sheet", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await fireEvent.press(screen.getByText("Tomorrow"));
+    await fireEvent.press(screen.getByText("High"));
+    await fireEvent.changeText(screen.getByLabelText("Notes"), "Chocolate");
+    await fireEvent.press(screen.getByText("Done"));
+
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith(
+      "Cake",
+      expect.objectContaining({ dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), tagOptionIds: ["high"], notes: "Chocolate" }),
+    );
+  });
+
+  it("deletes an item from its sheet", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await fireEvent.press(screen.getByText("Delete item"));
+
+    expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
+  });
+
+  it("is read-only without edit access", async () => {
+    await renderList([entry("Cake")], false);
+
+    expect(screen.queryByLabelText("Add an item to this list")).toBeNull();
+    expect(screen.queryByLabelText("Drag to reorder")).toBeNull();
+  });
+});

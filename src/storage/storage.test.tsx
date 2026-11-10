@@ -168,3 +168,80 @@ describe("TroveProvider list entries", () => {
     expect(result.current.items.find((item) => item.id === createdId)?.listItems).toHaveLength(2);
   });
 });
+
+describe("TroveProvider list entry actions", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  it("adds a line to the end of a list", async () => {
+    const { result } = await renderTrove();
+
+    await act(async () => {
+      result.current.createListEntry("list-1", { text: "  Send invites ", dueDate: "2026-12-01" });
+    });
+
+    const lines = result.current.items[0].listItems!;
+    expect(lines.map((line) => line.text)).toEqual(["Book florist", "Order cake", "Send invites"]);
+    expect(result.current.listEntries.find((entry) => entry.text === "Send invites")).toMatchObject({
+      dueDate: "2026-12-01",
+      kind: "check",
+    });
+  });
+
+  it("moves a line between two others by changing only its position", async () => {
+    const { result } = await renderTrove();
+    await act(async () => {
+      result.current.createListEntry("list-1", { text: "Venue" });
+    });
+    const [florist, cake, venue] = result.current.items[0].listItems!;
+    const before = result.current.listEntries;
+
+    await act(async () => {
+      result.current.moveListEntry(venue.id, florist.id, cake.id);
+    });
+
+    expect(result.current.items[0].listItems!.map((line) => line.text)).toEqual(["Book florist", "Venue", "Order cake"]);
+    const changed = result.current.listEntries.filter((entry, index) => entry !== before[index]);
+    expect(changed.map((entry) => entry.id)).toEqual([venue.id]);
+  });
+
+  it("moves a line to the top", async () => {
+    const { result } = await renderTrove();
+    const [florist, cake] = result.current.items[0].listItems!;
+
+    await act(async () => {
+      result.current.moveListEntry(cake.id, null, florist.id);
+    });
+
+    expect(result.current.items[0].listItems!.map((line) => line.text)).toEqual(["Order cake", "Book florist"]);
+  });
+
+  it("deletes a single line and keeps the rest", async () => {
+    const { result } = await renderTrove();
+    const [florist] = result.current.items[0].listItems!;
+
+    await act(async () => {
+      result.current.deleteListEntry(florist.id);
+    });
+
+    expect(result.current.items[0].listItems!.map((line) => line.text)).toEqual(["Order cake"]);
+  });
+
+  it("sets a due date, notes and priority on a line", async () => {
+    const { result } = await renderTrove();
+    const [florist] = result.current.items[0].listItems!;
+
+    await act(async () => {
+      result.current.updateListEntry(florist.id, { dueDate: "2026-12-01", notes: "Ask about peonies", tagOptionIds: ["high"] });
+    });
+
+    expect(result.current.listEntries.find((entry) => entry.id === florist.id)).toMatchObject({
+      dueDate: "2026-12-01",
+      notes: "Ask about peonies",
+      tagOptionIds: ["high"],
+    });
+  });
+});

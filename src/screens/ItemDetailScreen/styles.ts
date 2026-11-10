@@ -111,49 +111,6 @@ export const createStyles = (colors: ThemeColors) =>
     descriptionSecondary: {
       marginTop: spacing.sm,
     },
-    listBlock: {
-      backgroundColor: colors.surface,
-      borderRadius: 18,
-      marginTop: spacing.lg,
-      padding: spacing.md,
-    },
-    listRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-      marginVertical: 4,
-    },
-    listCheckbox: {
-      alignItems: "center",
-      borderRadius: 10,
-      minHeight: 44,
-      justifyContent: "center",
-      width: 44,
-    },
-    listCheckboxPressed: {
-      backgroundColor: colors.background,
-      opacity: 0.72,
-    },
-    listMarker: {
-      color: colors.accentDark,
-      fontSize: 24,
-      fontWeight: "900",
-      width: 30,
-    },
-    listBullet: {
-      fontSize: 16,
-      textAlign: "center",
-    },
-    listText: {
-      color: colors.ink,
-      flex: 1,
-      fontSize: 16,
-      lineHeight: 23,
-    },
-    listTextDone: {
-      color: colors.muted,
-      textDecorationLine: "line-through",
-    },
     attachmentBlock: {
       gap: spacing.sm,
       marginTop: spacing.lg,
