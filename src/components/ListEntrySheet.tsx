@@ -6,17 +6,35 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, withPriority } from "../utils/listView";
 
+export type FocusListChoice = { id: string; title: string };
+
 type Props = {
   entry: ListEntry | null;
   priorityOptions: TagOption[];
   canEdit: boolean;
+  // Set when this line is shown in a focus list but belongs to another list.
+  sourceListTitle?: string;
+  focusLists?: FocusListChoice[];
+  selectedFocusListIds?: string[];
+  onToggleFocusList?: (focusListId: string) => void;
   onSave: (updates: Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds">>) => void;
   onDelete: () => void;
   onClose: () => void;
 };
 
 // Details for one list line: due date, priority and notes.
-export const ListEntrySheet = ({ entry, priorityOptions, canEdit, onSave, onDelete, onClose }: Props) => {
+export const ListEntrySheet = ({
+  entry,
+  priorityOptions,
+  canEdit,
+  sourceListTitle,
+  focusLists,
+  selectedFocusListIds = [],
+  onToggleFocusList,
+  onSave,
+  onDelete,
+  onClose,
+}: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState("");
@@ -69,6 +87,10 @@ export const ListEntrySheet = ({ entry, priorityOptions, canEdit, onSave, onDele
             <Text style={styles.done}>Done</Text>
           </Pressable>
         </View>
+
+        {!!sourceListTitle && (
+          <Text style={styles.sourceNote}>From {sourceListTitle}. Changes here show up there too.</Text>
+        )}
 
         <TextInput
           accessibilityLabel="Item text"
@@ -144,13 +166,31 @@ export const ListEntrySheet = ({ entry, priorityOptions, canEdit, onSave, onDele
           style={[styles.input, styles.notes]}
         />
 
+        {!!focusLists?.length && (
+          <>
+            <Text style={styles.label}>Focus lists</Text>
+            <View style={styles.chipRow}>
+              {focusLists.map((focusList) => (
+                <Chip
+                  key={focusList.id}
+                  label={focusList.title}
+                  selected={selectedFocusListIds.includes(focusList.id)}
+                  disabled={false}
+                  onPress={() => onToggleFocusList?.(focusList.id)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
         {canEdit && (
           <Pressable
             accessibilityRole="button"
             onPress={onDelete}
             style={({ pressed }) => [styles.deleteButton, pressed && styles.deletePressed]}
           >
-            <Text style={styles.deleteText}>Delete item</Text>
+            <Text style={styles.deleteText}>{sourceListTitle ? "Remove from this list" : "Delete item"}</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -210,6 +250,11 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.accentDark,
       fontSize: 16,
       fontWeight: "800",
+    },
+    sourceNote: {
+      color: colors.muted,
+      fontSize: 13,
+      marginBottom: spacing.sm,
     },
     textInput: {
       backgroundColor: colors.surface,

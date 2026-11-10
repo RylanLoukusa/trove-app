@@ -245,3 +245,129 @@ describe("TroveProvider list entry actions", () => {
     });
   });
 });
+
+describe("TroveProvider focus lists", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  const createToday = async (result: { current: ReturnType<typeof useTrove> }) => {
+    let id = "";
+    await act(async () => {
+      id = result.current.createItem({ folderId: "folder-1", title: "Today", type: "list", listMode: "focus", tagOptionIds: [] })!.id;
+    });
+    return id;
+  };
+  const today = (result: { current: ReturnType<typeof useTrove> }, id: string) =>
+    result.current.items.find((item) => item.id === id)!;
+
+  it("pulls lines in from other lists without moving them", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+
+    await act(async () => {
+      expect(result.current.addToFocusList(todayId, ["list-1~b", "list-1~a", "list-1~b"])).toBe(2);
+    });
+    // Adding again, or adding a focus-list line, does nothing.
+    await act(async () => {
+      expect(result.current.addToFocusList(todayId, ["list-1~a", `${todayId}>list-1~a`])).toBe(0);
+    });
+
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Order cake", "Book florist"]);
+    expect(result.current.items.find((item) => item.id === "list-1")?.listItems).toHaveLength(2);
+  });
+
+  it("checking a pulled-in line checks the original", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+    });
+
+    // Through the focus list's own line id, as the folder screen does.
+    await act(async () => {
+      result.current.updateListEntry(`${todayId}>list-1~a`, { checked: true });
+    });
+
+    expect(today(result, todayId).listItems?.[0]).toMatchObject({ text: "Book florist", checked: true });
+    expect(result.current.listEntries.find((entry) => entry.id === "list-1~a")?.checked).toBe(true);
+  });
+
+  it("removing from the focus list keeps the original, deleting the original removes it everywhere", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a", "list-1~b"]);
+    });
+
+    await act(async () => {
+      result.current.removeFromFocusList(todayId, "list-1~a");
+    });
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Order cake"]);
+    expect(result.current.listEntries.some((entry) => entry.id === "list-1~a")).toBe(true);
+
+    await act(async () => {
+      result.current.deleteListEntry("list-1~b");
+    });
+    expect(today(result, todayId).listItems).toEqual([]);
+    expect(result.current.listEntries.filter((entry) => entry.listId === todayId)).toHaveLength(0);
+  });
+
+  it("deleting a source list takes its lines out of focus lists", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+      result.current.createListEntry(todayId, { text: "Call mom" });
+    });
+
+    await act(async () => {
+      await result.current.deleteItem("list-1");
+    });
+
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Call mom"]);
+  });
+
+  it("clears done lines, then everything, without touching the originals", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a", "list-1~b"]);
+    });
+    await act(async () => {
+      result.current.createListEntry(todayId, { text: "Call mom" });
+    });
+    await act(async () => {
+      result.current.updateListEntry("list-1~a", { checked: true });
+    });
+
+    await act(async () => {
+      expect(result.current.clearFocusList(todayId, "done")).toBe(1);
+    });
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Order cake", "Call mom"]);
+
+    await act(async () => {
+      expect(result.current.clearFocusList(todayId, "all")).toBe(2);
+    });
+    expect(today(result, todayId).listItems).toEqual([]);
+    expect(result.current.items.find((item) => item.id === "list-1")?.listItems).toHaveLength(2);
+  });
+
+  it("ignores whole-list rewrites for focus lists", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+    });
+    const before = result.current.listEntries;
+
+    await act(async () => {
+      result.current.updateItem(todayId, { title: "Today!", listItems: [] });
+    });
+
+    expect(today(result, todayId).title).toBe("Today!");
+    expect(result.current.listEntries).toEqual(before);
+  });
+});

@@ -16,7 +16,7 @@ import {
   normalizeSavedItem,
   normalizeTroveData,
 } from "../utils/itemTypes";
-import { entryToListItem, groupEntriesByList } from "../utils/listEntries";
+import { entryToListItem, groupResolvedEntriesByList, isFocusList } from "../utils/listEntries";
 
 const remoteUpdatedAtKey = (userId: string) =>
   `trove:remoteUpdatedAt:${userId}`;
@@ -87,6 +87,7 @@ type ItemRow = {
   connections: unknown;
   tags: unknown; // holds tag-option ids, not free text (column name kept for continuity)
   notes: string | null;
+  list_mode: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -105,6 +106,7 @@ type ListEntryRow = {
   due_date: string | null;
   completed_at: string | null;
   tags: unknown;
+  ref_entry_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -123,6 +125,7 @@ const LIST_ENTRY_COLUMNS = [
   "due_date",
   "completed_at",
   "tags",
+  "ref_entry_id",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -433,6 +436,7 @@ const itemRowToSavedItem = (
     createdBy: row.created_by ?? undefined,
     accessRole: row.owner_id === userId ? "owner" : row.folder_id ? folderAccessById.get(row.folder_id) ?? "viewer" : "viewer",
     notes: row.notes ?? undefined,
+    listMode: row.type === "list" && row.list_mode === "focus" ? "focus" : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -489,6 +493,7 @@ const savedItemToRow = (
     connections: optionalArray(normalizedItem.connections),
     tags: normalizedItem.tagOptionIds ?? [],
     notes: optional(normalizedItem.notes),
+    list_mode: isFocusList(normalizedItem) ? "focus" : null,
     created_at: normalizedItem.createdAt,
     updated_at: normalizedItem.updatedAt,
   };
@@ -506,6 +511,7 @@ const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
   dueDate: row.due_date ?? undefined,
   completedAt: row.completed_at ?? undefined,
   tagOptionIds: stringArray(row.tags),
+  refEntryId: row.ref_entry_id ?? undefined,
   ownerId: row.owner_id,
   createdBy: row.created_by ?? undefined,
   createdAt: row.created_at,
@@ -524,6 +530,7 @@ const listEntryToPayload = (entry: ListEntry) => ({
   due_date: entry.dueDate ?? null,
   completed_at: entry.completedAt ?? null,
   tags: entry.tagOptionIds ?? [],
+  ref_entry_id: entry.refEntryId ?? null,
   created_at: entry.createdAt,
   updated_at: entry.updatedAt,
 });
@@ -606,6 +613,7 @@ const upsertItemRowForCurrentUser = async (
     target_description: itemRow.description,
     target_expected_updated_at: expectedUpdatedAt ?? null,
     target_folder_id: itemRow.folder_id,
+    target_list_mode: itemRow.list_mode,
     target_item_id: itemRow.id,
     target_list_items: itemRow.list_items,
     target_media: itemRow.media,
@@ -687,7 +695,11 @@ const upsertListEntriesForCurrentUser = async (
   const { error } = await supabase.rpc("trove_upsert_list_entries_for_current_user", {
     known_updated_at: knownUpdatedAt,
     skip_conflict_check: skipConflictCheck,
-    target_entries: entries.map(listEntryToPayload),
+    // Focus-list references go last, so the lines they point at already exist.
+    target_entries: [
+      ...entries.filter((entry) => !entry.refEntryId),
+      ...entries.filter((entry) => entry.refEntryId),
+    ].map(listEntryToPayload),
   });
 
   if (error) {
@@ -875,6 +887,7 @@ const fetchNormalizedTroveDataForUser = async (
           "connections",
           "tags",
           "notes",
+          "list_mode",
           "created_at",
           "updated_at",
         ].join(", "),
@@ -1066,6 +1079,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "connections",
     "tagOptionIds",
     "notes",
+    "listMode",
   ]);
 
 const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>
@@ -1096,6 +1110,7 @@ const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConfl
     "dueDate",
     "completedAt",
     "tagOptionIds",
+    "refEntryId",
   ]);
 
 // Entries are compared one by one so two people editing different lines of
@@ -1470,7 +1485,8 @@ const replaceNormalizedTroveDataForUser = async (
   const writableItems = writableItemsForUser(normalizedData, userId);
   const writableListIds = new Set(writableItems.map((item) => item.id));
   const writableEntries = normalizedData.listEntries.filter((entry) => writableListIds.has(entry.listId));
-  const entriesByList = groupEntriesByList(normalizedData.listEntries);
+  // The snapshot shows a focus list's referenced lines as they read now.
+  const entriesByList = groupResolvedEntriesByList(normalizedData.listEntries);
 
   try {
     const baseline = await loadSyncBaseline(userId);

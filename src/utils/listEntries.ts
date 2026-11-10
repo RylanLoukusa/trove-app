@@ -92,9 +92,65 @@ export const entryToListItem = (entry: ListEntry): SavedListItem => ({
   indentLevel: entry.indentLevel,
 });
 
+// ---------------------------------------------------------------------------
+// Focus lists
+// ---------------------------------------------------------------------------
+
+export const isFocusList = (item: Pick<SavedItem, "type" | "listMode"> | undefined): boolean =>
+  !!item && item.type === "list" && item.listMode === "focus";
+
+// One id per (focus list, line), so adding the same line twice, or from two
+// devices, lands on the same row.
+export const focusReferenceId = (focusListId: string, entryId: string): string => `${focusListId}>${entryId}`;
+
+// A focus-list line as the UI sees it: the referenced line's content with the
+// reference's own id, list and position. `null` when the referenced line isn't
+// on this device (deleted, or in a list this person can't open).
+export const resolveReference = (reference: ListEntry, entriesById: Map<string, ListEntry>): ListEntry | null => {
+  if (!reference.refEntryId) return reference;
+  const source = entriesById.get(reference.refEntryId);
+  if (!source || source.refEntryId) return null;
+  return {
+    ...source,
+    id: reference.id,
+    listId: reference.listId,
+    position: reference.position,
+    indentLevel: 0,
+    refEntryId: source.id,
+  };
+};
+
+export const resolveEntries = (entries: ListEntry[], entriesById: Map<string, ListEntry>): ListEntry[] =>
+  entries.flatMap((entry) => {
+    const resolved = resolveReference(entry, entriesById);
+    return resolved ? [resolved] : [];
+  });
+
+// Lines grouped by list with references replaced by what they point at.
+export const groupResolvedEntriesByList = (entries: ListEntry[]): Map<string, ListEntry[]> => {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const grouped = groupEntriesByList(entries);
+  grouped.forEach((bucket, listId) => {
+    if (bucket.some((entry) => entry.refEntryId)) grouped.set(listId, resolveEntries(bucket, byId));
+  });
+  return grouped;
+};
+
+// When lines are removed from this device's data, references to them in focus
+// lists go too (the server does the same with a cascading delete). References
+// whose line simply isn't on this device are left alone.
+export const pruneReferencesToRemoved = (previous: ListEntry[], next: ListEntry[]): ListEntry[] => {
+  if (!next.some((entry) => entry.refEntryId)) return next;
+  const nextIds = new Set(next.map((entry) => entry.id));
+  const removed = new Set(previous.filter((entry) => !nextIds.has(entry.id)).map((entry) => entry.id));
+  if (removed.size === 0) return next;
+  const pruned = next.filter((entry) => !entry.refEntryId || !removed.has(entry.refEntryId));
+  return pruned.length === next.length ? next : pruned;
+};
+
 // Items as the UI sees them: list items carry their entries as `listItems`.
 export const hydrateItemsWithEntries = (items: SavedItem[], entries: ListEntry[]): SavedItem[] => {
-  const byList = groupEntriesByList(entries);
+  const byList = groupResolvedEntriesByList(entries);
   return items.map((item) => {
     const listEntries = byList.get(item.id);
     if (!listEntries && item.type !== "list") return item;

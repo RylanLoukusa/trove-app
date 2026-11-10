@@ -3,7 +3,7 @@ import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Plus } from "lucide-react-native";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
-import { ListEntriesView } from "../../components/ListEntriesView";
+import { ListSection } from "../../components/ListSection";
 import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay, resolveDisplayItems } from "../../components/MediaCollectionDisplay";
 import { MediaFullscreenViewer } from "../../components/MediaFullscreenViewer";
@@ -17,12 +17,11 @@ import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { useTrove } from "../../storage/storage";
-import type { ListEntry, SavedItem, TagOption } from "../../types/models";
+import type { SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import { getItemTypeLabel } from "../../utils/itemTypes";
-import { legacyEntryPosition, sortEntries } from "../../utils/listEntries";
-import { priorityOptionsFor } from "../../utils/listView";
+import { isFocusList } from "../../utils/listEntries";
 import { requiresProForVideoPlayback } from "../../utils/limits";
 import { createStyles } from "./styles";
 
@@ -37,14 +36,9 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
     folders,
-    listEntries,
     tagGroups,
     tagOptions,
     updateItem,
-    updateListEntry,
-    createListEntry,
-    moveListEntry,
-    deleteListEntry,
     createTagOption,
     canEditItem,
   } = useTrove();
@@ -60,34 +54,6 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const sortedTagGroups = useMemo(() => [...tagGroups].sort((a, b) => a.sortOrder - b.sortOrder), [tagGroups]);
 
   const mediaDisplayItems = useMemo(() => resolveDisplayItems(item.media, item.mediaItems), [item]);
-
-  // Full entry records (due date, priority, notes) for this list. Falls back
-  // to the item's lines when entries aren't available.
-  const entries = useMemo<ListEntry[]>(() => {
-    if (item.type !== "list") return [];
-    if (listEntries) return sortEntries(listEntries.filter((entry) => entry.listId === item.id));
-    return (item.listItems ?? []).map((line, index) => ({
-      id: line.id,
-      listId: item.id,
-      kind: line.kind,
-      text: line.text,
-      checked: !!line.checked,
-      indentLevel: line.indentLevel ?? 0,
-      position: legacyEntryPosition(index),
-      tagOptionIds: [],
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
-  }, [item, listEntries]);
-  const priorityOptions = useMemo(() => priorityOptionsFor(tagGroups, tagOptions), [tagGroups, tagOptions]);
-
-  const onToggleEntry = useCallback(
-    (entry: ListEntry): void => {
-      if (entry.kind !== "check" || !canEditCurrentItem) return;
-      updateListEntry(entry.id, { checked: !entry.checked });
-    },
-    [canEditCurrentItem, updateListEntry],
-  );
 
   const onPressOpenUrl = useCallback(() => {
     if (item.url) void Linking.openURL(item.url);
@@ -220,7 +186,7 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
 
   return (
     <ScrollView style={[styles.scroll, { width }]} contentContainerStyle={styles.content}>
-      <Text style={styles.type}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
+      <Text style={styles.type}>{(isFocusList(item) ? "Focus list" : getItemTypeLabel(item.type)).toUpperCase()}</Text>
       <Text style={styles.title}>{item.title}</Text>
       <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
       {isSharedAccess(item) && (
@@ -271,19 +237,7 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
         </View>
       )}
 
-      {item.type === "list" && (
-        <ListEntriesView
-          listId={item.id}
-          entries={entries}
-          priorityOptions={priorityOptions}
-          canEdit={canEditCurrentItem}
-          onToggleEntry={onToggleEntry}
-          onUpdateEntry={updateListEntry}
-          onMoveEntry={moveListEntry}
-          onAddEntry={(text) => createListEntry(item.id, { text })}
-          onDeleteEntry={deleteListEntry}
-        />
-      )}
+      {item.type === "list" && <ListSection item={item} />}
 
       {shouldShowAttachments && (
         <View style={styles.attachmentBlock}>
