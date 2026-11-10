@@ -270,6 +270,58 @@ describe("list entries sync", () => {
     });
   });
 
+  it("pushes a focus list with its references after the lines they point at", async () => {
+    const focus: SavedItem = { ...list, id: "today", title: "Today", listMode: "focus" };
+    const reference = localEntry("today>e1", { listId: "today", text: "", refEntryId: "e1", position: "V" });
+    const local: TroveData = {
+      folders: [folder],
+      items: [list, focus],
+      listEntries: [reference, localEntry("e1", { text: "Book florist" })],
+      tagGroups: [],
+      tagOptions: [],
+    };
+
+    const { result, rpcCalls, args } = await pushWith(local, [entryRow("e1", { text: "Book florist" })], {
+      e1: "2026-03-01T00:00:00.000Z",
+    });
+
+    expect(result.ok).toBe(true);
+    const upsert = args("trove_upsert_list_entries_for_current_user")!;
+    const payload = upsert.target_entries as Array<{ id: string; ref_entry_id: string | null }>;
+    expect(payload.map((entry) => entry.id)).toEqual(["e1", "today>e1"]);
+    expect(payload[1].ref_entry_id).toBe("e1");
+    const focusUpsert = rpcCalls.find(
+      ([name, params]) => name === "trove_upsert_item_for_current_user" && params.target_item_id === "today",
+    )?.[1];
+    expect(focusUpsert).toMatchObject({ target_list_mode: "focus" });
+    // Older apps and public links see the referenced line's text.
+    expect(focusUpsert?.target_list_items).toEqual([
+      { id: "today>e1", kind: "check", text: "Book florist", checked: false, indentLevel: 0 },
+    ]);
+    expect(args("trove_upsert_item_for_current_user")).toMatchObject({ target_list_mode: null });
+  });
+
+  it("pulls focus lists and their references", async () => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_folders: { data: [folderRow()], error: null },
+      trove_items: { data: [itemRow(), itemRow({ id: "today", title: "Today", list_mode: "focus" })], error: null },
+      trove_list_entries: {
+        data: [entryRow("e1"), entryRow("today>e1", { list_id: "today", text: "", ref_entry_id: "e1" })],
+        error: null,
+      },
+    });
+
+    const result = await pullTroveDataForUser(supabase, userId);
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    expect(result.data.items.find((item) => item.id === "today")?.listMode).toBe("focus");
+    expect(result.data.items.find((item) => item.id === "list-1")?.listMode).toBeUndefined();
+    expect(result.data.listEntries.find((entry) => entry.id === "today>e1")?.refEntryId).toBe("e1");
+  });
+
   it("treats a line someone else added as new, not a conflict, and makes the next pull fetch it", async () => {
     await AsyncStorage.setItem(remoteUpdatedAtKey(userId), "2026-03-01T00:00:00.000Z");
     const local: TroveData = {

@@ -67,6 +67,16 @@ export const createStyles = (colors: ThemeColors) =>
     listKindPicker: {
       marginBottom: spacing.sm,
     },
+    focusToggle: {
+      marginBottom: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    focusNote: {
+      color: colors.muted,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: spacing.xs,
+    },
     listRow: {
       alignItems: "center",
       backgroundColor: colors.surface,

@@ -120,6 +120,54 @@ describe("ListEntriesView", () => {
     expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
   });
 
+  it("shows where a focus-list line comes from and only removes it from the focus list", async () => {
+    await renderScreen(
+      <ListEntriesView
+        listId="today"
+        entries={[entry("today>a", { listId: "today", text: "Cake", refEntryId: "a" })]}
+        priorityOptions={[]}
+        canEdit
+        captions={{ "today>a": "Wedding" }}
+        referenceSources={{ "today>a": "Wedding" }}
+        {...handlers}
+      />,
+    );
+
+    expect(screen.getByText("Wedding")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    expect(screen.getByText("From Wedding. Changes here show up there too.")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Remove from this list"));
+
+    expect(handlers.onDeleteEntry).toHaveBeenCalledWith("today>a");
+  });
+
+  it("adds a line to a focus list from its sheet", async () => {
+    const onToggleFocusList = jest.fn();
+    await renderScreen(
+      <ListEntriesView
+        listId="list-1"
+        entries={[entry("Cake")]}
+        priorityOptions={[]}
+        canEdit
+        captions={{ Cake: "In Today" }}
+        focusLists={[
+          { id: "today", title: "Today" },
+          { id: "weekend", title: "Weekend plans" },
+        ]}
+        focusMembership={{ Cake: ["today"] }}
+        onToggleFocusList={onToggleFocusList}
+        {...handlers}
+      />,
+    );
+
+    expect(screen.getByText("In Today")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    expect(screen.getByRole("button", { name: "Today", selected: true })).toBeTruthy();
+    await fireEvent.press(screen.getByText("Weekend plans"));
+
+    expect(onToggleFocusList).toHaveBeenCalledWith("Cake", "weekend");
+  });
+
   it("is read-only without edit access", async () => {
     await renderList([entry("Cake")], false);
 

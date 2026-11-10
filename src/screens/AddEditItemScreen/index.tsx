@@ -65,6 +65,9 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [tagOptionIds, setTagOptionIds] = useState<string[]>(editing?.tagOptionIds ?? []);
   const [openSingleSelectGroupId, setOpenSingleSelectGroupId] = useState<string | null>(null);
   const [openMultiSelectGroupId, setOpenMultiSelectGroupId] = useState<string | null>(null);
+  // Focus lists are chosen when the list is created and can't be switched
+  // back, since their lines point at other lists.
+  const [isFocus, setIsFocus] = useState(editing?.listMode === "focus");
   const [listItems, setListItems] = useState<SavedListItem[]>(
     editing?.listItems?.length ? editing.listItems : [{ id: createId("list-item"), kind: "check", text: "", checked: false }],
   );
@@ -370,8 +373,9 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         media: storedMediaItems?.[0],
         mediaItems: storedMediaItems,
         attachments: undefined,
+        listMode: type === "list" && isFocus ? ("focus" as const) : undefined,
         listItems:
-          type === "list"
+          type === "list" && !(editing && isFocus)
             ? listItems
                 .map((item) => ({ ...item, text: item.text.trim() }))
                 .filter((item) => item.text.length > 0)
@@ -397,7 +401,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     } finally {
       setIsSaving(false);
     }
-  }, [canEditFolderContent, canEditItem, createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, sharedImportId, sharedText, sourceUrl, tagOptionIds, title, type, updateItem]);
+  }, [canEditFolderContent, canEditItem, createItem, editing, folderId, isFocus, linkText, listItems, mediaItems, navigation, noteText, sharedImportId, sharedText, sourceUrl, tagOptionIds, title, type, updateItem]);
 
   const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, advance, reportFocus } = useOnboardingTour();
   const isTourStepHere = currentStep?.screen === "AddEditItem" && folderId === stepTargetFolderId;
@@ -530,7 +534,25 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        {type === "list" && (
+        {type === "list" && editing && isFocus && (
+          <Text style={styles.focusNote}>
+            This is a focus list. Add lines from your other lists, or your own, on the list itself.
+          </Text>
+        )}
+
+        {type === "list" && !editing && (
+          <View style={styles.focusToggle}>
+            <OptionChoiceRow
+              label="Focus list"
+              detail="Like Today or This weekend: pull in lines from your other lists"
+              tone="#6F8FAF"
+              isSelected={isFocus}
+              onPress={() => setIsFocus((current) => !current)}
+            />
+          </View>
+        )}
+
+        {type === "list" && !(editing && isFocus) && (
           <View style={styles.listEditor}>
             {isListEmpty && (
               <View style={styles.listKindPicker}>

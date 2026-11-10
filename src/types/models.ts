@@ -58,6 +58,10 @@ export type ListEntry = {
   dueDate?: string; // YYYY-MM-DD
   completedAt?: string;
   tagOptionIds: string[];
+  // Set on a line in a focus list that shows a line from another list. Its
+  // own `position` orders it in the focus list; everything else is read from
+  // the referenced entry, which stays in (and is edited in) its own list.
+  refEntryId?: string;
   ownerId?: string;
   createdBy?: string;
   createdAt: string;
@@ -97,6 +101,9 @@ export type SavedItem = {
   // persisted on the stored item. Writing it via createItem/updateItem is
   // translated into entry changes.
   listItems?: SavedListItem[];
+  // "focus" marks a list (type "list") that can pull in lines from other
+  // lists, such as Today or This weekend.
+  listMode?: "focus";
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];

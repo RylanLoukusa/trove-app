@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { ArrowUpDown, CalendarDays, CheckCheck, GripVertical, Plus } from "lucide-react-native";
+import { ArrowUpDown, CalendarDays, CheckCheck, GripVertical, ListChecks, Plus } from "lucide-react-native";
 
 import { ChoiceSheet } from "./ChoiceSheet";
-import { ListEntrySheet } from "./ListEntrySheet";
+import { FocusListChoice, ListEntrySheet } from "./ListEntrySheet";
 import { useListViewSettings } from "../storage/listViewSettings";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
@@ -32,6 +32,18 @@ type Props = {
   onMoveEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => void;
   onAddEntry: (text: string) => void;
   onDeleteEntry: (entryId: string) => void;
+  // Small line under an entry's text, such as the list a focus-list line
+  // comes from, or the focus lists a line is in.
+  captions?: Record<string, string>;
+  // Entries that are lines from another list (focus lists only): deleting one
+  // only takes it out of this list.
+  referenceSources?: Record<string, string>;
+  // Focus lists a line can be added to from its sheet (regular lists only).
+  focusLists?: FocusListChoice[];
+  focusMembership?: Record<string, string[]>;
+  onToggleFocusList?: (entryId: string, focusListId: string) => void;
+  headerAccessory?: ReactNode;
+  emptyText?: string;
 };
 
 const sortOptions = (Object.keys(listSortLabels) as ListSortMode[]).map((value) => ({ value, label: listSortLabels[value] }));
@@ -69,6 +81,13 @@ export const ListEntriesView = ({
   onMoveEntry,
   onAddEntry,
   onDeleteEntry,
+  captions,
+  referenceSources,
+  focusLists,
+  focusMembership,
+  onToggleFocusList,
+  headerAccessory,
+  emptyText = "Nothing on this list yet.",
 }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -170,6 +189,7 @@ export const ListEntriesView = ({
           </Text>
         )}
       </View>
+      {headerAccessory}
 
       {visibleEntries.map((entry, index) => (
         <EntryRow
@@ -179,6 +199,7 @@ export const ListEntriesView = ({
           styles={styles}
           colors={colors}
           priority={entryPriority(entry, priorityOptions)}
+          caption={captions?.[entry.id]}
           showIndent={settings.sortMode === "manual"}
           canEdit={canEdit}
           canReorder={canReorder}
@@ -196,7 +217,7 @@ export const ListEntriesView = ({
       ))}
 
       {visibleEntries.length === 0 && (
-        <Text style={styles.empty}>{entries.length > 0 ? "Everything here is done." : "Nothing on this list yet."}</Text>
+        <Text style={styles.empty}>{entries.length > 0 ? "Everything here is done." : emptyText}</Text>
       )}
 
       {hiddenCount > 0 && (
@@ -249,6 +270,12 @@ export const ListEntriesView = ({
         entry={openEntry}
         priorityOptions={priorityOptions}
         canEdit={canEdit}
+        sourceListTitle={openEntry ? referenceSources?.[openEntry.id] : undefined}
+        focusLists={openEntry && onToggleFocusList ? focusLists : undefined}
+        selectedFocusListIds={openEntry ? focusMembership?.[openEntry.id] ?? [] : []}
+        onToggleFocusList={(focusListId) => {
+          if (openEntry) onToggleFocusList?.(openEntry.id, focusListId);
+        }}
         onClose={() => setOpenEntryId(null)}
         onSave={(updates) => {
           if (openEntry) onUpdateEntry(openEntry.id, updates);
@@ -268,6 +295,7 @@ type EntryRowProps = {
   styles: ReturnType<typeof createStyles>;
   colors: ThemeColors;
   priority?: TagOption;
+  caption?: string;
   showIndent: boolean;
   canEdit: boolean;
   canReorder: boolean;
@@ -289,6 +317,7 @@ const EntryRow = ({
   styles,
   colors,
   priority,
+  caption,
   showIndent,
   canEdit,
   canReorder,
@@ -365,6 +394,14 @@ const EntryRow = ({
           style={styles.textBlock}
         >
           <Text style={[styles.text, entry.checked && styles.textDone]}>{entry.text}</Text>
+          {!!caption && (
+            <View style={styles.metaItem}>
+              <ListChecks size={12} color={colors.muted} />
+              <Text numberOfLines={1} style={styles.metaText}>
+                {caption}
+              </Text>
+            </View>
+          )}
           {hasMeta && (
             <View style={styles.metaRow}>
               {!!due && (

@@ -2,6 +2,10 @@ import type { ListEntry, SavedItem } from "../types/models";
 import { normalizeTroveData } from "./itemTypes";
 import {
   applyListItemsToEntries,
+  focusReferenceId,
+  groupResolvedEntriesByList,
+  pruneReferencesToRemoved,
+  resolveReference,
   assignPositions,
   entriesFromLegacyListItems,
   generatePositionBetween,
@@ -273,5 +277,46 @@ describe("hydrateItemsWithEntries", () => {
 
   it("sortEntries breaks position ties by id", () => {
     expect(sortEntries([entry("b", "V"), entry("a", "V")]).map((candidate) => candidate.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("focus list references", () => {
+  const base = {
+    kind: "check" as const,
+    checked: false,
+    indentLevel: 0,
+    tagOptionIds: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const source = { ...base, id: "a", listId: "wedding", text: "Florist", position: "V", dueDate: "2026-12-01", indentLevel: 2 };
+  const reference = { ...base, id: focusReferenceId("today", "a"), listId: "today", text: "", position: "B", refEntryId: "a" };
+  const own = { ...base, id: "own", listId: "today", text: "Call mom", position: "C" };
+
+  it("reads a reference's content from the original line", () => {
+    const byId = new Map([source, reference].map((entry) => [entry.id, entry]));
+    expect(resolveReference(reference, byId)).toMatchObject({
+      id: "today>a",
+      listId: "today",
+      position: "B",
+      text: "Florist",
+      dueDate: "2026-12-01",
+      indentLevel: 0,
+      refEntryId: "a",
+    });
+    expect(resolveReference(reference, new Map())).toBeNull();
+  });
+
+  it("groups lists with references resolved and missing ones left out", () => {
+    const grouped = groupResolvedEntriesByList([own, reference, source, { ...reference, id: "today>gone", refEntryId: "gone" }]);
+    expect(grouped.get("today")?.map((entry) => entry.text)).toEqual(["Florist", "Call mom"]);
+    expect(grouped.get("wedding")?.map((entry) => entry.text)).toEqual(["Florist"]);
+  });
+
+  it("drops references to removed lines but keeps ones it can't see", () => {
+    const hidden = { ...reference, id: "today>hidden", refEntryId: "hidden" };
+    expect(pruneReferencesToRemoved([source, reference, hidden, own], [reference, hidden, own])).toEqual([hidden, own]);
+    const unchanged = [source, reference];
+    expect(pruneReferencesToRemoved(unchanged, unchanged)).toBe(unchanged);
   });
 });

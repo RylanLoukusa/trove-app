@@ -53,8 +53,12 @@ import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../uti
 import { normalizeTroveData } from "../utils/itemTypes";
 import {
   applyListItemsToEntries,
+  focusReferenceId,
   generatePositionBetween,
+  generatePositionsBetween,
   hydrateItemsWithEntries,
+  isFocusList,
+  pruneReferencesToRemoved,
   sortEntries,
 } from "../utils/listEntries";
 
@@ -96,6 +100,12 @@ type TroveContextValue = TroveData & {
   // Places the entry between two neighbours (either may be null for the ends).
   moveListEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => boolean;
   deleteListEntry: (entryId: string) => boolean;
+  // Focus lists: add lines from other lists (appended, skipping ones already
+  // there), take one back out, or clear the list. Removing or clearing never
+  // touches the original lines; clearing does delete the focus list's own.
+  addToFocusList: (focusListId: string, entryIds: string[]) => number;
+  removeFromFocusList: (focusListId: string, entryId: string) => boolean;
+  clearFocusList: (focusListId: string, which: "done" | "all") => number;
   createTagGroup: (
     input: Pick<TagGroup, "name"> & Partial<Pick<TagGroup, "selectionMode" | "allowInlineCreate" | "isSystem" | "sortOrder">>,
   ) => TagGroup;
@@ -143,7 +153,21 @@ export const saveTroveData = async (data: TroveData, userId?: string | null): Pr
 const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
   const { isPro } = useEntitlement();
-  const [data, setData] = useState<TroveData>(seedData);
+  const [data, setDataState] = useState<TroveData>(seedData);
+  // Every local change goes through here so that removing a line also removes
+  // it from any focus list that shows it.
+  const setData = useCallback((next: TroveData | ((current: TroveData) => TroveData)) => {
+    if (typeof next !== "function") {
+      setDataState(next);
+      return;
+    }
+    setDataState((current) => {
+      const updated = next(current);
+      if (updated.listEntries === current.listEntries) return updated;
+      const listEntries = pruneReferencesToRemoved(current.listEntries, updated.listEntries);
+      return listEntries === updated.listEntries ? updated : { ...updated, listEntries };
+    });
+  }, []);
   const [isReady, setIsReady] = useState(false);
   const [syncSnapshot, setSyncSnapshot] = useState<SyncSnapshot>({
     retryCount: 0,
@@ -562,7 +586,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           accessRole: nextFolder?.accessRole ?? item.accessRole ?? (activeUserId ? "owner" : undefined),
         };
 
-        if (listItems) {
+        // A focus list's lines point at other lists, so they are only changed
+        // through the entry actions, never by rewriting the whole array.
+        if (listItems && !isFocusList(item)) {
           nextListEntries = applyListItemsToEntries({
             listId: item.id,
             listItems,
@@ -702,8 +728,13 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     markLocalChangePending();
   }, [markLocalChangePending]);
 
-  const updateListEntry = useCallback<TroveContextValue["updateListEntry"]>((entryId, updates) => {
-    const entry = dataRef.current.listEntries.find((candidate) => candidate.id === entryId);
+  const updateListEntry = useCallback<TroveContextValue["updateListEntry"]>((requestedId, updates) => {
+    // Editing a focus-list line that comes from another list edits the original.
+    const requested = dataRef.current.listEntries.find((candidate) => candidate.id === requestedId);
+    const entryId = requested?.refEntryId ?? requestedId;
+    const entry = requested?.refEntryId
+      ? dataRef.current.listEntries.find((candidate) => candidate.id === entryId)
+      : requested;
     const list = dataRef.current.items.find((candidate) => candidate.id === entry?.listId);
     const folder = dataRef.current.folders.find((candidate) => candidate.id === list?.folderId);
     if (!entry || !canEditItemRecord(list, folder)) {
@@ -799,6 +830,87 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     markLocalChangePending();
     return true;
   }, [canEditListRecord, markLocalChangePending]);
+
+  const addToFocusList = useCallback<TroveContextValue["addToFocusList"]>((focusListId, entryIds) => {
+    const { items, listEntries } = dataRef.current;
+    const focusList = items.find((candidate) => candidate.id === focusListId);
+    if (!isFocusList(focusList) || !canEditListRecord(focusListId)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this list.");
+      return 0;
+    }
+
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    const alreadyIn = new Set(
+      listEntries.filter((entry) => entry.listId === focusListId && entry.refEntryId).map((entry) => entry.refEntryId),
+    );
+    const sources = entryIds
+      .filter((entryId, index) => entryIds.indexOf(entryId) === index && !alreadyIn.has(entryId))
+      .map((entryId) => listEntries.find((entry) => entry.id === entryId))
+      .filter((entry): entry is ListEntry => {
+        if (!entry || entry.refEntryId || entry.listId === focusListId) return false;
+        const list = itemsById.get(entry.listId);
+        return !!list && !isFocusList(list);
+      });
+    if (sources.length === 0) return 0;
+
+    const siblings = sortEntries(listEntries.filter((entry) => entry.listId === focusListId));
+    const positions = generatePositionsBetween(siblings[siblings.length - 1]?.position ?? null, null, sources.length);
+    const timestamp = new Date().toISOString();
+    const references: ListEntry[] = sources.map((source, index) => ({
+      id: focusReferenceId(focusListId, source.id),
+      listId: focusListId,
+      kind: "check",
+      text: "",
+      checked: false,
+      indentLevel: 0,
+      position: positions[index],
+      tagOptionIds: [],
+      refEntryId: source.id,
+      ownerId: focusList?.ownerId ?? activeUserId ?? undefined,
+      createdBy: activeUserId ?? undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }));
+    const referenceIds = new Set(references.map((reference) => reference.id));
+    setData((current) => ({
+      ...current,
+      // A stale reference row with the same id (removed, then re-added) is replaced.
+      listEntries: [...current.listEntries.filter((entry) => !referenceIds.has(entry.id)), ...references],
+    }));
+    markLocalChangePending();
+    return references.length;
+  }, [activeUserId, canEditListRecord, markLocalChangePending, setData]);
+
+  const removeFromFocusList = useCallback<TroveContextValue["removeFromFocusList"]>((focusListId, entryId) => {
+    const reference = dataRef.current.listEntries.find(
+      (entry) => entry.listId === focusListId && (entry.id === entryId || entry.refEntryId === entryId) && !!entry.refEntryId,
+    );
+    if (!reference || !canEditListRecord(focusListId)) return false;
+    setData((current) => ({ ...current, listEntries: current.listEntries.filter((entry) => entry.id !== reference.id) }));
+    markLocalChangePending();
+    return true;
+  }, [canEditListRecord, markLocalChangePending, setData]);
+
+  const clearFocusList = useCallback<TroveContextValue["clearFocusList"]>((focusListId, which) => {
+    const { items, listEntries } = dataRef.current;
+    if (!isFocusList(items.find((item) => item.id === focusListId)) || !canEditListRecord(focusListId)) return 0;
+
+    const byId = new Map(listEntries.map((entry) => [entry.id, entry]));
+    const isDone = (entry: ListEntry): boolean =>
+      entry.refEntryId ? !!byId.get(entry.refEntryId)?.checked : entry.checked;
+    const removeIds = new Set(
+      listEntries
+        .filter((entry) => entry.listId === focusListId)
+        // References to lines this device can't see are left alone.
+        .filter((entry) => !entry.refEntryId || byId.has(entry.refEntryId))
+        .filter((entry) => which === "all" || isDone(entry))
+        .map((entry) => entry.id),
+    );
+    if (removeIds.size === 0) return 0;
+    setData((current) => ({ ...current, listEntries: current.listEntries.filter((entry) => !removeIds.has(entry.id)) }));
+    markLocalChangePending();
+    return removeIds.size;
+  }, [canEditListRecord, markLocalChangePending, setData]);
 
   const canManageFolder = useCallback<TroveContextValue["canManageFolder"]>((folderId) => {
     if (!folderId) return true;
@@ -1160,6 +1272,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createListEntry,
       moveListEntry,
       deleteListEntry,
+      addToFocusList,
+      removeFromFocusList,
+      clearFocusList,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,
@@ -1191,6 +1306,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createListEntry,
       moveListEntry,
       deleteListEntry,
+      addToFocusList,
+      removeFromFocusList,
+      clearFocusList,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,
