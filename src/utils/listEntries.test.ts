@@ -4,8 +4,20 @@ import {
   parsePastedLines,
   splitEnteredText,
   applyListItemsToEntries,
+  canListBorrowLines,
+  decodeEntryFormat,
+  encodeEntryFormat,
+  entryToListItem,
+  entryToSnapshotItem,
   focusReferenceId,
   groupResolvedEntriesByList,
+  isUntitledList,
+  listActivityTimes,
+  listDisplayTitle,
+  listIdsLendingLines,
+  listItemKindFromSnapshot,
+  listPreviewText,
+  MAX_ENTRY_INDENT,
   pruneReferencesToRemoved,
   resolveReference,
   assignPositions,
@@ -16,6 +28,8 @@ import {
   isValidPosition,
   legacyEntryPosition,
   sortEntries,
+  sortListsByActivity,
+  UNTITLED_LIST_TITLE,
 } from "./listEntries";
 
 const listItem = (overrides: Partial<SavedItem> = {}): SavedItem => ({
@@ -338,7 +352,8 @@ describe("parsePastedLines", () => {
   });
 
   it("reads leading tabs and spaces as indents, up to the limit", () => {
-    expect(parsePastedLines("Trip\r\n  Passport\n\tTickets\n          Deep").map((line) => line.indentLevel)).toEqual([0, 1, 1, 3]);
+    const rows = ["Trip", "  Passport", "\tTickets", "      Three deep", `${" ".repeat(24)}Too deep`];
+    expect(parsePastedLines(rows.join("\r\n")).map((line) => line.indentLevel)).toEqual([0, 1, 1, 3, MAX_ENTRY_INDENT]);
   });
 
   it("keeps text that only looks like a marker", () => {
@@ -383,5 +398,258 @@ describe("splitEnteredText", () => {
     const result = splitEnteredText("Party: ", "Party: cake\nballoons\ncandles");
     expect(result.keep).toBe("Party: cake");
     expect(result.added.map((line) => line.text)).toEqual(["balloons", "candles"]);
+  });
+});
+
+describe("plain and bold lines", () => {
+  const kinds: Array<ListEntry["kind"]> = ["check", "bullet", "text"];
+
+  it("reads a line's kind from a saved snapshot, old or new", () => {
+    expect(listItemKindFromSnapshot({ kind: "text" })).toBe("text");
+    expect(listItemKindFromSnapshot({ kind: "bullet", plain: true })).toBe("text");
+    expect(listItemKindFromSnapshot({ kind: "bullet" })).toBe("bullet");
+    expect(listItemKindFromSnapshot({ kind: "check", plain: true })).toBe("check");
+    expect(listItemKindFromSnapshot({})).toBe("check");
+    expect(listItemKindFromSnapshot(undefined)).toBe("check");
+  });
+
+  it("writes a plain line to the snapshot as a bullet older versions can show", () => {
+    expect(entryToSnapshotItem(entry("a", "V", { kind: "text", text: "Produce", bold: true, indentLevel: 1 }))).toEqual({
+      id: "a",
+      kind: "bullet",
+      text: "Produce",
+      checked: false,
+      indentLevel: 1,
+      plain: true,
+      bold: true,
+    });
+    expect(entryToSnapshotItem(entry("b", "W", { checked: true }))).toEqual({
+      id: "b",
+      kind: "check",
+      text: "b",
+      checked: true,
+      indentLevel: 0,
+    });
+  });
+
+  it("gets the same kind and weight back from a snapshot", () => {
+    kinds.forEach((kind) => {
+      [true, undefined].forEach((bold) => {
+        const snapshot = entryToSnapshotItem(entry("a", "V", { kind, bold }));
+        expect(listItemKindFromSnapshot(snapshot)).toBe(kind);
+        expect(!!snapshot.bold).toBe(!!bold);
+      });
+    });
+  });
+
+  it("shows bold on the line the screen reads", () => {
+    expect(entryToListItem(entry("a", "V", { kind: "text", bold: true }))).toEqual({
+      id: "a",
+      kind: "text",
+      text: "a",
+      checked: false,
+      indentLevel: 0,
+      bold: true,
+    });
+    expect(entryToListItem(entry("b", "W"))).not.toHaveProperty("bold");
+  });
+
+  it("syncs kind and weight inside the line's tags and reads them back", () => {
+    kinds.forEach((kind) => {
+      [true, undefined].forEach((bold) => {
+        const encoded = encodeEntryFormat({ kind, bold, tagOptionIds: ["tag-high"] });
+        expect(["check", "bullet"]).toContain(encoded.kind);
+        expect(encoded.tags).toContain("tag-high");
+
+        const decoded = decodeEntryFormat(encoded.kind, encoded.tags);
+        expect(decoded.kind).toBe(kind);
+        expect(!!decoded.bold).toBe(!!bold);
+        expect(decoded.tagOptionIds).toEqual(["tag-high"]);
+      });
+    });
+  });
+
+  it("sends the format tags only when they apply", () => {
+    expect(encodeEntryFormat({ kind: "check", tagOptionIds: ["tag-high"] })).toEqual({ kind: "check", tags: ["tag-high"] });
+    expect(encodeEntryFormat({ kind: "text", bold: true, tagOptionIds: [] })).toEqual({
+      kind: "bullet",
+      tags: ["fmt:text", "fmt:bold"],
+    });
+    // A format tag left over from an earlier kind is replaced, not kept.
+    expect(encodeEntryFormat({ kind: "bullet", tagOptionIds: ["fmt:text", "fmt:bold", "tag-high"] })).toEqual({
+      kind: "bullet",
+      tags: ["tag-high"],
+    });
+  });
+
+  it("never treats a format tag as one of the person's tags", () => {
+    expect(decodeEntryFormat("check", ["fmt:text", "fmt:bold", "tag-high"])).toEqual({
+      kind: "check",
+      tagOptionIds: ["tag-high"],
+      bold: true,
+    });
+    expect(decodeEntryFormat("something-new", ["fmt:later"])).toEqual({ kind: "check", tagOptionIds: [] });
+    expect(decodeEntryFormat("bullet", [])).toEqual({ kind: "bullet", tagOptionIds: [] });
+  });
+
+  it("saves kind and weight changes made on the page", () => {
+    const timestamp = "2026-02-01T00:00:00.000Z";
+    const heading = entry("a", "V1", { kind: "text", bold: true });
+    const task = entry("b", "V2", { checked: true, completedAt: "2026-01-05T00:00:00.000Z" });
+
+    const result = applyListItemsToEntries({
+      listId: "list-1",
+      listItems: [
+        { id: "a", kind: "text", text: "a", bold: true },
+        { id: "b", kind: "text", text: "b", checked: true, bold: true },
+        { id: "c", kind: "bullet", text: "c", bold: true, checked: true },
+      ],
+      entries: [heading, task],
+      timestamp,
+      createId: () => "unused",
+    });
+
+    expect(result.find((candidate) => candidate.id === "a")).toBe(heading);
+    expect(result.find((candidate) => candidate.id === "b")).toMatchObject({
+      kind: "text",
+      bold: true,
+      checked: false,
+      completedAt: undefined,
+      updatedAt: timestamp,
+    });
+    expect(result.find((candidate) => candidate.id === "c")).toMatchObject({ kind: "bullet", bold: true, checked: false });
+  });
+
+  it("removes bold when the line is no longer bold", () => {
+    const [result] = applyListItemsToEntries({
+      listId: "list-1",
+      listItems: [{ id: "a", kind: "check", text: "a" }],
+      entries: [entry("a", "V1", { bold: true })],
+      timestamp: "2026-02-01T00:00:00.000Z",
+      createId: () => "unused",
+    });
+
+    expect(result.bold).toBeUndefined();
+    expect(result.updatedAt).toBe("2026-02-01T00:00:00.000Z");
+  });
+
+  it("keeps plain and bold lines when an older saved list is read", () => {
+    const item = listItem({
+      listItems: [
+        { id: "a", kind: "bullet", text: "Produce", plain: true, bold: true } as never,
+        { id: "b", kind: "text", text: "Note", checked: true },
+        { id: "c", kind: "bullet", text: "Apples" },
+      ],
+    });
+
+    expect(entriesFromLegacyListItems(item).map(({ kind, bold, checked }) => ({ kind, bold, checked }))).toEqual([
+      { kind: "text", bold: true, checked: false },
+      { kind: "text", bold: undefined, checked: false },
+      { kind: "bullet", bold: undefined, checked: false },
+    ]);
+  });
+});
+
+describe("lists that lend and borrow lines", () => {
+  const chores = listItem({ id: "chores", title: "Chores" });
+  const today = listItem({ id: "today", title: "Today", listMode: "focus" });
+  const groceries = listItem({ id: "groceries", title: "Groceries" });
+  const entries = [
+    entry("mow", "V", { listId: "chores" }),
+    entry("dishes", "W", { listId: "chores" }),
+    entry(focusReferenceId("today", "mow"), "V", { listId: "today", refEntryId: "mow", text: "" }),
+    entry("milk", "V", { listId: "groceries" }),
+  ];
+
+  it("finds the lists whose lines other lists show", () => {
+    expect([...listIdsLendingLines(entries)]).toEqual(["chores"]);
+    expect(listIdsLendingLines(entries.filter((candidate) => !candidate.refEntryId)).size).toBe(0);
+  });
+
+  it("ignores a reference to a line that isn't on this device", () => {
+    const dangling = entry("today>gone", "W", { listId: "today", refEntryId: "gone", text: "" });
+    expect(listIdsLendingLines([dangling]).size).toBe(0);
+  });
+
+  it("lets a list pull lines in unless its own lines are shown elsewhere", () => {
+    const lending = listIdsLendingLines(entries);
+    expect(canListBorrowLines(today, lending)).toBe(true);
+    expect(canListBorrowLines(groceries, lending)).toBe(true);
+    expect(canListBorrowLines(chores, lending)).toBe(false);
+    expect(canListBorrowLines(undefined, lending)).toBe(false);
+    expect(canListBorrowLines(listItem({ id: "note", type: "text" }), lending)).toBe(false);
+  });
+
+  it("keeps letting a list that already pulls lines pull more", () => {
+    expect(canListBorrowLines(today, new Set(["today"]))).toBe(true);
+  });
+});
+
+describe("list titles and previews", () => {
+  const lines = [{ text: "  " }, { text: "Milk" }, { text: "Eggs " }, { text: "" }, { text: "Bread" }, { text: "Jam" }, { text: "Tea" }];
+
+  it("knows a list the person hasn't named", () => {
+    expect(isUntitledList({ title: UNTITLED_LIST_TITLE })).toBe(true);
+    expect(isUntitledList({ title: "   " })).toBe(true);
+    expect(isUntitledList({ title: "Groceries" })).toBe(false);
+  });
+
+  it("shows a named list by its name", () => {
+    expect(listDisplayTitle({ title: " Groceries " }, lines)).toBe("Groceries");
+  });
+
+  it("shows an unnamed list by its first line that has text", () => {
+    expect(listDisplayTitle({ title: UNTITLED_LIST_TITLE }, lines)).toBe("Milk");
+    expect(listDisplayTitle({ title: "" }, [{ text: " " }])).toBe("New list");
+    expect(listDisplayTitle({ title: UNTITLED_LIST_TITLE })).toBe("New list");
+  });
+
+  it("previews the first few lines, skipping blank ones", () => {
+    expect(listPreviewText({ title: "Groceries" }, lines)).toBe("Milk, Eggs, Bread, Jam");
+    expect(listPreviewText({ title: "Groceries" }, lines, 2)).toBe("Milk, Eggs");
+    expect(listPreviewText({ title: "Groceries" }, [])).toBe("");
+    expect(listPreviewText({ title: "Groceries" })).toBe("");
+  });
+
+  it("doesn't repeat the line an unnamed list is already titled with", () => {
+    expect(listPreviewText({ title: UNTITLED_LIST_TITLE }, lines)).toBe("Eggs, Bread, Jam, Tea");
+    expect(listPreviewText({ title: UNTITLED_LIST_TITLE }, [{ text: "Milk" }])).toBe("");
+  });
+});
+
+describe("list activity", () => {
+  const older = listItem({ id: "older", updatedAt: "2026-03-01T00:00:00.000Z" });
+  const newer = listItem({ id: "newer", updatedAt: "2026-03-05T00:00:00.000Z" });
+  const same = listItem({ id: "also-newer", updatedAt: "2026-03-05T00:00:00.000Z" });
+
+  it("counts an edit to a line as activity on its list", () => {
+    const times = listActivityTimes(
+      [older, newer],
+      [
+        entry("a", "V", { listId: "older", updatedAt: "2026-03-09T00:00:00.000Z" }),
+        entry("b", "W", { listId: "older", updatedAt: "2026-03-02T00:00:00.000Z" }),
+        entry("c", "V", { listId: "newer", updatedAt: "2026-01-01T00:00:00.000Z" }),
+        entry("d", "V", { listId: "gone", updatedAt: "2026-04-01T00:00:00.000Z" }),
+      ],
+    );
+
+    expect(Object.fromEntries(times)).toEqual({
+      older: "2026-03-09T00:00:00.000Z",
+      newer: "2026-03-05T00:00:00.000Z",
+    });
+  });
+
+  it("puts the most recently changed list first", () => {
+    const lists = [older, newer];
+    const quiet = listActivityTimes(lists, []);
+    expect(sortListsByActivity(lists, quiet).map((list) => list.id)).toEqual(["newer", "older"]);
+
+    const edited = listActivityTimes(lists, [entry("a", "V", { listId: "older", updatedAt: "2026-03-09T00:00:00.000Z" })]);
+    expect(sortListsByActivity(lists, edited).map((list) => list.id)).toEqual(["older", "newer"]);
+    expect(lists.map((list) => list.id)).toEqual(["older", "newer"]);
+  });
+
+  it("keeps a steady order for lists changed at the same moment and falls back to the list's own time", () => {
+    expect(sortListsByActivity([newer, same, older], new Map()).map((list) => list.id)).toEqual(["also-newer", "newer", "older"]);
   });
 });
