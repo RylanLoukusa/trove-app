@@ -658,12 +658,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const iconTone = colors.accentDark;
   const keyboardBar = focusedId ? (
     <View style={styles.bar}>
-      <ScrollView
-        horizontal
-        keyboardShouldPersistTaps="always"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.barRow}
-      >
+      <View style={styles.barRow}>
         <BarButton
           accessibilityLabel="Checklist"
           selected={barFormat?.kind === "check"}
@@ -735,7 +730,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           }}
           styles={styles}
         />
-      </ScrollView>
+      </View>
       <BarButton label="Done" strong onPress={() => Keyboard.dismiss()} styles={styles} />
     </View>
   ) : null;
@@ -1347,6 +1342,7 @@ const EntryRow = ({
                   {!!onSwipeLink && (
                     <SwipeButton
                       label="Add to"
+                      accessibilityLabel={`Add ${entry.text} to another list`}
                       icon={<ListPlus size={20} color={colors.onAccent} />}
                       tone={colors.buttonPrimaryBg}
                       onPress={() => {
@@ -1359,6 +1355,7 @@ const EntryRow = ({
                   {!!onSwipeMove && (
                     <SwipeButton
                       label="Move"
+                      accessibilityLabel={`Move ${entry.text} to another list`}
                       icon={<FolderInput size={20} color={colors.onAccent} />}
                       tone={colors.blue}
                       onPress={() => {
@@ -1371,6 +1368,7 @@ const EntryRow = ({
                   {!!onSwipeDelete && (
                     <SwipeButton
                       label={borrowed ? "Remove" : "Delete"}
+                      accessibilityLabel={borrowed ? `Remove ${entry.text} from this list` : `Delete ${entry.text}`}
                       icon={<Trash2 size={20} color={colors.onAccent} />}
                       tone={colors.buttonDangerBg}
                       onPress={() => {
@@ -1400,12 +1398,15 @@ const EntryRow = ({
 
 const SwipeButton = ({
   label,
+  accessibilityLabel,
   icon,
   tone,
   onPress,
   styles,
 }: {
   label: string;
+  // Names the line too, since every row has these buttons.
+  accessibilityLabel: string;
   icon: ReactNode;
   tone: string;
   onPress: () => void;
@@ -1413,7 +1414,7 @@ const SwipeButton = ({
 }) => (
   <Pressable
     accessibilityRole="button"
-    accessibilityLabel={label}
+    accessibilityLabel={accessibilityLabel}
     onPress={onPress}
     style={({ pressed }) => [styles.swipeButton, { backgroundColor: tone }, pressed && styles.dim]}
   >
@@ -1448,7 +1449,12 @@ const BarButton = ({
     disabled={disabled}
     hitSlop={4}
     onPress={onPress}
-    style={({ pressed }) => [styles.barButton, selected && styles.barButtonSelected, (pressed || disabled) && styles.dim]}
+    style={({ pressed }) => [
+      styles.barButton,
+      !label && styles.barIconButton,
+      selected && styles.barButtonSelected,
+      (pressed || disabled) && styles.dim,
+    ]}
   >
     {icon}
     {!!label && <Text style={[styles.barButtonText, strong && styles.barButtonStrong]}>{label}</Text>}
@@ -1634,35 +1640,40 @@ const createStyles = (colors: ThemeColors) =>
     dim: {
       opacity: 0.35,
     },
+    // Every button fits across a phone, so the bar never has to scroll.
     bar: {
       alignItems: "center",
       backgroundColor: colors.surface,
       borderTopColor: colors.border,
       borderTopWidth: StyleSheet.hairlineWidth,
       flexDirection: "row",
-      paddingRight: spacing.sm,
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 4,
     },
     barRow: {
       alignItems: "center",
-      gap: 2,
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 5,
+      flexDirection: "row",
+      flexGrow: 1,
+      flexShrink: 1,
+      maxWidth: 460,
     },
     barDivider: {
       backgroundColor: colors.border,
       height: 20,
-      marginHorizontal: 4,
       width: StyleSheet.hairlineWidth,
     },
     barButton: {
       alignItems: "center",
       borderRadius: 9,
       flexDirection: "row",
-      gap: 4,
       justifyContent: "center",
-      minHeight: 36,
-      minWidth: 36,
-      paddingHorizontal: 7,
+      minHeight: 38,
+      paddingHorizontal: 8,
+    },
+    barIconButton: {
+      flex: 1,
+      paddingHorizontal: 0,
     },
     barButtonSelected: {
       backgroundColor: withAlpha(colors.accent, 0.22),
