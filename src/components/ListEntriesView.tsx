@@ -1,8 +1,9 @@
 import React, { ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import ReanimatedSwipeable, { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { ArrowUpDown, CalendarDays, CheckCheck, GripVertical, ListChecks, Plus } from "lucide-react-native";
+import { ArrowUpDown, CalendarDays, Check, CheckCheck, GripVertical, ListChecks, Plus, Undo2 } from "lucide-react-native";
 
 import { ChoiceSheet } from "./ChoiceSheet";
 import { FocusListChoice, ListEntrySheet } from "./ListEntrySheet";
@@ -38,6 +39,8 @@ type Props = {
   // Entries that are lines from another list (focus lists only): deleting one
   // only takes it out of this list.
   referenceSources?: Record<string, string>;
+  // Lines a smart focus list's rule pulled in; they can't be removed by hand.
+  ruleEntryIds?: Set<string>;
   // Focus lists a line can be added to from its sheet (regular lists only).
   focusLists?: FocusListChoice[];
   focusMembership?: Record<string, string[]>;
@@ -83,6 +86,7 @@ export const ListEntriesView = ({
   onDeleteEntry,
   captions,
   referenceSources,
+  ruleEntryIds,
   focusLists,
   focusMembership,
   onToggleFocusList,
@@ -271,6 +275,7 @@ export const ListEntriesView = ({
         priorityOptions={priorityOptions}
         canEdit={canEdit}
         sourceListTitle={openEntry ? referenceSources?.[openEntry.id] : undefined}
+        fromRule={!!openEntry && !!ruleEntryIds?.has(openEntry.id)}
         focusLists={openEntry && onToggleFocusList ? focusLists : undefined}
         selectedFocusListIds={openEntry ? focusMembership?.[openEntry.id] ?? [] : []}
         onToggleFocusList={(focusListId) => {
@@ -331,7 +336,10 @@ const EntryRow = ({
   onDragEnd,
 }: EntryRowProps) => {
   const dragY = useSharedValue(0);
+  const swipeRef = useRef<SwipeableMethods>(null);
   const due = entry.dueDate ? describeDueDate(entry.dueDate) : null;
+  // Swiping a checklist line to the right checks it off (or back on).
+  const canSwipe = canEdit && entry.kind === "check" && !isDragging;
 
   const dragGesture = useMemo(
     () =>
@@ -359,7 +367,7 @@ const EntryRow = ({
 
   const hasMeta = !!due || !!priority || !!entry.notes;
 
-  return (
+  const row = (
     <Animated.View
       style={[styles.row, isDragging && styles.rowDragging, animatedStyle]}
       onLayout={(event) => onLayoutHeight(event.nativeEvent.layout.height)}
@@ -426,6 +434,29 @@ const EntryRow = ({
         </Pressable>
       </View>
     </Animated.View>
+  );
+
+  if (!canSwipe) return row;
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={1.5}
+      leftThreshold={56}
+      overshootLeft={false}
+      renderLeftActions={() => (
+        <View style={[styles.swipeAction, entry.checked && styles.swipeActionUndo]}>
+          {entry.checked ? <Undo2 size={18} color={colors.onAccent} /> : <Check size={18} color={colors.onAccent} />}
+          <Text style={styles.swipeActionText}>{entry.checked ? "Undo" : "Check off"}</Text>
+        </View>
+      )}
+      onSwipeableOpen={() => {
+        onToggle();
+        swipeRef.current?.close();
+      }}
+    >
+      {row}
+    </ReanimatedSwipeable>
   );
 };
 
@@ -528,6 +559,25 @@ const createStyles = (colors: ThemeColors) =>
     textDone: {
       color: colors.muted,
       textDecorationLine: "line-through",
+    },
+    swipeAction: {
+      alignItems: "center",
+      backgroundColor: colors.accentDark,
+      borderRadius: 12,
+      flexDirection: "row",
+      gap: 6,
+      justifyContent: "flex-start",
+      marginVertical: 2,
+      paddingHorizontal: spacing.md,
+      width: 120,
+    },
+    swipeActionUndo: {
+      backgroundColor: colors.muted,
+    },
+    swipeActionText: {
+      color: colors.onAccent,
+      fontSize: 14,
+      fontWeight: "800",
     },
     metaRow: {
       alignItems: "center",

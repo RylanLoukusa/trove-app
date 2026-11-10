@@ -1,6 +1,7 @@
 import type { ListEntry, TagGroup, TagOption } from "../types/models";
 import {
   describeDueDate,
+  matchesFocusRule,
   orderEntriesForView,
   parseDateKey,
   priorityOptionsFor,
@@ -113,5 +114,42 @@ describe("due dates", () => {
     expect(parseDateKey("2026-02-28")).not.toBeNull();
     expect(parseDateKey("2026-02-30")).toBeNull();
     expect(parseDateKey("2026-2-3")).toBeNull();
+  });
+});
+
+describe("matchesFocusRule", () => {
+  // Wednesday, Nov 11 2026 (local time).
+  const wednesday = new Date(2026, 10, 11, 15, 30);
+  const due = (dueDate: string, overrides: Partial<ListEntry> = {}) => entry(dueDate, { dueDate, ...overrides });
+
+  it("matches due today or overdue", () => {
+    expect(matchesFocusRule(due("2026-11-10"), "due_today", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(due("2026-11-11"), "due_today", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(due("2026-11-12"), "due_today", [], wednesday)).toBe(false);
+    expect(matchesFocusRule(entry("undated"), "due_today", [], wednesday)).toBe(false);
+  });
+
+  it("matches the next 7 days and this weekend", () => {
+    expect(matchesFocusRule(due("2026-11-17"), "due_week", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(due("2026-11-18"), "due_week", [], wednesday)).toBe(false);
+    expect(matchesFocusRule(due("2026-11-14"), "due_weekend", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(due("2026-11-15"), "due_weekend", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(due("2026-11-13"), "due_weekend", [], wednesday)).toBe(false);
+    // On Sunday, "this weekend" is still the current one.
+    expect(matchesFocusRule(due("2026-11-14"), "due_weekend", [], new Date(2026, 10, 15, 9))).toBe(true);
+  });
+
+  it("matches the highest priority", () => {
+    expect(matchesFocusRule(entry("a", { tagOptionIds: ["high"] }), "high_priority", priorityOptions, wednesday)).toBe(true);
+    expect(matchesFocusRule(entry("a", { tagOptionIds: ["medium"] }), "high_priority", priorityOptions, wednesday)).toBe(false);
+    expect(matchesFocusRule(entry("a", { tagOptionIds: ["high"] }), "high_priority", [], wednesday)).toBe(false);
+  });
+
+  it("keeps done lines only on the day they were done", () => {
+    const doneToday = due("2026-11-10", { checked: true, completedAt: new Date(2026, 10, 11, 9).toISOString() });
+    const doneBefore = due("2026-11-10", { checked: true, completedAt: new Date(2026, 10, 10, 9).toISOString() });
+    expect(matchesFocusRule(doneToday, "due_today", [], wednesday)).toBe(true);
+    expect(matchesFocusRule(doneBefore, "due_today", [], wednesday)).toBe(false);
+    expect(matchesFocusRule(due("2026-11-10", { kind: "bullet" }), "due_today", [], wednesday)).toBe(false);
   });
 });
