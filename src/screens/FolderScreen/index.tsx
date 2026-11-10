@@ -200,7 +200,18 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOp
 export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, tagOptions, updateListEntry, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
+  const {
+    folders,
+    isReady,
+    items,
+    tagOptions,
+    createItem,
+    updateListEntry,
+    deleteFolder,
+    canManageFolder,
+    canEditFolderContent,
+    canEditItem,
+  } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
 
   const folder = getFolderById(folders, route.params.folderId);
@@ -266,6 +277,14 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     }
     navigation.navigate("AddEditItem", { folderId: folder.id });
   }, [canEditCurrentFolderContent, folder, navigation]);
+
+  // Skips the Add item form: makes an empty checklist and opens it with the
+  // cursor in its title.
+  const onPressNewList = useCallback(() => {
+    if (!folder || !canEditCurrentFolderContent) return;
+    const list = createItem({ folderId: folder.id, title: "Untitled list", type: "list", tagOptionIds: [] });
+    if (list) navigation.navigate("ItemDetail", { itemId: list.id, newList: true });
+  }, [canEditCurrentFolderContent, createItem, folder, navigation]);
 
   const onPressAddSubfolder = useCallback(() => {
     if (!folder || !canNestMore || !canManageCurrentFolder) return;
@@ -430,6 +449,11 @@ export const FolderScreen = ({ navigation, route }: Props) => {
               disabled={!canEditCurrentFolderContent}
             />
           </View>
+          {canEditCurrentFolderContent && (
+            <View style={styles.action}>
+              <AppButton label="New list" variant="secondary" onPress={onPressNewList} />
+            </View>
+          )}
           <View style={styles.action} ref={registerAnchor("add-subfolder")}>
             <AppButton
               label={!canManageCurrentFolder ? "Owner only" : canNestMore ? "Add subfolder" : "Max depth reached"}

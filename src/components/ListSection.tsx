@@ -20,7 +20,11 @@ import {
 } from "../utils/listEntries";
 import { focusRuleLabels, matchesFocusRule, priorityOptionsFor } from "../utils/listView";
 
-type Props = { item: SavedItem };
+type Props = {
+  item: SavedItem;
+  // Bump to put the cursor in the list's "New item" line.
+  focusAddSignal?: number;
+};
 
 type ClearChoice = "done" | "all";
 const clearOptions: Array<{ value: ClearChoice; label: string; detail: string }> = [
@@ -40,7 +44,7 @@ const ruleOptions: Array<{ value: RuleChoice; label: string; detail?: string }> 
 
 // The lines of a list item, for both regular and focus lists. A focus list's
 // lines from other lists are edited in place but stay in their own list.
-export const ListSection = ({ item }: Props) => {
+export const ListSection = ({ item, focusAddSignal }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
@@ -50,7 +54,7 @@ export const ListSection = ({ item }: Props) => {
     tagOptions,
     updateItem,
     updateListEntry,
-    createListEntry,
+    insertListEntries,
     moveListEntry,
     deleteListEntry,
     addToFocusList,
@@ -277,7 +281,10 @@ export const ListSection = ({ item }: Props) => {
         onToggleEntry={onToggleEntry}
         onUpdateEntry={(entryId, updates) => updateListEntry(targetOf(entryId), updates)}
         onMoveEntry={isFocus ? onMoveFocusEntry : moveListEntry}
-        onAddEntry={(text) => createListEntry(item.id, { text })}
+        onInsertEntries={(afterEntryId, lines) =>
+          insertListEntries(item.id, afterEntryId, lines).map((entry) => entry.id)
+        }
+        focusAddSignal={focusAddSignal}
         onDeleteEntry={(entryId) => {
           if (autoIds.has(entryId)) return;
           if (targetIds.has(entryId)) removeFromFocusList(item.id, entryId);

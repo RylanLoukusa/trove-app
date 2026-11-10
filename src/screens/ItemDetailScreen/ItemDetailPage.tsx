@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Plus } from "lucide-react-native";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
@@ -29,9 +29,11 @@ type Props = {
   item: SavedItem;
   width: number;
   navigation: NativeStackScreenProps<RootStackParamList, "ItemDetail">["navigation"];
+  // A list that was just made: start with the cursor in its title.
+  autoFocusTitle?: boolean;
 };
 
-export const ItemDetailPage = ({ item, width, navigation }: Props) => {
+export const ItemDetailPage = ({ item, width, navigation, autoFocusTitle = false }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
@@ -50,6 +52,21 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const [openSingleSelectGroupId, setOpenSingleSelectGroupId] = useState<string | null>(null);
   const [openMultiSelectGroupId, setOpenMultiSelectGroupId] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  // Lists get their title typed in place; Return moves on to the first line.
+  const editableTitle = item.type === "list" && canEditCurrentItem;
+  const [titleDraft, setTitleDraft] = useState(item.title);
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [focusAddSignal, setFocusAddSignal] = useState(0);
+
+  useEffect(() => {
+    if (!titleFocused) setTitleDraft(item.title);
+  }, [item.title, titleFocused]);
+
+  const commitTitle = useCallback(() => {
+    const next = titleDraft.trim();
+    if (next && next !== item.title) updateItem(item.id, { title: next });
+    else setTitleDraft(item.title);
+  }, [item.id, item.title, titleDraft, updateItem]);
 
   const sortedTagGroups = useMemo(() => [...tagGroups].sort((a, b) => a.sortOrder - b.sortOrder), [tagGroups]);
 
@@ -185,9 +202,38 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   );
 
   return (
-    <ScrollView style={[styles.scroll, { width }]} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={[styles.scroll, { width }]}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+    >
       <Text style={styles.type}>{(isFocusList(item) ? "Focus list" : getItemTypeLabel(item.type)).toUpperCase()}</Text>
-      <Text style={styles.title}>{item.title}</Text>
+      {editableTitle ? (
+        <TextInput
+          accessibilityLabel="List title"
+          value={titleDraft}
+          onChangeText={setTitleDraft}
+          onFocus={() => setTitleFocused(true)}
+          onBlur={() => {
+            setTitleFocused(false);
+            commitTitle();
+          }}
+          onSubmitEditing={() => {
+            commitTitle();
+            setFocusAddSignal((count) => count + 1);
+          }}
+          autoFocus={autoFocusTitle}
+          selectTextOnFocus={autoFocusTitle}
+          submitBehavior="submit"
+          returnKeyType="next"
+          placeholder="List title"
+          placeholderTextColor={colors.muted}
+          style={[styles.title, styles.titleInput]}
+        />
+      ) : (
+        <Text style={styles.title}>{item.title}</Text>
+      )}
       <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
       {isSharedAccess(item) && (
         <View style={styles.accessBadge}>
@@ -237,7 +283,7 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
         </View>
       )}
 
-      {item.type === "list" && <ListSection item={item} />}
+      {item.type === "list" && <ListSection item={item} focusAddSignal={focusAddSignal} />}
 
       {shouldShowAttachments && (
         <View style={styles.attachmentBlock}>

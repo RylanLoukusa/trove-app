@@ -76,6 +76,11 @@ export const createStyles = (colors: ThemeColors) =>
       fontWeight: "900",
       marginTop: spacing.xs,
     },
+    titleInput: {
+      paddingBottom: 0,
+      paddingHorizontal: 0,
+      paddingTop: 0,
+    },
     path: {
       color: colors.accentDark,
       fontWeight: "800",

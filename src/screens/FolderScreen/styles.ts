@@ -76,11 +76,13 @@ export const createStyles = (colors: ThemeColors) =>
     },
     actions: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: spacing.sm,
       marginTop: spacing.md,
     },
     action: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: 140,
     },
     section: {
       color: colors.ink,

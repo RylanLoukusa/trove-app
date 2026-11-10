@@ -44,7 +44,7 @@ const handlers = {
   onToggleEntry: jest.fn(),
   onUpdateEntry: jest.fn(),
   onMoveEntry: jest.fn(),
-  onAddEntry: jest.fn(),
+  onInsertEntries: jest.fn((_after: string | null, lines: unknown[]) => lines.map((_, index) => `new-${index}`)),
   onDeleteEntry: jest.fn(),
 };
 
@@ -53,8 +53,13 @@ const renderList = (entries: ListEntry[], canEdit = true) =>
     <ListEntriesView listId="list-1" entries={entries} priorityOptions={[low, high]} canEdit={canEdit} {...handlers} />,
   );
 
+const openDetails = async (text: string) => {
+  await fireEvent(screen.getByLabelText(text), "focus");
+  await fireEvent.press(screen.getByLabelText("Line details"));
+};
+
 const visibleTexts = () =>
-  screen.getAllByRole("button", { name: /^Edit / }).map((button) => button.props.accessibilityLabel.replace(/^Edit /, ""));
+  screen.getAllByTestId("list-line-input").map((input) => input.props.value);
 
 describe("ListEntriesView", () => {
   beforeEach(async () => {
@@ -95,13 +100,75 @@ describe("ListEntriesView", () => {
     expect(visibleTexts()).toEqual(["Cake", "Florist"]);
   });
 
-  it("adds an item from the quick add field", async () => {
+  it("adds an item from the new item line with Return and keeps typing there", async () => {
     await renderList([entry("Cake")]);
 
-    await fireEvent.changeText(screen.getByLabelText("Add an item to this list"), "  Venue ");
-    await fireEvent(screen.getByLabelText("Add an item to this list"), "submitEditing");
+    await fireEvent.changeText(screen.getByLabelText("Add an item to this list"), "  Venue \n");
 
-    expect(handlers.onAddEntry).toHaveBeenCalledWith("Venue");
+    expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [{ text: "Venue", checked: false, indentLevel: 0 }]);
+    expect(screen.getByLabelText("Add an item to this list").props.value).toBe("");
+  });
+
+  it("adds one line per row when several lines are pasted, with undo", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent.changeText(screen.getByLabelText("Add an item to this list"), "- Milk\n- Eggs\n- [x] Bread");
+
+    expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+      { text: "Milk", checked: false, indentLevel: 0 },
+      { text: "Eggs", checked: false, indentLevel: 0 },
+      { text: "Bread", checked: true, indentLevel: 0 },
+    ]);
+    expect(screen.getByText("Added 3 items")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Undo"));
+    expect(handlers.onDeleteEntry.mock.calls.map((call) => call[0])).toEqual(["new-0", "new-1", "new-2"]);
+  });
+
+  it("edits a line's text in place", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent(screen.getByLabelText("Cake"), "focus");
+    await fireEvent.changeText(screen.getByLabelText("Cake"), "Carrot cake");
+    await fireEvent(screen.getByLabelText("Cake"), "blur");
+
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { text: "Carrot cake" });
+  });
+
+  it("starts a new line right below on Return, with the same indent", async () => {
+    await renderList([entry("Cake", { indentLevel: 1 }), entry("Venue")]);
+
+    await fireEvent(screen.getByLabelText("Cake"), "focus");
+    await fireEvent.changeText(screen.getByLabelText("Cake"), "Cake\n");
+
+    expect(handlers.onInsertEntries).toHaveBeenCalledWith("Cake", [
+      { text: "", checked: false, indentLevel: 1, kind: "check" },
+    ]);
+  });
+
+  it("deletes a line that is left empty", async () => {
+    await renderList([entry("Cake")]);
+
+    await fireEvent(screen.getByLabelText("Cake"), "focus");
+    await fireEvent.changeText(screen.getByLabelText("Cake"), "");
+    await fireEvent(screen.getByLabelText("Cake"), "blur");
+
+    expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
+    expect(handlers.onUpdateEntry).not.toHaveBeenCalled();
+  });
+
+  it("sets priority and indent from the keyboard bar", async () => {
+    await renderList([entry("Cake"), entry("Venue")]);
+
+    await fireEvent(screen.getByLabelText("Venue"), "focus");
+    await fireEvent.press(screen.getByLabelText("Priority: none. Tap to change"));
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { tagOptionIds: ["low"] });
+
+    await fireEvent.press(screen.getByLabelText("Indent line"));
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { indentLevel: 1 });
+
+    await fireEvent.press(screen.getByLabelText("Set due date"));
+    await fireEvent.press(screen.getByText("Tomorrow"));
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
   it("checks an item off", async () => {
@@ -116,7 +183,7 @@ describe("ListEntriesView", () => {
   it("sets a due date and priority from the item sheet", async () => {
     await renderList([entry("Cake")]);
 
-    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await openDetails("Cake");
     await fireEvent.press(screen.getByText("Tomorrow"));
     await fireEvent.press(screen.getByText("High"));
     await fireEvent.changeText(screen.getByLabelText("Notes"), "Chocolate");
@@ -131,7 +198,7 @@ describe("ListEntriesView", () => {
   it("deletes an item from its sheet", async () => {
     await renderList([entry("Cake")]);
 
-    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await openDetails("Cake");
     await fireEvent.press(screen.getByText("Delete item"));
 
     expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
@@ -151,7 +218,7 @@ describe("ListEntriesView", () => {
     );
 
     expect(screen.getByText("Wedding")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await openDetails("Cake");
     expect(screen.getByText("From Wedding. Changes here show up there too.")).toBeTruthy();
     await fireEvent.press(screen.getByText("Remove from this list"));
 
@@ -178,7 +245,7 @@ describe("ListEntriesView", () => {
     );
 
     expect(screen.getByText("In Today")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Edit Cake"));
+    await openDetails("Cake");
     expect(screen.getByRole("button", { name: "Today", selected: true })).toBeTruthy();
     await fireEvent.press(screen.getByText("Weekend plans"));
 

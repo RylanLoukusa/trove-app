@@ -374,8 +374,9 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         mediaItems: storedMediaItems,
         attachments: undefined,
         listMode: type === "list" && isFocus ? ("focus" as const) : undefined,
+        // An existing list's lines are edited on the list itself.
         listItems:
-          type === "list" && !(editing && isFocus)
+          type === "list" && editing?.type !== "list"
             ? listItems
                 .map((item) => ({ ...item, text: item.text.trim() }))
                 .filter((item) => item.text.length > 0)
@@ -534,9 +535,11 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        {type === "list" && editing && isFocus && (
+        {type === "list" && editing?.type === "list" && (
           <Text style={styles.focusNote}>
-            This is a focus list. Add lines from your other lists, or your own, on the list itself.
+            {isFocus
+              ? "This is a focus list. Add lines from your other lists, or your own, on the list itself."
+              : "Add, edit and reorder lines right on the list."}
           </Text>
         )}
 
@@ -552,7 +555,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </View>
         )}
 
-        {type === "list" && !(editing && isFocus) && (
+        {type === "list" && editing?.type !== "list" && (
           <View style={styles.listEditor}>
             {isListEmpty && (
               <View style={styles.listKindPicker}>
