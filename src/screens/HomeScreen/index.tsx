@@ -2,90 +2,37 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
-import { Sparkles } from "lucide-react-native";
-import { AppButton } from "../../components/AppButton";
-import { EmptyState } from "../../components/EmptyState";
-import { FolderCard } from "../../components/FolderCard";
-import { FolderTreeBrowserModal } from "../../components/FolderTreeBrowserModal";
-import { ScreenTopBar } from "../../components/ScreenTopBar";
-import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
-import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
+import { Ellipsis, LogIn, LogOut, Search, Settings, Sparkles, UserRound } from "lucide-react-native";
+
+import { SkeletonBlock, SkeletonText } from "../../components";
+import { MenuAction, MenuSheet } from "../../components/MenuSheet";
+import { NavBar, NavIconButton } from "../../components/NavBar";
+import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader, SectionLink } from "../../components/Rows";
+import { SpotlightMessageCard } from "../../components/SpotlightTour";
+import { useListRowActions } from "../../components/useListRowActions";
+import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
-import { spacing } from "../../theme/theme";
-import { useThemeColors } from "../../theme/ThemeContext";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
-import { useAuth } from "../../auth/AuthContext";
-import { Folder } from "../../types/models";
-import { getDescendantFolderIds, getVisibleRootFolders } from "../../utils/folderTree";
+import { useThemeColors } from "../../theme/ThemeContext";
+import { folderLabel, getDescendantFolderIds, getVisibleRootFolders } from "../../utils/folderTree";
+import { listActivityTimes, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
-type ScreenStyles = ReturnType<typeof createStyles>;
-
-const HomeSkeleton = ({ styles }: { styles: ScreenStyles }) => (
-  <ScreenSkeleton>
-    <SkeletonText lineCount={1} lineWidths={["72%"]} />
-    <SkeletonBlock height={44} radius={14} width="46%" />
-    <SkeletonBlock height={48} radius={24} />
-    <View style={styles.actions}>
-      <SkeletonBlock height={52} radius={16} style={styles.action} />
-      <SkeletonBlock height={52} radius={16} style={styles.action} />
-    </View>
-    <SkeletonBlock height={24} radius={12} width="42%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={5}
-      renderItem={() => (
-        <View style={styles.skeletonCard}>
-          <SkeletonBlock height={24} radius={12} width={56} />
-          <SkeletonText lineCount={2} lineWidths={["72%", "38%"]} style={styles.skeletonCardText} />
-        </View>
-      )}
-    />
-  </ScreenSkeleton>
-);
-
-type FolderListItemProps = {
-  folder: Folder;
-  count: number;
-  onOpenFolder: (folderId: string) => void;
-  anchorRef?: React.Ref<View>;
-};
-
-const FolderListItem = React.memo(function FolderListItem({ folder, count, onOpenFolder, anchorRef }: FolderListItemProps) {
-  const onPress = useCallback(() => {
-    onOpenFolder(folder.id);
-  }, [folder.id, onOpenFolder]);
-
-  if (anchorRef) {
-    return (
-      <View ref={anchorRef}>
-        <FolderCard folder={folder} count={count} onPress={onPress} />
-      </View>
-    );
-  }
-
-  return <FolderCard folder={folder} count={count} onPress={onPress} />;
-});
-
+// Every list, newest first, with the folders one tap away above them.
 export const HomeScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, syncSnapshot, syncToRemote } = useTrove();
+  const { folders, isReady, items, listEntries, syncSnapshot, syncToRemote, createItem } = useTrove();
   const { session, signOut } = useAuth();
   const { isPro, isLoading: isEntitlementLoading, presentPaywall } = useEntitlement();
-  const [isFolderBrowserOpen, setIsFolderBrowserOpen] = useState(false);
-
-  const { currentStep, stepNumber, totalSteps, next, skip, maybeStart } = useOnboardingTour();
-  const isHomeStepHere = currentStep?.screen === "Home";
-  const isSpotlightStepHere = isHomeStepHere && currentStep?.mode !== "message";
-  const isMessageStepHere = isHomeStepHere && currentStep?.mode === "message";
-  const { scrollRef, onScroll, registerAnchor, rect } = useSpotlightAnchor(
-    isSpotlightStepHere ? currentStep?.anchorKey : undefined,
-  );
+  const { currentStep, next, skip, maybeStart } = useOnboardingTour();
+  const { openListActions, overlays } = useListRowActions();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -93,37 +40,17 @@ export const HomeScreen = ({ navigation }: Props) => {
     }, [maybeStart]),
   );
 
-  const onOpenFolderBrowser = useCallback(() => {
-    setIsFolderBrowserOpen(true);
-  }, []);
+  const topFolders = useMemo(() => getVisibleRootFolders(folders), [folders]);
+  const activity = useMemo(() => listActivityTimes(items, listEntries ?? []), [items, listEntries]);
+  const lists = useMemo(() => sortListsByActivity(items, activity), [activity, items]);
 
-  const onCloseFolderBrowser = useCallback(() => {
-    setIsFolderBrowserOpen(false);
-  }, []);
-
-  const onSelectFolderFromBrowser = useCallback(
-    (folderId: string) => {
-      setIsFolderBrowserOpen(false);
-      navigation.navigate("Folder", { folderId });
+  const countForFolder = useCallback(
+    (folderId: string): number => {
+      const ids = new Set([folderId, ...getDescendantFolderIds(folders, folderId)]);
+      return items.reduce((count, item) => count + (ids.has(item.folderId) ? 1 : 0), 0);
     },
-    [navigation],
+    [folders, items],
   );
-
-  const onPressUpgrade = useCallback(() => {
-    presentPaywall("general");
-  }, [presentPaywall]);
-
-  const onPressSearch = useCallback(() => {
-    navigation.navigate("Search");
-  }, [navigation]);
-
-  const onPressAddItem = useCallback(() => {
-    navigation.navigate("AddEditItem");
-  }, [navigation]);
-
-  const onPressNewFolder = useCallback(() => {
-    navigation.navigate("AddEditFolder", { parentFolderId: null });
-  }, [navigation]);
 
   const onOpenFolder = useCallback(
     (folderId: string) => {
@@ -132,39 +59,13 @@ export const HomeScreen = ({ navigation }: Props) => {
     [navigation],
   );
 
-  const onPressSettings = useCallback(() => {
-    navigation.navigate("Settings");
-  }, [navigation]);
+  // One tap starts a list: it opens with the cursor in its title.
+  const onNewList = useCallback(() => {
+    const list = createItem({ folderId: "", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
+    if (list) navigation.navigate("List", { listId: list.id, isNew: true });
+  }, [createItem, navigation]);
 
-  const onPressManageTags = useCallback(() => {
-    navigation.navigate("ManageTags");
-  }, [navigation]);
-
-  const onPressProfile = useCallback(() => {
-    navigation.navigate("Profile");
-  }, [navigation]);
-
-  const onPressLogin = useCallback(() => {
-    navigation.navigate("Login");
-  }, [navigation]);
-
-  const onSignOut = useCallback(async () => {
-    await signOut();
-  }, [signOut]);
-
-  const onOpenMenu = useCallback(() => {
-    const buttons = [
-      ...(session?.user ? [{ text: "Profile", onPress: onPressProfile }] : []),
-      { text: "Settings", onPress: onPressSettings },
-      session?.user
-        ? { text: "Logout", style: "destructive" as const, onPress: onSignOut }
-        : { text: "Login", onPress: onPressLogin },
-      { text: "Cancel", style: "cancel" as const },
-    ];
-
-    Alert.alert("Menu", "Choose an action", buttons);
-  }, [onPressProfile, onPressSettings, onPressLogin, onSignOut, session?.user]);
-
+  const syncNeedsAttention = syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted";
   const onPressSyncStatus = useCallback(async () => {
     if (syncSnapshot.status === "conflicted") {
       navigation.navigate("SyncConflict");
@@ -177,152 +78,158 @@ export const HomeScreen = ({ navigation }: Props) => {
     }
   }, [navigation, syncSnapshot.status, syncToRemote]);
 
-  const topFolders = getVisibleRootFolders(folders);
+  const menuActions: MenuAction[] = [
+    ...(session?.user
+      ? [
+          {
+            key: "profile",
+            label: "Profile",
+            icon: <UserRound size={20} color={colors.accentDark} />,
+            onPress: () => navigation.navigate("Profile"),
+          },
+        ]
+      : []),
+    {
+      key: "settings",
+      label: "Settings",
+      icon: <Settings size={20} color={colors.accentDark} />,
+      onPress: () => navigation.navigate("Settings"),
+    },
+    session?.user
+      ? {
+          key: "logout",
+          label: "Log out",
+          icon: <LogOut size={20} color={colors.danger} />,
+          destructive: true,
+          separated: true,
+          onPress: () => void signOut(),
+        }
+      : {
+          key: "login",
+          label: "Log in",
+          icon: <LogIn size={20} color={colors.accentDark} />,
+          separated: true,
+          onPress: () => navigation.navigate("Login"),
+        },
+  ];
 
-  const countForFolder = (folderId: string) => {
-    const ids = [folderId, ...getDescendantFolderIds(folders, folderId)];
-    return items.filter((item) => ids.includes(item.folderId)).length;
-  };
+  const showWelcome = currentStep?.screen === "Home" && currentStep.mode === "message";
 
   return (
     <View style={styles.screen}>
-      <ScreenTopBar
-        navigation={navigation}
-        showBack={false}
-        onMenuPress={onOpenMenu}
-        rightActions={
-          !isEntitlementLoading && !isPro ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Upgrade to Trove Pro"
-              hitSlop={8}
-              onPress={onPressUpgrade}
-              style={({ pressed }) => [styles.upgradePill, pressed && styles.upgradePillPressed]}
-            >
-              <Sparkles size={13} color={colors.onAccent} />
-              <Text style={styles.upgradePillText}>Pro</Text>
-            </Pressable>
-          ) : undefined
-        }
-      />
-      <ScrollView
-        ref={scrollRef}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-      >
-        {!isReady ? (
-          <HomeSkeleton styles={styles} />
-        ) : (
+      <NavBar
+        right={
           <>
-        <Text style={styles.kicker}>Save plans, ideas, and links in one place.</Text>
-        <Text style={styles.title}>Trove</Text>
-
-        {session?.user && isPro ? (
-          <Pressable
-            accessibilityRole={
-              syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted"
-                ? "button"
-                : "text"
-            }
-            disabled={syncSnapshot.status !== "failed" && syncSnapshot.status !== "conflicted"}
-            onPress={onPressSyncStatus}
-            style={[
-              styles.syncPill,
-              (syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted") &&
-                styles.syncPillFailed,
-            ]}
-          >
-            <Text
-              style={[
-                styles.syncPillText,
-                (syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted") &&
-                  styles.syncPillTextFailed,
-              ]}
-            >
-              {displayTextForSyncSnapshot(syncSnapshot)}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable style={styles.search} onPress={onPressSearch}>
-          <Text style={styles.searchText}>Search folders, ideas, tags, URLs...</Text>
-        </Pressable>
-
-        <View style={styles.actions}>
-          <AppButton label="Add Item" onPress={onPressAddItem} style={styles.action} />
-        </View>
-
-        <View ref={registerAnchor("folders", spacing.lg)}>
-        <View style={styles.rowHeader}>
-          <Text style={styles.section}>Folders</Text>
-          <View style={styles.rowHeaderActions}>
-            {folders.length > 0 && (
-              <Pressable onPress={onOpenFolderBrowser}>
-                <Text style={styles.link}>Browse all</Text>
+            {!isEntitlementLoading && !isPro && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Upgrade to Trove Pro"
+                hitSlop={8}
+                onPress={() => presentPaywall("general")}
+                style={({ pressed }) => [styles.upgradePill, pressed && styles.pressed]}
+              >
+                <Sparkles size={13} color={colors.onAccent} />
+                <Text style={styles.upgradePillText}>Pro</Text>
               </Pressable>
             )}
-            <Pressable onPress={onPressNewFolder}>
-              <Text style={styles.link}>New folder</Text>
+            <NavIconButton label="Open menu" onPress={() => setMenuOpen(true)}>
+              <Ellipsis size={24} color={colors.accentDark} />
+            </NavIconButton>
+          </>
+        }
+      />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <View style={styles.titleRow}>
+          <Text accessibilityRole="header" style={styles.title}>
+            Trove
+          </Text>
+          {isReady && !!session?.user && isPro && (
+            <Pressable
+              accessibilityRole={syncNeedsAttention ? "button" : "text"}
+              disabled={!syncNeedsAttention}
+              hitSlop={8}
+              onPress={onPressSyncStatus}
+              style={({ pressed }) => [styles.sync, pressed && styles.pressed]}
+            >
+              <View style={[styles.syncDot, syncNeedsAttention && styles.syncDotFailed]} />
+              <Text style={[styles.syncText, syncNeedsAttention && styles.syncTextFailed]}>
+                {displayTextForSyncSnapshot(syncSnapshot)}
+              </Text>
             </Pressable>
-          </View>
+          )}
         </View>
 
-        {topFolders.length === 0 ? (
-          <EmptyState
-            title="No folders yet."
-            message="Create folders to organize everything waiting for later."
-          />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Search"
+          onPress={() => navigation.navigate("Search")}
+          style={({ pressed }) => [styles.search, pressed && styles.pressed]}
+        >
+          <Search size={17} color={colors.muted} />
+          <Text style={styles.searchText}>Search</Text>
+        </Pressable>
+
+        {!isReady ? (
+          <View style={styles.skeleton}>
+            <SkeletonBlock height={46} radius={14} width="58%" />
+            <SkeletonBlock height={62} radius={14} style={styles.skeletonRow} />
+            <SkeletonText lineCount={3} lineWidths={["82%", "64%", "74%"]} style={styles.skeletonRow} />
+          </View>
         ) : (
-          topFolders.map((folder) => (
-            <FolderListItem
-              key={folder.id}
-              folder={folder}
-              count={countForFolder(folder.id)}
-              onOpenFolder={onOpenFolder}
-              anchorRef={
-                folder.name === "Places" && !folder.parentFolderId
-                  ? registerAnchor("places-folder", spacing.xs, spacing.xs)
-                  : undefined
+          <>
+            <SectionHeader
+              title="Folders"
+              action={
+                <SectionLink
+                  label="New folder"
+                  onPress={() => navigation.navigate("AddEditFolder", { parentFolderId: null })}
+                />
               }
             />
-          ))
-        )}
-        </View>
+            {topFolders.length > 0 ? (
+              <FolderStrip folders={topFolders} countFor={countForFolder} onOpen={onOpenFolder} />
+            ) : (
+              <Text style={styles.hint}>No folders yet. Folders keep related lists together.</Text>
+            )}
 
-        <Text style={styles.section}>Tags</Text>
-        <View style={styles.legalLinks}>
-          <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
-            <Text style={styles.legalLinkText}>Manage Tags</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
-        </View>
+            <SectionHeader title="Lists" />
+            {lists.length > 0 ? (
+              <RowGroup>
+                {lists.map((list) => (
+                  <ListRow
+                    key={list.id}
+                    list={list}
+                    activityAt={activity.get(list.id)}
+                    folderLabel={folderLabel(folders, list.folderId)}
+                    onPress={() => navigation.navigate("List", { listId: list.id })}
+                    onLongPress={() => openListActions(list.id)}
+                  />
+                ))}
+              </RowGroup>
+            ) : (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>No lists yet</Text>
+                <Text style={styles.emptyText}>Tap the pencil to start one.</Text>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
-      <FolderTreeBrowserModal
-        visible={isFolderBrowserOpen}
-        folders={folders}
-        onClose={onCloseFolderBrowser}
-        onSelectFolder={onSelectFolderFromBrowser}
-      />
-      {isSpotlightStepHere && currentStep && rect ? (
-        <SpotlightOverlay
-          rect={rect}
+
+      {isReady && <ComposeButton onPress={onNewList} />}
+
+      {showWelcome && currentStep ? (
+        <SpotlightMessageCard
           title={currentStep.title}
           body={currentStep.body}
-          stepNumber={stepNumber}
-          totalSteps={totalSteps}
-          mode={currentStep.mode === "info" ? "info" : "action"}
-          placement={currentStep.preferredPlacement}
-          onNext={next}
+          primaryLabel="Got it"
+          onPrimary={next}
           onSkip={skip}
         />
       ) : null}
-      {isMessageStepHere && currentStep ? (
-        <SpotlightMessageCard title={currentStep.title} body={currentStep.body} primaryLabel="Next" onPrimary={next} onSkip={skip} />
-      ) : null}
+
+      <MenuSheet visible={menuOpen} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      {overlays}
     </View>
   );
 };

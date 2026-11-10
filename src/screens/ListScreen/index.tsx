@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { NavBar } from "../../components/NavBar";
 import { SkeletonBlock, SkeletonText } from "../../components";
+import { backLabelFor } from "../../navigation/backLabel";
 import type { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { spacing, ThemeColors } from "../../theme/theme";
@@ -15,14 +16,17 @@ type Props = NativeStackScreenProps<RootStackParamList, "List">;
 export const ListScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { isReady, items } = useTrove();
+  const { folders, isReady, items } = useTrove();
+  const backLabel = backLabelFor(navigation.getState(), route.key, folders);
   const item = items.find((candidate) => candidate.id === route.params.listId && candidate.type === "list");
   // Once shown, a list that goes away (deleted, or thrown away for being
   // empty) leaves a blank page behind while the screen closes.
   const wasShown = useRef(false);
   if (item) wasShown.current = true;
 
-  if (item) return <ListPage key={item.id} item={item} navigation={navigation} isNew={!!route.params.isNew} />;
+  if (item) {
+    return <ListPage key={item.id} item={item} navigation={navigation} backLabel={backLabel} isNew={!!route.params.isNew} />;
+  }
 
   const goBack = () => {
     if (navigation.canGoBack()) navigation.goBack();
@@ -31,7 +35,7 @@ export const ListScreen = ({ navigation, route }: Props) => {
 
   return (
     <View style={styles.screen}>
-      <NavBar backLabel="Trove" onBack={goBack} />
+      <NavBar backLabel={backLabel} onBack={goBack} />
       {!isReady ? (
         <View style={styles.body}>
           <SkeletonBlock height={34} radius={10} width="62%" />

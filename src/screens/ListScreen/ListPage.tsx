@@ -23,6 +23,7 @@ import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { HOME_LABEL } from "../../navigation/backLabel";
 import type { RootStackParamList } from "../../navigation/types";
 import { useListViewSettings } from "../../storage/listViewSettings";
 import { useTrove } from "../../storage/storage";
@@ -59,6 +60,8 @@ import {
 type Props = {
   item: SavedItem;
   navigation: NativeStackNavigationProp<RootStackParamList, "List">;
+  // Name of the screen Back returns to.
+  backLabel: string;
   // Just created: the cursor starts in the title.
   isNew?: boolean;
 };
@@ -79,11 +82,10 @@ const completedOptions = (Object.keys(completedModeLabels) as CompletedMode[]).m
   label: completedModeLabels[value],
 }));
 
-const HOME_LABEL = "Trove";
 
 // One list: its title and its lines on a single page. A line pulled in from
 // another list is edited in place but stays in its own list.
-export const ListPage = ({ item, navigation, isNew = false }: Props) => {
+export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
@@ -551,16 +553,6 @@ export const ListPage = ({ item, navigation, isNew = false }: Props) => {
   ];
 
   // --- Page ----------------------------------------------------------------
-  const state = navigation.getState();
-  const previousRoute = state.routes[state.index - 1];
-  const backLabel =
-    previousRoute?.name === "Folder"
-      ? folders.find((folder) => folder.id === (previousRoute.params as { folderId?: string } | undefined)?.folderId)?.name ??
-        "Folder"
-      : previousRoute?.name === "Search"
-        ? "Search"
-        : HOME_LABEL;
-
   const caption = [
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
     settings.sortMode !== "manual" ? `Sorted by ${listSortLabels[settings.sortMode].toLowerCase()}` : "",

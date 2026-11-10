@@ -1,12 +1,12 @@
 import React, { Children, ReactNode, useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronRight, SquarePen } from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SquarePen, Users } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { Folder, SavedItem } from "../types/models";
-import { accessRoleLabel, isSharedAccess } from "../utils/access";
+import { isSharedAccess } from "../utils/access";
 import { listDisplayTitle, listPreviewText } from "../utils/listEntries";
 import { formatListDate } from "../utils/listView";
 
@@ -21,6 +21,18 @@ export const SectionHeader = ({ title, action }: { title: string; action?: React
       </Text>
       {action}
     </View>
+  );
+};
+
+// The text button on the right of a section header.
+export const SectionLink = ({ label, onPress }: { label: string; onPress: () => void }) => {
+  const colors = useThemeColors();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={10} onPress={onPress}>
+      {({ pressed }) => (
+        <Text style={{ color: colors.accentDark, fontSize: 15, fontWeight: "600", opacity: pressed ? 0.5 : 1 }}>{label}</Text>
+      )}
+    </Pressable>
   );
 };
 
@@ -41,37 +53,52 @@ export const RowGroup = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const FolderRow = ({
-  folder,
-  count,
-  onPress,
-  onLongPress,
+// Folders as a strip of chips that scrolls sideways, so the lists under it
+// stay near the top of the screen. `bleed` is the screen's side padding, which
+// the strip scrolls through.
+export const FolderStrip = ({
+  folders,
+  countFor,
+  onOpen,
+  bleed = spacing.md,
 }: {
-  folder: Pick<Folder, "name" | "icon" | "color" | "accessRole" | "ownerId">;
-  count: number;
-  onPress: () => void;
-  onLongPress?: () => void;
+  folders: Array<Pick<Folder, "id" | "name" | "icon" | "color" | "accessRole" | "ownerId">>;
+  countFor: (folderId: string) => number;
+  onOpen: (folderId: string) => void;
+  bleed?: number;
 }) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${folder.name}, ${count} ${count === 1 ? "list" : "lists"}`}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={({ pressed }) => [styles.row, styles.folderRow, pressed && styles.rowPressed]}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={{ marginHorizontal: -bleed }}
+      contentContainerStyle={[styles.strip, { paddingHorizontal: bleed }]}
     >
-      <View style={[styles.folderIcon, { backgroundColor: folder.color ?? colors.border }]}>
-        <Text style={styles.folderEmoji}>{folder.icon ?? "📁"}</Text>
-      </View>
-      <Text numberOfLines={1} style={styles.folderName}>
-        {folder.name}
-      </Text>
-      {isSharedAccess(folder) && <Text style={styles.sharedPill}>{accessRoleLabel(folder.accessRole)}</Text>}
-      <Text style={styles.count}>{count}</Text>
-      <ChevronRight size={18} color={withAlpha(colors.muted, 0.7)} />
-    </Pressable>
+      {folders.map((folder) => {
+        const count = countFor(folder.id);
+        return (
+          <Pressable
+            key={folder.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${folder.name}, ${count} ${count === 1 ? "list" : "lists"}`}
+            onPress={() => onOpen(folder.id)}
+            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+          >
+            <View style={[styles.chipIcon, { backgroundColor: folder.color ?? colors.border }]}>
+              <Text style={styles.chipEmoji}>{folder.icon ?? "📁"}</Text>
+            </View>
+            <Text numberOfLines={1} style={styles.chipName}>
+              {folder.name}
+            </Text>
+            {isSharedAccess(folder) && <Users size={13} color={colors.muted} />}
+            <Text style={styles.count}>{count}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 };
 
@@ -191,33 +218,38 @@ const createStyles = (colors: ThemeColors) =>
     rowPressed: {
       backgroundColor: withAlpha(colors.border, 0.5),
     },
-    folderRow: {
-      minHeight: 52,
+    strip: {
+      gap: spacing.xs,
     },
-    folderIcon: {
+    chip: {
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      flexDirection: "row",
+      gap: 8,
+      height: 46,
+      maxWidth: 220,
+      paddingLeft: 8,
+      paddingRight: 14,
+    },
+    chipPressed: {
+      backgroundColor: withAlpha(colors.border, 0.6),
+    },
+    chipIcon: {
       alignItems: "center",
       borderRadius: 9,
-      height: 32,
+      height: 30,
       justifyContent: "center",
-      width: 32,
+      width: 30,
     },
-    folderEmoji: {
-      fontSize: 16,
+    chipEmoji: {
+      fontSize: 15,
     },
-    folderName: {
+    chipName: {
       color: colors.ink,
-      flex: 1,
-      fontSize: 17,
-    },
-    sharedPill: {
-      backgroundColor: colors.background,
-      borderRadius: 999,
-      color: colors.accentDark,
-      fontSize: 11,
-      fontWeight: "700",
-      overflow: "hidden",
-      paddingHorizontal: 8,
-      paddingVertical: 3,
+      flexShrink: 1,
+      fontSize: 16,
+      fontWeight: "600",
     },
     count: {
       color: colors.muted,
