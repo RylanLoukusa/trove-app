@@ -29,8 +29,23 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
     () => (data ? data.items.filter((item) => item.folderId === activeFolderId) : []),
     [data, activeFolderId],
   );
+  // Lists in a folder and in everything nested inside it, as the app counts them.
   const countForFolder = useCallback(
-    (folderId: string): number => (data ? data.items.filter((item) => item.folderId === folderId).length : 0),
+    (folderId: string): number => {
+      if (!data) return 0;
+      const ids = new Set([folderId]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        data.folders.forEach((folder) => {
+          if (folder.parentFolderId && ids.has(folder.parentFolderId) && !ids.has(folder.id)) {
+            ids.add(folder.id);
+            grew = true;
+          }
+        });
+      }
+      return data.items.filter((item) => ids.has(item.folderId)).length;
+    },
     [data],
   );
 

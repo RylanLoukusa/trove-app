@@ -69,6 +69,12 @@ describe("searchTrove", () => {
     expect(ids(searchTrove("untitled", folders, lists).lists)).toEqual([]);
   });
 
+  it("doesn't find the line an unnamed list is shown as a second time, as a line", () => {
+    expect(searchTrove("plumber", folders, lists).lines).toEqual([]);
+    const named = list("named", "Repairs", [line("n1", "Call the plumber")]);
+    expect(searchTrove("plumber", [], [named]).lines.map((match) => match.line.id)).toEqual(["n1"]);
+  });
+
   it("finds single lines, and says which list each is on", () => {
     const { lines } = searchTrove("garden", folders, lists);
     expect(lines.map((match) => `${match.list.id}:${match.line.id}`)).toEqual(["groceries:g2", "chores:c2"]);

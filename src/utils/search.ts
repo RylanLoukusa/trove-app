@@ -1,5 +1,5 @@
 import type { Folder, SavedItem, SavedListItem } from "../types/models";
-import { listDisplayTitle } from "./listEntries";
+import { isUntitledList, listDisplayTitle } from "./listEntries";
 
 export type LineMatch = { list: SavedItem; line: SavedListItem };
 
@@ -21,9 +21,12 @@ export const searchTrove = (query: string, folders: Folder[], lists: SavedItem[]
 
   const lines: LineMatch[] = [];
   for (const list of lists) {
+    // An unnamed list is shown by its first line, so that line is already
+    // found as the list itself.
+    const titleLine = isUntitledList(list) ? (list.listItems ?? []).find((line) => line.text.trim()) : undefined;
     for (const line of list.listItems ?? []) {
       if (lines.length >= MAX_LINE_MATCHES) break;
-      if (matches(line.text)) lines.push({ list, line });
+      if (line !== titleLine && matches(line.text)) lines.push({ list, line });
     }
   }
 
