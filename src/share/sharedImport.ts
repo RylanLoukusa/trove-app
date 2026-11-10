@@ -14,7 +14,6 @@ export type SharedImportPayload = {
 type SharedImportNativeModule = {
   clearImport: (importId: string) => Promise<boolean>;
   getLatestImportId?: () => Promise<string | null>;
-  markImportConsumed?: (importId: string) => Promise<boolean>;
   readImport: (importId: string) => Promise<SharedImportPayload | null>;
   syncFolderSnapshot?: (snapshot: ShareExtensionFolderSnapshot) => Promise<boolean>;
 };
@@ -56,11 +55,6 @@ export const readSharedImport = async (importId: string): Promise<SharedImportPa
 export const clearSharedImport = async (importId: string): Promise<void> => {
   if (Platform.OS !== "ios" || !nativeModule) return;
   await nativeModule.clearImport(importId);
-};
-
-export const markSharedImportConsumed = async (importId: string): Promise<void> => {
-  if (Platform.OS !== "ios" || !nativeModule?.markImportConsumed) return;
-  await nativeModule.markImportConsumed(importId);
 };
 
 // Lines shared into Trove from other apps collect on a list with this title.

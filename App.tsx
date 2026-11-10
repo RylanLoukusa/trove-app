@@ -1,6 +1,6 @@
 import "react-native-gesture-handler";
 import React from "react";
-import { ActivityIndicator, AppState, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, View } from "react-native";
 import * as Sentry from "@sentry/react-native";
 import { DarkTheme, DefaultTheme, LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -39,7 +39,6 @@ import {
   clearSharedImport,
   getLatestSharedImportId,
   lineFromSharedImport,
-  markSharedImportConsumed,
   readSharedImport,
   SHARED_INBOX_TITLE,
 } from "./src/share/sharedImport";
@@ -113,13 +112,13 @@ function AppNavigator() {
             type: "list",
           })?.id ?? null;
       if (listId && !payload.autoSave) navigationRef.navigate("List", { listId });
+    } else if ((payload.mediaItems ?? []).length > 0) {
+      Alert.alert("Nothing to add", "Trove keeps lists, so it can save words or a link you share, but not photos or videos.");
     }
 
-    if ((payload.mediaItems ?? []).length > 0) {
-      await markSharedImportConsumed(importId);
-    } else {
-      await clearSharedImport(importId);
-    }
+    // The whole import goes, including any photos or videos the share sheet
+    // copied in, which a list has no place for.
+    await clearSharedImport(importId);
   }, [canEditItem, createItem, folders, insertListEntries, isPasswordRecovery, isTroveReady, items, session]);
 
   React.useEffect(() => {

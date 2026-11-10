@@ -1,6 +1,8 @@
 import type { ListEntry, TagGroup, TagOption } from "../types/models";
 import {
+  defaultListViewSettings,
   describeDueDate,
+  formatListDate,
   matchesFocusRule,
   orderEntriesForView,
   parseDateKey,
@@ -40,6 +42,22 @@ describe("orderEntriesForView", () => {
 
   it("keeps manual order and can leave completed lines in place", () => {
     expect(ids(orderEntriesForView(entries, { sortMode: "manual", completedMode: "inline" }))).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("leaves checked lines where they are unless the list says otherwise", () => {
+    expect(defaultListViewSettings).toEqual({ sortMode: "manual", completedMode: "inline" });
+    expect(ids(orderEntriesForView(entries, defaultListViewSettings))).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("keeps headings and bullets in place when checked lines move down", () => {
+    const outline = [
+      entry("a", { kind: "text", text: "Produce" }),
+      entry("b", { checked: true }),
+      entry("c", { kind: "bullet" }),
+      entry("d"),
+    ];
+    expect(ids(orderEntriesForView(outline, { sortMode: "manual", completedMode: "bottom" }))).toEqual(["a", "c", "d", "b"]);
+    expect(ids(orderEntriesForView(outline, { sortMode: "manual", completedMode: "hide" }))).toEqual(["a", "c", "d"]);
   });
 
   it("moves completed lines to the bottom or hides them", () => {
@@ -114,6 +132,47 @@ describe("due dates", () => {
     expect(parseDateKey("2026-02-28")).not.toBeNull();
     expect(parseDateKey("2026-02-30")).toBeNull();
     expect(parseDateKey("2026-2-3")).toBeNull();
+  });
+});
+
+describe("formatListDate", () => {
+  // Wednesday, Nov 11 2026 (local time).
+  const wednesday = new Date(2026, 10, 11, 15, 30);
+  const at = (...parts: [number, number, number, number?, number?]) => new Date(...parts).toISOString();
+
+  it("shows the time for a list changed today", () => {
+    const changed = new Date(2026, 10, 11, 9, 5);
+    expect(formatListDate(changed.toISOString(), wednesday)).toBe(
+      changed.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    );
+    expect(formatListDate(changed.toISOString(), wednesday)).toMatch(/9:05/);
+  });
+
+  it("says Yesterday, even for a change late in the evening", () => {
+    expect(formatListDate(at(2026, 10, 10, 23, 59), wednesday)).toBe("Yesterday");
+    expect(formatListDate(at(2026, 10, 10, 0, 1), wednesday)).toBe("Yesterday");
+  });
+
+  it("names the weekday for the rest of the past week", () => {
+    expect(formatListDate(at(2026, 10, 9, 12), wednesday)).toBe(
+      new Date(2026, 10, 9).toLocaleDateString(undefined, { weekday: "long" }),
+    );
+    expect(formatListDate(at(2026, 10, 5, 12), wednesday)).toBe(
+      new Date(2026, 10, 5).toLocaleDateString(undefined, { weekday: "long" }),
+    );
+  });
+
+  it("shows the date for anything older, with the year once it is a different one", () => {
+    expect(formatListDate(at(2026, 10, 4, 12), wednesday)).toBe(
+      new Date(2026, 10, 4).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    );
+    expect(formatListDate(at(2025, 11, 31, 12), wednesday)).toMatch(/2025/);
+    expect(formatListDate(at(2026, 0, 2, 12), wednesday)).not.toMatch(/2026/);
+  });
+
+  it("treats a time a little ahead of this device's clock as now, and gives nothing for a bad date", () => {
+    expect(formatListDate(at(2026, 10, 12, 8), wednesday)).toMatch(/8:00/);
+    expect(formatListDate("not a date", wednesday)).toBe("");
   });
 });
 
