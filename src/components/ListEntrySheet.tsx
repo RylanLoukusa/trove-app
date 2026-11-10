@@ -6,19 +6,17 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, withPriority } from "../utils/listView";
 
-export type FocusListChoice = { id: string; title: string };
-
 type Props = {
   entry: ListEntry | null;
   priorityOptions: TagOption[];
   canEdit: boolean;
-  // Set when this line is shown in a focus list but belongs to another list.
+  // Set when this line is shown here but belongs to another list.
   sourceListTitle?: string;
-  // The line is on a smart focus list because it matches the list's rule.
+  // The line is here because it matches this list's rule.
   fromRule?: boolean;
-  focusLists?: FocusListChoice[];
-  selectedFocusListIds?: string[];
-  onToggleFocusList?: (focusListId: string) => void;
+  // Other lists this line also shows on; tapping one takes it off that list.
+  alsoOnLists?: Array<{ id: string; title: string }>;
+  onRemoveFromList?: (listId: string) => void;
   onSave: (updates: Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds">>) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -31,9 +29,8 @@ export const ListEntrySheet = ({
   canEdit,
   sourceListTitle,
   fromRule = false,
-  focusLists,
-  selectedFocusListIds = [],
-  onToggleFocusList,
+  alsoOnLists,
+  onRemoveFromList,
   onSave,
   onDelete,
   onClose,
@@ -85,7 +82,7 @@ export const ListEntrySheet = ({
     <Modal animationType="slide" visible={!!entry} presentationStyle="pageSheet" onRequestClose={close}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.title}>{canEdit ? "Edit item" : "Item"}</Text>
+          <Text style={styles.title}>{canEdit ? "Line details" : "Line"}</Text>
           <Pressable accessibilityRole="button" onPress={close} hitSlop={8}>
             <Text style={styles.done}>Done</Text>
           </Pressable>
@@ -99,7 +96,7 @@ export const ListEntrySheet = ({
         )}
 
         <TextInput
-          accessibilityLabel="Item text"
+          accessibilityLabel="Line text"
           editable={canEdit}
           value={text}
           onChangeText={setText}
@@ -172,21 +169,22 @@ export const ListEntrySheet = ({
           style={[styles.input, styles.notes]}
         />
 
-        {!!focusLists?.length && (
+        {!!alsoOnLists?.length && (
           <>
-            <Text style={styles.label}>Focus lists</Text>
+            <Text style={styles.label}>Also on</Text>
             <View style={styles.chipRow}>
-              {focusLists.map((focusList) => (
+              {alsoOnLists.map((list) => (
                 <Chip
-                  key={focusList.id}
-                  label={focusList.title}
-                  selected={selectedFocusListIds.includes(focusList.id)}
-                  disabled={false}
-                  onPress={() => onToggleFocusList?.(focusList.id)}
+                  key={list.id}
+                  label={list.title}
+                  selected
+                  disabled={!canEdit}
+                  onPress={() => onRemoveFromList?.(list.id)}
                   styles={styles}
                 />
               ))}
             </View>
+            <Text style={styles.hint}>Tap a list to take this line off it.</Text>
           </>
         )}
 
@@ -196,7 +194,7 @@ export const ListEntrySheet = ({
             onPress={onDelete}
             style={({ pressed }) => [styles.deleteButton, pressed && styles.deletePressed]}
           >
-            <Text style={styles.deleteText}>{sourceListTitle ? "Remove from this list" : "Delete item"}</Text>
+            <Text style={styles.deleteText}>{sourceListTitle ? "Remove from this list" : "Delete line"}</Text>
           </Pressable>
         )}
       </ScrollView>

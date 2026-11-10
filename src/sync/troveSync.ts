@@ -16,7 +16,14 @@ import {
   normalizeSavedItem,
   normalizeTroveData,
 } from "../utils/itemTypes";
-import { entryToListItem, groupResolvedEntriesByList, isFocusList } from "../utils/listEntries";
+import {
+  decodeEntryFormat,
+  encodeEntryFormat,
+  entryToSnapshotItem,
+  groupResolvedEntriesByList,
+  isFocusList,
+} from "../utils/listEntries";
+import { collectStoredMediaPaths, MEDIA_STORAGE_BUCKET } from "../utils/storedMedia";
 
 const remoteUpdatedAtKey = (userId: string) =>
   `trove:remoteUpdatedAt:${userId}`;
@@ -98,7 +105,7 @@ type ListEntryRow = {
   list_id: string;
   owner_id: string;
   created_by: string | null;
-  kind: ListEntry["kind"];
+  kind: "check" | "bullet";
   text: string;
   checked: boolean;
   indent_level: number;
@@ -491,7 +498,7 @@ const savedItemToRow = (
     // Snapshot of the entries for older app versions and the public-link
     // function, which still read list lines from trove_items.list_items.
     list_items: entriesByList.has(normalizedItem.id)
-      ? (entriesByList.get(normalizedItem.id) ?? []).map(entryToListItem)
+      ? (entriesByList.get(normalizedItem.id) ?? []).map(entryToSnapshotItem)
       : normalizedItem.type === "list"
         ? []
         : optionalArray(normalizedItem.listItems),
@@ -510,7 +517,6 @@ const savedItemToRow = (
 const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
   id: row.id,
   listId: row.list_id,
-  kind: row.kind === "bullet" ? "bullet" : "check",
   text: row.text ?? "",
   checked: !!row.checked,
   indentLevel: row.indent_level ?? 0,
@@ -518,7 +524,8 @@ const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
   notes: row.notes ?? undefined,
   dueDate: row.due_date ?? undefined,
   completedAt: row.completed_at ?? undefined,
-  tagOptionIds: stringArray(row.tags),
+  // Plain lines and bold travel in the tags; see decodeEntryFormat.
+  ...decodeEntryFormat(row.kind, stringArray(row.tags)),
   refEntryId: row.ref_entry_id ?? undefined,
   ownerId: row.owner_id,
   createdBy: row.created_by ?? undefined,
@@ -526,22 +533,25 @@ const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
   updatedAt: row.updated_at,
 });
 
-const listEntryToPayload = (entry: ListEntry) => ({
-  id: entry.id,
-  list_id: entry.listId,
-  kind: entry.kind,
-  text: entry.text,
-  checked: entry.checked,
-  indent_level: entry.indentLevel,
-  position: entry.position,
-  notes: entry.notes ?? null,
-  due_date: entry.dueDate ?? null,
-  completed_at: entry.completedAt ?? null,
-  tags: entry.tagOptionIds ?? [],
-  ref_entry_id: entry.refEntryId ?? null,
-  created_at: entry.createdAt,
-  updated_at: entry.updatedAt,
-});
+const listEntryToPayload = (entry: ListEntry) => {
+  const format = encodeEntryFormat(entry);
+  return {
+    id: entry.id,
+    list_id: entry.listId,
+    kind: format.kind,
+    text: entry.text,
+    checked: entry.checked,
+    indent_level: entry.indentLevel,
+    position: entry.position,
+    notes: entry.notes ?? null,
+    due_date: entry.dueDate ?? null,
+    completed_at: entry.completedAt ?? null,
+    tags: format.tags,
+    ref_entry_id: entry.refEntryId ?? null,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+  };
+};
 
 const tagGroupRowToTagGroup = (row: TagGroupRow): TagGroup => ({
   id: row.id,
@@ -777,6 +787,91 @@ const deleteOwnedRowsMissing = async (
   }
 };
 
+// ---------------------------------------------------------------------------
+// Notes, links and photos from before Trove kept only lists
+//
+// The app no longer reads or writes these. The ones this person owns are
+// deleted from the server, together with the photos and videos they
+// uploaded, the first time this version syncs. Ones owned by other people
+// (in folders shared with this person) are left for their owner's app.
+// ---------------------------------------------------------------------------
+
+type LegacyItemRow = Pick<ItemRow, "id" | "owner_id" | "type" | "media" | "media_items">;
+
+const isOwnLegacyItemRow = (row: Pick<ItemRow, "owner_id" | "type">, userId: string): boolean =>
+  row.owner_id === userId && row.type !== "list";
+
+const fetchLegacyItemRows = async (supabase: SupabaseClient, userId: string): Promise<LegacyItemRow[]> => {
+  const { data, error } = await supabase
+    .from("trove_items")
+    .select("id, owner_id, type, media, media_items")
+    .eq("owner_id", userId)
+    .neq("type", "list");
+
+  if (error) {
+    throw error;
+  }
+
+  // Filtered again here so a list can never be handed to the delete below.
+  return ((data ?? []) as unknown as LegacyItemRow[]).filter((row) => isOwnLegacyItemRow(row, userId));
+};
+
+const legacyMediaPaths = (row: LegacyItemRow): string[] =>
+  collectStoredMediaPaths([
+    {
+      media: objectValue<SavedItem["media"]>(row.media),
+      mediaItems: Array.isArray(row.media_items) ? (row.media_items as SavedItem["mediaItems"]) : undefined,
+    },
+  ]);
+
+// Deletes the given rows and their stored media. Returns the ids that are
+// still on the server (their media or the row itself could not be removed),
+// so the caller can leave them alone and try again on a later sync.
+const purgeLegacyItems = async (
+  supabase: SupabaseClient,
+  userId: string,
+  rows: LegacyItemRow[],
+): Promise<string[]> => {
+  const legacyRows = rows.filter((row) => isOwnLegacyItemRow(row, userId));
+  if (legacyRows.length === 0) return [];
+
+  const mediaPaths = [...new Set(legacyRows.flatMap(legacyMediaPaths))];
+  let mediaRemoved = true;
+  if (mediaPaths.length > 0) {
+    try {
+      const { error } = await supabase.storage.from(MEDIA_STORAGE_BUCKET).remove(mediaPaths);
+      if (error) mediaRemoved = false;
+    } catch {
+      mediaRemoved = false;
+    }
+  }
+
+  const remaining: string[] = [];
+  for (const row of legacyRows) {
+    if (!mediaRemoved && legacyMediaPaths(row).length > 0) {
+      remaining.push(row.id);
+      continue;
+    }
+
+    try {
+      const { error } = await supabase.rpc("trove_delete_item_for_current_user", {
+        skip_conflict_check: true,
+        target_expected_updated_at: null,
+        target_item_id: row.id,
+      });
+      if (error) remaining.push(row.id);
+    } catch {
+      remaining.push(row.id);
+    }
+  }
+
+  if (remaining.length > 0) {
+    console.warn(`Could not remove ${remaining.length} old Trove items yet; will retry on the next sync.`);
+  }
+
+  return remaining;
+};
+
 const deleteTroveItemForUser = async (
   supabase: SupabaseClient,
   itemId: string,
@@ -848,6 +943,8 @@ const fetchNormalizedTroveDataForUser = async (
       kind: "data";
       data: TroveData;
       latestRowUpdatedAt: string | null;
+      // This person's notes, links and photos that are still on the server.
+      legacyItems: LegacyItemRow[];
       syncState: SyncStateRow | null;
     }
   | { kind: "error" }
@@ -959,9 +1056,11 @@ const fetchNormalizedTroveDataForUser = async (
   const folderAccessById = new Map(
     folders.map((folder) => [folder.id, (folder.accessRole ?? "owner") as AccessRole]),
   );
-  const items = ((itemsResult.data ?? []) as unknown as ItemRow[]).map((item) =>
-    itemRowToSavedItem(item, userId, folderAccessById),
-  );
+  const itemRows = (itemsResult.data ?? []) as unknown as ItemRow[];
+  const items = itemRows
+    .filter((item) => item.type === "list")
+    .map((item) => itemRowToSavedItem(item, userId, folderAccessById));
+  const legacyItems = itemRows.filter((item) => isOwnLegacyItemRow(item, userId));
   const tagGroups = ((tagGroupsResult.data ?? []) as unknown as TagGroupRow[]).map(tagGroupRowToTagGroup);
   const tagOptions = ((tagOptionsResult.data ?? []) as unknown as TagOptionRow[]).map(tagOptionRowToTagOption);
   const listEntryRows = (listEntriesResult.data ?? []) as unknown as ListEntryRow[];
@@ -987,6 +1086,7 @@ const fetchNormalizedTroveDataForUser = async (
       tagOptions,
     }),
     latestRowUpdatedAt,
+    legacyItems,
     syncState: (syncStateResult.data as SyncStateRow | null) ?? null,
   };
 };
@@ -1114,6 +1214,7 @@ const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConfl
   changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
     "text",
     "kind",
+    "bold",
     "checked",
     "indentLevel",
     "position",
@@ -1589,13 +1690,21 @@ const replaceNormalizedTroveDataForUser = async (
       );
     }
 
+    // Old notes, links and photos go first. Any that could not be deleted
+    // yet are passed along as if they were local, so the cleanup below
+    // neither removes them half-way nor reports them as a conflict.
+    const keptLegacyItemIds = await purgeLegacyItems(
+      supabase,
+      userId,
+      await fetchLegacyItemRows(supabase, userId),
+    );
     const localItemIds = normalizedData.items
       .filter((item) => (item.ownerId ?? userId) === userId)
       .map((item) => item.id);
     await deleteOwnedRowsMissing(
       supabase,
       "trove_items",
-      localItemIds,
+      [...localItemIds, ...keptLegacyItemIds],
       baseline.items,
       options.skipConflictCheck ?? false,
     );
@@ -1791,6 +1900,8 @@ const pullTroveDataForUser = async (
   if (normalizedResult.kind === "error") {
     return { kind: "error" };
   }
+
+  await purgeLegacyItems(supabase, userId, normalizedResult.legacyItems);
 
   const normalizedHasSource =
     normalizedResult.syncState !== null ||

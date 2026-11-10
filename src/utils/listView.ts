@@ -9,9 +9,11 @@ export type ListViewSettings = {
   completedMode: CompletedMode;
 };
 
+// Checked lines stay where they are by default, so a list with headings and
+// nested lines keeps its shape as things get done.
 export const defaultListViewSettings: ListViewSettings = {
   sortMode: "manual",
-  completedMode: "bottom",
+  completedMode: "inline",
 };
 
 export const listSortLabels: Record<ListSortMode, string> = {
@@ -102,6 +104,23 @@ export const describeDueDate = (dueDate: string, today: Date = new Date()): { la
   if (days === 1) return { label: "Tomorrow", tone: "soon" };
   if (days < 7) return { label: date.toLocaleDateString(undefined, { weekday: "long" }), tone: "soon" };
   return { label: shortDate, tone: "later" };
+};
+
+// When a list last changed, for the row under its title: the time today,
+// "Yesterday", the weekday this past week, otherwise the date.
+export const formatListDate = (iso: string, today: Date = new Date()): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const days = daysBetween(date, today);
+  if (days <= 0) return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days === 1) return "Yesterday";
+  if (days < 7) return date.toLocaleDateString(undefined, { weekday: "long" });
+  return date.toLocaleDateString(
+    undefined,
+    date.getFullYear() === today.getFullYear()
+      ? { month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" },
+  );
 };
 
 // ---------------------------------------------------------------------------

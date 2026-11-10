@@ -19,11 +19,10 @@ import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
 import { AcceptFolderInviteScreen } from "./src/screens/AcceptFolderInviteScreen";
 import { AddEditFolderScreen } from "./src/screens/AddEditFolderScreen";
-import { AddEditItemScreen } from "./src/screens/AddEditItemScreen";
 import { AddEditTagGroupScreen } from "./src/screens/AddEditTagGroupScreen";
 import { FolderScreen } from "./src/screens/FolderScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
-import { ItemDetailScreen } from "./src/screens/ItemDetailScreen";
+import { ListScreen } from "./src/screens/ListScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
@@ -36,7 +35,15 @@ import { SearchScreen } from "./src/screens/SearchScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
 import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
-import { clearSharedImport, getLatestSharedImportId, inferSourcePlatform, markSharedImportConsumed, readSharedImport, titleFromSharedImport } from "./src/share/sharedImport";
+import {
+  clearSharedImport,
+  getLatestSharedImportId,
+  lineFromSharedImport,
+  markSharedImportConsumed,
+  readSharedImport,
+  SHARED_INBOX_TITLE,
+} from "./src/share/sharedImport";
+import { createId } from "./src/utils/id";
 
 initSentry();
 
@@ -48,11 +55,10 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
       PublicFolderPreview: "shared/:token",
-      AddEditItem: "shared-import/:sharedImportId",
       ShareFolder: "folder/:folderId/share",
       Folder: "folder/:folderId",
       Home: "home",
-      ItemDetail: "item/:itemId",
+      List: "item/:listId",
       Login: "login",
       Profile: "profile",
       Search: "search",
@@ -64,12 +70,14 @@ const linking: LinkingOptions<RootStackParamList> = {
 
 function AppNavigator() {
   const { session, isAuthReady, isPasswordRecovery } = useAuth();
-  const { createItem, folders, isReady: isTroveReady } = useTrove();
+  const { canEditItem, createItem, folders, insertListEntries, isReady: isTroveReady, items } = useTrove();
   const scheme = useThemeScheme();
   const themeColors = useThemeColors();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
 
+  // Something shared into Trove from another app becomes a line on the Inbox
+  // list of the folder that was picked (or of the top level).
   const openPendingSharedImport = React.useCallback(async () => {
     if (!session || isPasswordRecovery || !isTroveReady || !navigationRef.isReady()) return;
 
@@ -83,53 +91,36 @@ function AppNavigator() {
     if (!importId || lastHandledSharedImportId.current === importId) return;
 
     const payload = await readSharedImport(importId);
-
-    if (payload?.autoSave && payload.folderId !== undefined) {
-      const folderId =
-        payload.folderId === "" || folders.some((folder) => folder.id === payload.folderId)
-          ? payload.folderId
-          : "";
-
-      const mediaItems = payload.mediaItems ?? [];
-      const type = mediaItems.length > 0 ? "media" : payload.sourceUrl ? "link" : "text";
-
-      createItem({
-        attachments: undefined,
-        description: type === "text" ? payload.sharedText?.trim() || undefined : undefined,
-        folderId,
-        listItems: undefined,
-        media: mediaItems[0],
-        mediaItems: mediaItems.length ? mediaItems : undefined,
-        richText: type === "text" ? payload.sharedText?.trim() || undefined : undefined,
-        sharedText: payload.sharedText?.trim() || undefined,
-        sourcePlatform: inferSourcePlatform(payload.sourceUrl),
-        sourceUrl: payload.sourceUrl?.trim() || undefined,
-        tagOptionIds: [],
-        title: titleFromSharedImport(payload),
-        type,
-        url: type === "link" ? payload.sourceUrl?.trim() || undefined : undefined,
-      });
-      if (mediaItems.length > 0) {
-        await markSharedImportConsumed(importId);
-      } else {
-        await clearSharedImport(importId);
-      }
-      lastHandledSharedImportId.current = importId;
-      return;
-    }
-
     if (!payload) return;
+    lastHandledSharedImportId.current = importId;
 
-    const currentRoute = navigationRef.getCurrentRoute();
-    const currentParams = currentRoute?.params as { sharedImportId?: string } | undefined;
-    if (currentRoute?.name === "AddEditItem" && currentParams?.sharedImportId === importId) {
-      lastHandledSharedImportId.current = importId;
-      return;
+    const text = lineFromSharedImport(payload);
+    if (text) {
+      const folderId = payload.folderId && folders.some((folder) => folder.id === payload.folderId) ? payload.folderId : "";
+      const inbox = items.find(
+        (item) =>
+          item.type === "list" && item.folderId === folderId && item.title === SHARED_INBOX_TITLE && canEditItem(item.id),
+      );
+      const listId = inbox
+        ? insertListEntries(inbox.id, null, [{ text, kind: "check" }]).length
+          ? inbox.id
+          : null
+        : createItem({
+            folderId,
+            listItems: [{ id: createId("entry"), kind: "check", text }],
+            tagOptionIds: [],
+            title: SHARED_INBOX_TITLE,
+            type: "list",
+          })?.id ?? null;
+      if (listId && !payload.autoSave) navigationRef.navigate("List", { listId });
     }
 
-    lastHandledSharedImportId.current = importId;
-    navigationRef.navigate("AddEditItem", { sharedImportId: importId });
-  }, [createItem, folders, isPasswordRecovery, isTroveReady, session]);
+    if ((payload.mediaItems ?? []).length > 0) {
+      await markSharedImportConsumed(importId);
+    } else {
+      await clearSharedImport(importId);
+    }
+  }, [canEditItem, createItem, folders, insertListEntries, isPasswordRecovery, isTroveReady, items, session]);
 
   React.useEffect(() => {
     void openPendingSharedImport();
@@ -206,8 +197,7 @@ function AppNavigator() {
             <Stack.Screen name="PublicItemDetail" component={PublicItemDetailScreen} />
             <Stack.Screen name="Folder" component={FolderScreen} />
             <Stack.Screen name="AddEditFolder" component={AddEditFolderScreen} />
-            <Stack.Screen name="AddEditItem" component={AddEditItemScreen} />
-            <Stack.Screen name="ItemDetail" component={ItemDetailScreen} options={{ gestureEnabled: false }} />
+            <Stack.Screen name="List" component={ListScreen} />
             <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />

@@ -63,26 +63,17 @@ export const markSharedImportConsumed = async (importId: string): Promise<void> 
   await nativeModule.markImportConsumed(importId);
 };
 
-export const inferSourcePlatform = (sourceUrl?: string): string | undefined => {
-  if (!sourceUrl) return undefined;
+// Lines shared into Trove from other apps collect on a list with this title.
+export const SHARED_INBOX_TITLE = "Inbox";
 
-  try {
-    const host = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
-    if (host.includes("instagram")) return "Instagram";
-    if (host.includes("tiktok")) return "TikTok";
-    if (host.includes("x.com") || host.includes("twitter")) return "X";
-    if (host.includes("youtube") || host.includes("youtu.be")) return "YouTube";
-    if (host.includes("threads")) return "Threads";
-    return host;
-  } catch {
-    return undefined;
-  }
-};
+const MAX_SHARED_LINE_LENGTH = 500;
 
-export const titleFromSharedImport = (payload: SharedImportPayload): string => {
-  if (payload.title?.trim()) return payload.title.trim();
-  const platform = inferSourcePlatform(payload.sourceUrl);
-  if (platform) return `${platform} post`;
-  if (payload.sharedText?.trim()) return payload.sharedText.trim().slice(0, 72);
-  return "Shared item";
+// What a share becomes on a list: its words and its link on one line. Photos
+// and videos have no place on a list, so a share of only those gives "".
+export const lineFromSharedImport = (payload: Pick<SharedImportPayload, "sharedText" | "sourceUrl" | "title">): string => {
+  const clean = (value?: string): string => (value ?? "").replace(/\s+/g, " ").trim();
+  const url = clean(payload.sourceUrl);
+  const words = clean(payload.title) || clean(payload.sharedText);
+  const parts = words && url && words.includes(url) ? [words] : [words, url];
+  return parts.filter(Boolean).join(" ").slice(0, MAX_SHARED_LINE_LENGTH).trim();
 };

@@ -1,8 +1,9 @@
 import { getSupabase } from "./supabase";
 import type { SavedItem } from "../types/models";
 import { friendlyErrorMessage } from "../utils/errorMessages";
+import { collectStoredMediaPaths, MEDIA_STORAGE_BUCKET } from "../utils/storedMedia";
 
-const STORAGE_BUCKET = "media";
+const STORAGE_BUCKET = MEDIA_STORAGE_BUCKET;
 
 /**
  * Upload a file from the device to Supabase Storage.
@@ -107,21 +108,6 @@ export async function deleteMediaFromSupabase(storagePath: string): Promise<bool
     return false;
   }
 }
-
-const collectStoredMediaPaths = (items: SavedItem[]): string[] => {
-  const paths = new Set<string>();
-
-  items.forEach((item) => {
-    if (item.media?.storagePath) paths.add(item.media.storagePath);
-    if (item.media?.thumbnailPath) paths.add(item.media.thumbnailPath);
-    item.mediaItems?.forEach((mediaItem) => {
-      if (mediaItem.storagePath) paths.add(mediaItem.storagePath);
-      if (mediaItem.thumbnailPath) paths.add(mediaItem.thumbnailPath);
-    });
-  });
-
-  return Array.from(paths);
-};
 
 export async function deleteStoredMediaForItems(items: SavedItem[]): Promise<{ ok: boolean; error?: string }> {
   const paths = collectStoredMediaPaths(items);

@@ -10,9 +10,8 @@ export type RootStackParamList = {
   PublicItemDetail: { token: string; itemId: string };
   Folder: { folderId: string };
   AddEditFolder: { folderId?: string; parentFolderId?: string | null } | undefined;
-  AddEditItem: { itemId?: string; folderId?: string; sharedImportId?: string } | undefined;
-  // `newList`: just created from a folder; the cursor starts in the title.
-  ItemDetail: { itemId: string; newList?: boolean };
+  // `isNew`: just created; the cursor starts in the title.
+  List: { listId: string; isNew?: boolean };
   Search: { query?: string } | undefined;
   ShareFolder: { folderId: string };
   Profile: undefined;

@@ -90,14 +90,94 @@ export const entryToListItem = (entry: ListEntry): SavedListItem => ({
   text: entry.text,
   checked: entry.checked,
   indentLevel: entry.indentLevel,
+  ...(entry.bold ? { bold: true } : {}),
+});
+
+// A line as saved in the `list_items` snapshot on the list's own row, which
+// older app versions and the public-link page read. They only know "check"
+// and "bullet", so a plain line is written as a bullet marked `plain`.
+export type SnapshotListItem = Omit<SavedListItem, "kind"> & { kind: "check" | "bullet"; plain?: boolean };
+
+export const entryToSnapshotItem = (entry: ListEntry): SnapshotListItem => ({
+  id: entry.id,
+  kind: entry.kind === "check" ? "check" : "bullet",
+  text: entry.text,
+  checked: entry.checked,
+  indentLevel: entry.indentLevel,
+  ...(entry.kind === "text" ? { plain: true } : {}),
+  ...(entry.bold ? { bold: true } : {}),
+});
+
+export const listItemKindFromSnapshot = (listItem: { kind?: unknown; plain?: unknown } | undefined): ListEntry["kind"] => {
+  if (listItem?.kind === "text" || (listItem?.kind === "bullet" && listItem.plain === true)) return "text";
+  return listItem?.kind === "bullet" ? "bullet" : "check";
+};
+
+// ---------------------------------------------------------------------------
+// Formatting that syncs inside an entry's tags
+//
+// The server stores an entry's kind as "check" or "bullet" and has no column
+// for bold. A plain line is therefore synced as a bullet tagged "fmt:text",
+// and a bold line carries "fmt:bold". App versions that don't know these tags
+// keep them as they are, so they show a plain line as a bullet and lose
+// nothing when they save it.
+// ---------------------------------------------------------------------------
+
+const FORMAT_TAG_PREFIX = "fmt:";
+const PLAIN_LINE_TAG = `${FORMAT_TAG_PREFIX}text`;
+const BOLD_LINE_TAG = `${FORMAT_TAG_PREFIX}bold`;
+
+export const encodeEntryFormat = (
+  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds">,
+): { kind: "check" | "bullet"; tags: string[] } => ({
+  kind: entry.kind === "check" ? "check" : "bullet",
+  tags: [
+    ...(entry.tagOptionIds ?? []).filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+    ...(entry.kind === "text" ? [PLAIN_LINE_TAG] : []),
+    ...(entry.bold ? [BOLD_LINE_TAG] : []),
+  ],
+});
+
+export const decodeEntryFormat = (
+  kind: unknown,
+  tags: string[],
+): Pick<ListEntry, "kind" | "tagOptionIds"> & { bold?: true } => ({
+  kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
+  tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+  ...(tags.includes(BOLD_LINE_TAG) ? { bold: true as const } : {}),
 });
 
 // ---------------------------------------------------------------------------
-// Focus lists
+// Lines pulled in from other lists
+//
+// Any list can show lines from other lists. Such a line is a reference: it
+// stays in its own list and is shown, checked off and edited in both places.
+// A list that has pulled lines in is stored with listMode "focus" (the name
+// of the older feature this grew out of). The server only lets focus lists
+// hold references and never lets one point at a line of another focus list,
+// so a list either lends lines or borrows them, not both.
 // ---------------------------------------------------------------------------
 
 export const isFocusList = (item: Pick<SavedItem, "type" | "listMode"> | undefined): boolean =>
   !!item && item.type === "list" && item.listMode === "focus";
+
+// Ids of lists with at least one line that another list shows.
+export const listIdsLendingLines = (entries: ListEntry[]): Set<string> => {
+  const referenced = new Set(entries.map((entry) => entry.refEntryId).filter((id): id is string => !!id));
+  const lending = new Set<string>();
+  if (referenced.size === 0) return lending;
+  entries.forEach((entry) => {
+    if (referenced.has(entry.id)) lending.add(entry.listId);
+  });
+  return lending;
+};
+
+// Whether `list` can show lines from other lists: it already does, or none
+// of its own lines are shown elsewhere.
+export const canListBorrowLines = (
+  list: Pick<SavedItem, "id" | "type" | "listMode"> | undefined,
+  lendingListIds: Set<string>,
+): boolean => !!list && list.type === "list" && (isFocusList(list) || !lendingListIds.has(list.id));
 
 // One id per (focus list, line), so adding the same line twice, or from two
 // devices, lands on the same row.
@@ -115,7 +195,7 @@ export const resolveReference = (reference: ListEntry, entriesById: Map<string, 
     id: reference.id,
     listId: reference.listId,
     position: reference.position,
-    indentLevel: 0,
+    indentLevel: reference.indentLevel ?? 0,
     refEntryId: source.id,
   };
 };
@@ -181,7 +261,7 @@ export const entriesFromLegacyListItems = (item: SavedItem): ListEntry[] => {
     const id = legacyEntryId(item.id, listItem?.id, index);
     if (seen.has(id)) return;
     seen.add(id);
-    const kind: ListEntry["kind"] = listItem?.kind === "bullet" ? "bullet" : "check";
+    const kind = listItemKindFromSnapshot(listItem);
     entries.push({
       id,
       listId: item.id,
@@ -189,6 +269,7 @@ export const entriesFromLegacyListItems = (item: SavedItem): ListEntry[] => {
       text: typeof listItem?.text === "string" ? listItem.text : "",
       checked: kind === "check" && !!listItem?.checked,
       indentLevel: clampIndent(listItem?.indentLevel),
+      ...(listItem?.bold ? { bold: true } : {}),
       position: legacyEntryPosition(index),
       tagOptionIds: [],
       ownerId: item.ownerId,
@@ -321,9 +402,10 @@ export const applyListItemsToEntries = ({
 
   const nextListEntries = resolved.map(({ id, listItem }) => {
     const existing = existingById.get(id);
-    const kind: ListEntry["kind"] = listItem.kind === "bullet" ? "bullet" : "check";
+    const kind = listItemKindFromSnapshot(listItem);
     const checked = kind === "check" && !!listItem.checked;
     const indentLevel = clampIndent(listItem.indentLevel);
+    const bold = listItem.bold ? true : undefined;
     const position = positions.get(id) as string;
 
     if (existing) {
@@ -332,6 +414,7 @@ export const applyListItemsToEntries = ({
         existing.text === listItem.text &&
         existing.checked === checked &&
         existing.indentLevel === indentLevel &&
+        !!existing.bold === !!bold &&
         existing.position === position;
       if (unchanged) return existing;
 
@@ -341,6 +424,7 @@ export const applyListItemsToEntries = ({
         text: listItem.text,
         checked,
         indentLevel,
+        bold,
         position,
         completedAt: checked ? (existing.checked ? existing.completedAt : timestamp) : undefined,
         updatedAt: timestamp,
@@ -354,6 +438,7 @@ export const applyListItemsToEntries = ({
       text: listItem.text,
       checked,
       indentLevel,
+      ...(bold ? { bold } : {}),
       position,
       completedAt: checked ? timestamp : undefined,
       tagOptionIds: [],
@@ -368,7 +453,54 @@ export const applyListItemsToEntries = ({
   return [...otherEntries, ...nextListEntries];
 };
 
-export const MAX_ENTRY_INDENT = 3;
+export const MAX_ENTRY_INDENT = 5;
+
+// ---------------------------------------------------------------------------
+// Titles and previews
+// ---------------------------------------------------------------------------
+
+// A list always has a title on the server. One the person hasn't named yet
+// carries this placeholder and is shown by its first line instead.
+export const UNTITLED_LIST_TITLE = "Untitled list";
+
+export const isUntitledList = (item: Pick<SavedItem, "title">): boolean => {
+  const title = item.title.trim();
+  return !title || title === UNTITLED_LIST_TITLE;
+};
+
+type LineText = Pick<SavedListItem, "text">;
+
+const nonEmptyLines = (lines: LineText[] | undefined): string[] =>
+  (lines ?? []).map((line) => line.text.trim()).filter((text) => text.length > 0);
+
+export const listDisplayTitle = (item: Pick<SavedItem, "title">, lines?: LineText[]): string =>
+  isUntitledList(item) ? nonEmptyLines(lines)[0] ?? "New list" : item.title.trim();
+
+// The first few lines, for the row under a list's title. An untitled list
+// already shows its first line as the title, so the preview starts after it.
+export const listPreviewText = (item: Pick<SavedItem, "title">, lines?: LineText[], maxLines = 4): string =>
+  nonEmptyLines(lines)
+    .slice(isUntitledList(item) ? 1 : 0)
+    .slice(0, maxLines)
+    .join(", ");
+
+// When each list last changed, counting edits to its lines, and the lists
+// sorted with the most recently changed first.
+export const listActivityTimes = (lists: SavedItem[], entries: ListEntry[]): Map<string, string> => {
+  const times = new Map(lists.map((list) => [list.id, list.updatedAt]));
+  entries.forEach((entry) => {
+    const current = times.get(entry.listId);
+    if (current !== undefined && Date.parse(entry.updatedAt) > Date.parse(current)) times.set(entry.listId, entry.updatedAt);
+  });
+  return times;
+};
+
+export const sortListsByActivity = (lists: SavedItem[], times: Map<string, string>): SavedItem[] =>
+  [...lists].sort(
+    (a, b) =>
+      Date.parse(times.get(b.id) ?? b.updatedAt) - Date.parse(times.get(a.id) ?? a.updatedAt) ||
+      comparePositions(a.id, b.id),
+  );
 
 export type PastedLine = { text: string; checked: boolean; indentLevel: number };
 

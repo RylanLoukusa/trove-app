@@ -1,5 +1,7 @@
 export type ItemType = "text" | "list" | "link" | "media" | "image" | "video";
-export type ListItemKind = "check" | "bullet";
+// "check" is a checklist line, "bullet" a bulleted line, and "text" a plain
+// line with no marker (a heading or a note between items).
+export type ListItemKind = "check" | "bullet" | "text";
 export type TagGroupSelectionMode = "single" | "multi";
 export type ItemConnectionRelation = "related" | "similar" | "compare" | "alternative" | "part_of" | "inspired_by";
 export type AccessRole = "owner" | "editor" | "viewer";
@@ -42,6 +44,7 @@ export type SavedListItem = {
   text: string;
   checked?: boolean;
   indentLevel?: number;
+  bold?: boolean;
 };
 
 // A list line stored as its own record (trove_list_entries), so it can be
@@ -54,15 +57,18 @@ export type ListEntry = {
   text: string;
   checked: boolean;
   indentLevel: number;
+  // The whole line is shown in bold.
+  bold?: boolean;
   // Fractional index key; entries in a list sort by plain string comparison.
   position: string;
   notes?: string;
   dueDate?: string; // YYYY-MM-DD
   completedAt?: string;
   tagOptionIds: string[];
-  // Set on a line in a focus list that shows a line from another list. Its
-  // own `position` orders it in the focus list; everything else is read from
-  // the referenced entry, which stays in (and is edited in) its own list.
+  // Set on a line that shows a line from another list (a "pulled" line). Its
+  // own `position` and `indentLevel` place it in this list; everything else is
+  // read from the referenced entry, which stays in (and is edited in) its own
+  // list.
   refEntryId?: string;
   ownerId?: string;
   createdBy?: string;
@@ -103,8 +109,9 @@ export type SavedItem = {
   // persisted on the stored item. Writing it via createItem/updateItem is
   // translated into entry changes.
   listItems?: SavedListItem[];
-  // "focus" marks a list (type "list") that can pull in lines from other
-  // lists, such as Today or This weekend.
+  // "focus" marks a list that shows lines pulled in from other lists, such
+  // as Today. It is set the first time a list pulls a line in. Lines of such
+  // a list can be moved to other lists but not pulled into them.
   listMode?: "focus";
   focusRule?: FocusRule;
   richText?: string;
