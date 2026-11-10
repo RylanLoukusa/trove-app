@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Plus } from "lucide-react-native";
 import { ChoiceSheet } from "../../components/ChoiceSheet";
+import { ListEntriesView } from "../../components/ListEntriesView";
 import { CommentThread } from "../../components/CommentThread";
 import { MediaCollectionDisplay, resolveDisplayItems } from "../../components/MediaCollectionDisplay";
 import { MediaFullscreenViewer } from "../../components/MediaFullscreenViewer";
@@ -15,12 +16,13 @@ import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
-import { spacing } from "../../theme/theme";
 import { useTrove } from "../../storage/storage";
-import type { SavedItem, TagOption } from "../../types/models";
+import type { ListEntry, SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { getFolderPathLabel } from "../../utils/folderTree";
-import { bulletGlyphForIndent, getItemTypeLabel } from "../../utils/itemTypes";
+import { getItemTypeLabel } from "../../utils/itemTypes";
+import { legacyEntryPosition, sortEntries } from "../../utils/listEntries";
+import { priorityOptionsFor } from "../../utils/listView";
 import { requiresProForVideoPlayback } from "../../utils/limits";
 import { createStyles } from "./styles";
 
@@ -33,7 +35,19 @@ type Props = {
 export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, tagGroups, tagOptions, updateItem, updateListEntry, createTagOption, canEditItem } = useTrove();
+  const {
+    folders,
+    listEntries,
+    tagGroups,
+    tagOptions,
+    updateItem,
+    updateListEntry,
+    createListEntry,
+    moveListEntry,
+    deleteListEntry,
+    createTagOption,
+    canEditItem,
+  } = useTrove();
   const { isPro } = useEntitlement();
   const canEditCurrentItem = canEditItem(item.id);
   const videoLocked = requiresProForVideoPlayback(isPro, item.accessRole);
@@ -47,14 +61,32 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
 
   const mediaDisplayItems = useMemo(() => resolveDisplayItems(item.media, item.mediaItems), [item]);
 
-  const onPressToggleChecklistItem = useCallback(
-    (listItemId: string): void => {
-      const listItem = item.listItems?.find((entry) => entry.id === listItemId);
-      if (!listItem || listItem.kind !== "check" || !canEditCurrentItem) return;
+  // Full entry records (due date, priority, notes) for this list. Falls back
+  // to the item's lines when entries aren't available.
+  const entries = useMemo<ListEntry[]>(() => {
+    if (item.type !== "list") return [];
+    if (listEntries) return sortEntries(listEntries.filter((entry) => entry.listId === item.id));
+    return (item.listItems ?? []).map((line, index) => ({
+      id: line.id,
+      listId: item.id,
+      kind: line.kind,
+      text: line.text,
+      checked: !!line.checked,
+      indentLevel: line.indentLevel ?? 0,
+      position: legacyEntryPosition(index),
+      tagOptionIds: [],
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+  }, [item, listEntries]);
+  const priorityOptions = useMemo(() => priorityOptionsFor(tagGroups, tagOptions), [tagGroups, tagOptions]);
 
-      updateListEntry(listItemId, { checked: !listItem.checked });
+  const onToggleEntry = useCallback(
+    (entry: ListEntry): void => {
+      if (entry.kind !== "check" || !canEditCurrentItem) return;
+      updateListEntry(entry.id, { checked: !entry.checked });
     },
-    [canEditCurrentItem, item, updateListEntry],
+    [canEditCurrentItem, updateListEntry],
   );
 
   const onPressOpenUrl = useCallback(() => {
@@ -239,27 +271,18 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
         </View>
       )}
 
-      {item.type === "list" && !!item.listItems?.length && (
-        <View style={styles.listBlock}>
-          {item.listItems.map((listItem) => (
-            <View key={listItem.id} style={[styles.listRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * spacing.lg }]}>
-              {listItem.kind === "check" ? (
-                <Pressable
-                  accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: !!listItem.checked }}
-                  onPress={() => onPressToggleChecklistItem(listItem.id)}
-                  style={({ pressed }) => [styles.listCheckbox, pressed && styles.listCheckboxPressed]}
-                >
-                  <Text style={styles.listMarker}>{listItem.checked ? "☑" : "☐"}</Text>
-                </Pressable>
-              ) : (
-                <Text style={[styles.listMarker, styles.listBullet]}>{bulletGlyphForIndent(listItem.indentLevel)}</Text>
-              )}
-              <Text style={[styles.listText, listItem.checked && styles.listTextDone]}>{listItem.text}</Text>
-            </View>
-          ))}
-        </View>
+      {item.type === "list" && (
+        <ListEntriesView
+          listId={item.id}
+          entries={entries}
+          priorityOptions={priorityOptions}
+          canEdit={canEditCurrentItem}
+          onToggleEntry={onToggleEntry}
+          onUpdateEntry={updateListEntry}
+          onMoveEntry={moveListEntry}
+          onAddEntry={(text) => createListEntry(item.id, { text })}
+          onDeleteEntry={deleteListEntry}
+        />
       )}
 
       {shouldShowAttachments && (
