@@ -30,6 +30,7 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
   const {
     folders,
     items,
+    listEntries,
     tagGroups,
     tagOptions,
     resolveSyncConflict,
@@ -48,14 +49,17 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
         return tagGroups.find((tagGroup) => tagGroup.id === conflict.entityId);
       case "tagOptions":
         return tagOptions.find((tagOption) => tagOption.id === conflict.entityId);
+      case "listEntries":
+        return (listEntries ?? []).find((entry) => entry.id === conflict.entityId);
       default:
         return items.find((item) => item.id === conflict.entityId);
     }
-  }, [conflict, folders, items, tagGroups, tagOptions]);
+  }, [conflict, folders, items, listEntries, tagGroups, tagOptions]);
 
   const entityKindLabels: Record<SyncEntityKind, string> = {
     folders: "folder",
     items: "item",
+    listEntries: "list item",
     tagGroups: "tag group",
     tagOptions: "tag",
   };
@@ -73,7 +77,7 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
   const entityTitle =
     conflict?.localLabel ??
     conflict?.remoteLabel ??
-    (entity && "name" in entity ? entity.name : entity?.title) ??
+    (entity && "name" in entity ? entity.name : entity && "text" in entity ? entity.text : entity?.title) ??
     "Deleted locally";
   const conflictBody =
     conflict?.reason === "remote_deleted"

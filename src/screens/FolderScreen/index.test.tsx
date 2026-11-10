@@ -59,6 +59,7 @@ const navigation = {
 } as unknown as NativeStackScreenProps<RootStackParamList, "Folder">["navigation"];
 
 const updateItem = jest.fn();
+const updateListEntry = jest.fn();
 const deleteFolder = jest.fn();
 const canManageFolder = jest.fn().mockReturnValue(true);
 const canEditFolderContent = jest.fn().mockReturnValue(true);
@@ -72,6 +73,7 @@ const renderFolderScreen = async (folders: Folder[], items: SavedItem[], folderI
     items,
     tagOptions: [],
     updateItem,
+    updateListEntry,
     deleteFolder,
     canManageFolder,
     canEditFolderContent,
@@ -149,12 +151,8 @@ describe("FolderScreen", () => {
 
     await fireEvent.press(screen.getByLabelText("Mark checklist item complete"));
 
-    expect(updateItem).toHaveBeenCalledWith(
-      "shopping",
-      expect.objectContaining({
-        listItems: [{ id: "li-1", kind: "check", text: "Eggs", checked: true }],
-      }),
-    );
+    expect(updateListEntry).toHaveBeenCalledWith("li-1", { checked: true });
+    expect(updateItem).not.toHaveBeenCalled();
   });
 
   it("blocks toggling a checklist item without edit access", async () => {
@@ -173,7 +171,7 @@ describe("FolderScreen", () => {
     await renderFolderScreen(folders, items);
     await fireEvent.press(screen.getByLabelText("Mark checklist item complete"));
 
-    expect(updateItem).not.toHaveBeenCalled();
+    expect(updateListEntry).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith("Cannot edit item", "You do not have permission to edit this item.");
   });
 

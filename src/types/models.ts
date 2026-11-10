@@ -42,6 +42,28 @@ export type SavedListItem = {
   indentLevel?: number;
 };
 
+// A list line stored as its own record (trove_list_entries), so it can be
+// sorted, edited and synced individually and referenced from focus lists.
+// `listId` is the SavedItem (type "list") that owns the entry.
+export type ListEntry = {
+  id: string;
+  listId: string;
+  kind: ListItemKind;
+  text: string;
+  checked: boolean;
+  indentLevel: number;
+  // Fractional index key; entries in a list sort by plain string comparison.
+  position: string;
+  notes?: string;
+  dueDate?: string; // YYYY-MM-DD
+  completedAt?: string;
+  tagOptionIds: string[];
+  ownerId?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ItemAttachment = {
   id: string;
   uri: string;
@@ -71,6 +93,9 @@ export type SavedItem = {
   media?: MediaMetadata; // metadata for stored media
   mediaItems?: MediaCollectionItem[];
   attachments?: ItemAttachment[];
+  // Derived from listEntries when items are read through useTrove(); never
+  // persisted on the stored item. Writing it via createItem/updateItem is
+  // translated into entry changes.
   listItems?: SavedListItem[];
   richText?: string;
   connections?: ItemConnection[];
@@ -108,6 +133,7 @@ export type TagOption = {
 export type TroveData = {
   folders: Folder[];
   items: SavedItem[];
+  listEntries: ListEntry[];
   tagGroups: TagGroup[];
   tagOptions: TagOption[];
 };

@@ -20,7 +20,7 @@ const item = (id: string, updatedAt: string): SavedItem => ({
   updatedAt,
 });
 
-const emptyBaseline = { folders: {}, items: {}, tagGroups: {}, tagOptions: {} };
+const emptyBaseline = { folders: {}, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} };
 
 describe("baselineFromTroveData", () => {
   it("maps each folder and item id to its updatedAt timestamp", () => {
@@ -29,6 +29,7 @@ describe("baselineFromTroveData", () => {
       items: [item("item-1", "2026-01-03T00:00:00.000Z")],
       tagGroups: [],
       tagOptions: [],
+      listEntries: [],
     };
 
     expect(baselineFromTroveData(troveData)).toEqual({
@@ -39,13 +40,14 @@ describe("baselineFromTroveData", () => {
       items: {
         "item-1": "2026-01-03T00:00:00.000Z",
       },
+      listEntries: {},
       tagGroups: {},
       tagOptions: {},
     });
   });
 
   it("returns empty maps for empty input", () => {
-    expect(baselineFromTroveData({ folders: [], items: [], tagGroups: [], tagOptions: [] })).toEqual(emptyBaseline);
+    expect(baselineFromTroveData({ folders: [], items: [], tagGroups: [], tagOptions: [], listEntries: [] })).toEqual(emptyBaseline);
   });
 });
 
@@ -59,21 +61,21 @@ describe("loadSyncBaseline / saveSyncBaseline / clearSyncBaseline", () => {
   });
 
   it("round-trips a saved baseline", async () => {
-    const baseline = { folders: { "folder-1": "2026-01-01T00:00:00.000Z" }, items: {}, tagGroups: {}, tagOptions: {} };
+    const baseline = { folders: { "folder-1": "2026-01-01T00:00:00.000Z" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} };
     await saveSyncBaseline("user-1", baseline);
     expect(await loadSyncBaseline("user-1")).toEqual(baseline);
   });
 
   it("keeps baselines separate per user", async () => {
-    await saveSyncBaseline("user-1", { folders: { a: "1" }, items: {}, tagGroups: {}, tagOptions: {} });
-    await saveSyncBaseline("user-2", { folders: { b: "2" }, items: {}, tagGroups: {}, tagOptions: {} });
+    await saveSyncBaseline("user-1", { folders: { a: "1" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} });
+    await saveSyncBaseline("user-2", { folders: { b: "2" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} });
 
-    expect(await loadSyncBaseline("user-1")).toEqual({ folders: { a: "1" }, items: {}, tagGroups: {}, tagOptions: {} });
-    expect(await loadSyncBaseline("user-2")).toEqual({ folders: { b: "2" }, items: {}, tagGroups: {}, tagOptions: {} });
+    expect(await loadSyncBaseline("user-1")).toEqual({ folders: { a: "1" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} });
+    expect(await loadSyncBaseline("user-2")).toEqual({ folders: { b: "2" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} });
   });
 
   it("returns an empty baseline again after clearing", async () => {
-    await saveSyncBaseline("user-1", { folders: { a: "1" }, items: {}, tagGroups: {}, tagOptions: {} });
+    await saveSyncBaseline("user-1", { folders: { a: "1" }, items: {}, listEntries: {}, tagGroups: {}, tagOptions: {} });
     await clearSyncBaseline("user-1");
     expect(await loadSyncBaseline("user-1")).toEqual(emptyBaseline);
   });

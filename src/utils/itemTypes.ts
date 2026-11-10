@@ -1,4 +1,5 @@
-import { Folder, ItemType, SavedItem, TroveData } from "../types/models";
+import { Folder, ItemType, ListEntry, SavedItem, TroveData } from "../types/models";
+import { migrateEmbeddedListItems } from "./listEntries";
 
 export type ItemChoiceOption = { label: string; detail: string; tone: string };
 
@@ -53,10 +54,30 @@ export const normalizeFolder = (folder: Folder): Folder => ({
   parentFolderId: folder.parentFolderId || null,
 });
 
-export const normalizeTroveData = (data: TroveData): TroveData => ({
-  ...data,
-  folders: data.folders.map(normalizeFolder),
-  items: data.items.map(normalizeSavedItem),
-  tagGroups: data.tagGroups ?? [],
-  tagOptions: data.tagOptions ?? [],
+export const normalizeListEntry = (entry: ListEntry): ListEntry => ({
+  ...entry,
+  kind: entry.kind === "bullet" ? "bullet" : "check",
+  text: entry.text ?? "",
+  checked: !!entry.checked,
+  indentLevel: entry.indentLevel ?? 0,
+  tagOptionIds: entry.tagOptionIds ?? [],
 });
+
+// Data stored before list entries existed has no `listEntries` and keeps list
+// lines embedded on each item; those are migrated into entries here.
+export const normalizeTroveData = (data: TroveData): TroveData => {
+  const { items, listEntries } = migrateEmbeddedListItems(
+    (data.items ?? []).map(normalizeSavedItem),
+    (data.listEntries ?? []).map(normalizeListEntry),
+  );
+  const itemIds = new Set(items.map((item) => item.id));
+
+  return {
+    ...data,
+    folders: (data.folders ?? []).map(normalizeFolder),
+    items,
+    listEntries: listEntries.filter((entry) => itemIds.has(entry.listId)),
+    tagGroups: data.tagGroups ?? [],
+    tagOptions: data.tagOptions ?? [],
+  };
+};

@@ -84,6 +84,7 @@ const navigation = {
 } as unknown as NativeStackScreenProps<RootStackParamList, "ItemDetail">["navigation"];
 
 const updateItem = jest.fn();
+const updateListEntry = jest.fn();
 const deleteItem = jest.fn();
 const createTagOption = jest.fn((input: { groupId: string; name: string }) => makeTagOption(`new-${input.name}`, input.name));
 const canEditItem = jest.fn().mockReturnValue(true);
@@ -101,6 +102,7 @@ const renderItemDetail = async (
     tagGroups: extra.tagGroups ?? [],
     tagOptions: extra.tagOptions ?? [],
     updateItem,
+    updateListEntry,
     createTagOption,
     deleteItem,
     canEditItem,
@@ -197,12 +199,8 @@ describe("ItemDetailScreen", () => {
     await renderItemDetail(items, "shopping");
     await fireEvent.press(screen.getByLabelText("Mark checklist item complete"));
 
-    expect(updateItem).toHaveBeenCalledWith(
-      "shopping",
-      expect.objectContaining({
-        listItems: [{ id: "li-1", kind: "check", text: "Eggs", checked: true }],
-      }),
-    );
+    expect(updateListEntry).toHaveBeenCalledWith("li-1", { checked: true });
+    expect(updateItem).not.toHaveBeenCalled();
   });
 
   it("adds a new tag via the picker, creating a tag option in the Tags group", async () => {

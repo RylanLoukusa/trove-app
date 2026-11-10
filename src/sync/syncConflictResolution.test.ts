@@ -36,7 +36,7 @@ const baseConflict: SyncConflictSummary = {
 
 describe("mergeConflictFields", () => {
   it("returns the data unchanged when there are no conflicting fields", () => {
-    const troveData: TroveData = { folders: [folder("folder-1", "Local Name", "Local purpose")], items: [], tagGroups: [], tagOptions: [] };
+    const troveData: TroveData = { folders: [folder("folder-1", "Local Name", "Local purpose")], items: [], tagGroups: [], tagOptions: [], listEntries: [] };
     const conflict: SyncConflictSummary = { ...baseConflict, fields: undefined };
     expect(mergeConflictFields(troveData, conflict, {}, mergedAt)).toBe(troveData);
 
@@ -50,6 +50,7 @@ describe("mergeConflictFields", () => {
       items: [],
       tagGroups: [],
       tagOptions: [],
+      listEntries: [],
     };
 
     const result = mergeConflictFields(troveData, baseConflict, { name: "remote" }, mergedAt);
@@ -64,7 +65,7 @@ describe("mergeConflictFields", () => {
   });
 
   it("keeps the local value when a conflicting field is not chosen as remote", () => {
-    const troveData: TroveData = { folders: [folder("folder-1", "Local Name", "Local purpose")], items: [], tagGroups: [], tagOptions: [] };
+    const troveData: TroveData = { folders: [folder("folder-1", "Local Name", "Local purpose")], items: [], tagGroups: [], tagOptions: [], listEntries: [] };
 
     const result = mergeConflictFields(troveData, baseConflict, { name: "local" }, mergedAt);
 
@@ -75,7 +76,7 @@ describe("mergeConflictFields", () => {
   });
 
   it("applies the same logic to the items entityKind", () => {
-    const troveData: TroveData = { folders: [], items: [item("item-1", "Local Title"), item("item-2", "Other Item")], tagGroups: [], tagOptions: [] };
+    const troveData: TroveData = { folders: [], items: [item("item-1", "Local Title"), item("item-2", "Other Item")], tagGroups: [], tagOptions: [], listEntries: [] };
     const itemConflict: SyncConflictSummary = {
       entityId: "item-1",
       entityKind: "items",

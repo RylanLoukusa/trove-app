@@ -43,4 +43,5 @@ export const seedData: TroveData = {
   items: seedItems,
   tagGroups: [],
   tagOptions: [],
+  listEntries: [],
 };
