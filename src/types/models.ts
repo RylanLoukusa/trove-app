@@ -188,9 +188,3 @@ export type TroveComment = {
   targetType: CommentTargetType;
   updatedAt: string;
 };
-
-export type FolderSuggestion = {
-  folder: Folder;
-  score: number;
-  reasons: string[];
-};

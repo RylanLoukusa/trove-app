@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import type { Folder, SavedItem } from "../types/models";
+import type { Folder, SavedItem, SavedListItem } from "../types/models";
 import { isSharedAccess } from "../utils/access";
 import { listDisplayTitle, listPreviewText } from "../utils/listEntries";
 import { formatListDate } from "../utils/listView";
@@ -111,7 +111,7 @@ export const ListRow = ({
   onPress,
   onLongPress,
 }: {
-  list: SavedItem;
+  list: Pick<SavedItem, "title" | "updatedAt"> & { listItems?: Array<Pick<SavedListItem, "kind" | "text" | "checked">> };
   activityAt?: string;
   folderLabel?: string;
   onPress: () => void;

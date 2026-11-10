@@ -15,5 +15,5 @@ export const backLabelFor = (state: StackState | undefined, routeKey: string | u
     return folders.find((folder) => folder.id === folderId)?.name ?? "Folder";
   }
   if (previous?.name === "Search") return "Search";
-  return HOME_LABEL;
+  return !previous || previous.name === "Home" ? HOME_LABEL : "Back";
 };

@@ -562,7 +562,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const createItem = useCallback<TroveContextValue["createItem"]>((input) => {
     const folder = dataRef.current.folders.find((candidate) => candidate.id === input.folderId);
     if (input.folderId && !canEditFolderContentRecord(folder)) {
-      Alert.alert("Cannot save item", "You do not have permission to add items to that folder.");
+      Alert.alert("Cannot add list", "You do not have permission to add lists to that folder.");
       return null;
     }
 
@@ -610,12 +610,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         const nextFolder = current.folders.find((folder) => folder.id === nextFolderId);
 
         if (!canEditItemRecord(item, currentFolder)) {
-          Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+          Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
           return item;
         }
 
         if (nextFolderId && !canEditFolderContentRecord(nextFolder)) {
-          Alert.alert("Cannot move item", "You do not have permission to save items in that folder.");
+          Alert.alert("Cannot move list", "You do not have permission to add lists to that folder.");
           return item;
         }
 
@@ -795,7 +795,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       (changesSource && (!entry || !canEditListRecord(entry.listId))) ||
       (placementIndent !== undefined && !canEditListRecord(requested.listId))
     ) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return false;
     }
     if (!changesSource && placementIndent === undefined) return true;
@@ -847,7 +847,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const createListEntry = useCallback<TroveContextValue["createListEntry"]>((listId, input) => {
     const list = dataRef.current.items.find((candidate) => candidate.id === listId);
     if (!list || !canEditListRecord(listId)) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return null;
     }
 
@@ -876,7 +876,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const insertListEntries = useCallback<TroveContextValue["insertListEntries"]>((listId, afterEntryId, inputs) => {
     const list = dataRef.current.items.find((candidate) => candidate.id === listId);
     if (!list || !canEditListRecord(listId)) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return [];
     }
     if (inputs.length === 0) return [];
@@ -946,7 +946,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       updates.set(entry.id, { listId: target.id, position, ownerId: target.ownerId ?? entry.ownerId });
     });
 
-    if (denied) Alert.alert("Cannot move item", "You need edit access to both lists to move a line.");
+    if (denied) Alert.alert("Cannot move line", "You need edit access to both lists to move a line.");
     if (updates.size === 0) return [];
     const timestamp = new Date().toISOString();
     setData((current) => ({
@@ -983,7 +983,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const entries = dataRef.current.listEntries;
     const entry = entries.find((candidate) => candidate.id === entryId);
     if (!entry || !canEditListRecord(entry.listId)) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return false;
     }
 
@@ -1009,7 +1009,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const deleteListEntry = useCallback<TroveContextValue["deleteListEntry"]>((entryId) => {
     const entry = dataRef.current.listEntries.find((candidate) => candidate.id === entryId);
     if (!entry || !canEditListRecord(entry.listId)) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return false;
     }
 
@@ -1022,7 +1022,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const { items, listEntries } = dataRef.current;
     const focusList = items.find((candidate) => candidate.id === focusListId);
     if (!focusList || focusList.type !== "list" || !canEditListRecord(focusListId)) {
-      Alert.alert("Cannot edit item", "You do not have permission to edit this list.");
+      Alert.alert("Cannot edit list", "You do not have permission to edit this list.");
       return 0;
     }
     if (!canListBorrowLines(focusList, listIdsLendingLines(listEntries))) return 0;
@@ -1143,7 +1143,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const itemToDelete = dataRef.current.items.find((item) => item.id === itemId);
     const folder = dataRef.current.folders.find((candidate) => candidate.id === itemToDelete?.folderId);
     if (!canEditItemRecord(itemToDelete, folder)) {
-      return { ok: false, error: "You do not have permission to delete this item." };
+      return { ok: false, error: "You do not have permission to delete this list." };
     }
 
     const isSharedItem = !!activeUserId && !!itemToDelete?.ownerId && itemToDelete.ownerId !== activeUserId;

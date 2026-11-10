@@ -82,6 +82,32 @@ export const createStyles = (colors: ThemeColors) =>
       color: colors.muted,
       fontSize: 17,
     },
+    welcome: {
+      backgroundColor: withAlpha(colors.accent, 0.16),
+      borderRadius: 14,
+      marginTop: spacing.md,
+      padding: spacing.md,
+    },
+    welcomeTitle: {
+      color: colors.ink,
+      fontSize: 17,
+      fontWeight: "700",
+    },
+    welcomeBody: {
+      color: colors.ink,
+      fontSize: 15,
+      lineHeight: 21,
+      marginTop: 4,
+    },
+    welcomeButton: {
+      alignSelf: "flex-start",
+      marginTop: spacing.sm,
+    },
+    welcomeButtonText: {
+      color: colors.accentDark,
+      fontSize: 15,
+      fontWeight: "700",
+    },
     hint: {
       color: colors.muted,
       fontSize: 14,

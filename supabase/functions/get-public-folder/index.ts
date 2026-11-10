@@ -42,7 +42,16 @@ type MediaCollectionItemRow = MediaMetadataRow & { id: string };
 
 type ItemAttachmentRow = { caption?: string; id: string; mediaType: "image" | "video"; uri: string };
 
-type ListItemRow = { checked?: boolean; id: string; indentLevel?: number; kind: "check" | "bullet"; text: string };
+// `plain` marks a line with no checkbox or bullet, which is stored as a bullet.
+type ListItemRow = {
+  bold?: boolean;
+  checked?: boolean;
+  id: string;
+  indentLevel?: number;
+  kind: "check" | "bullet";
+  plain?: boolean;
+  text: string;
+};
 
 type ItemRow = {
   attachments: ItemAttachmentRow[] | null;
@@ -206,6 +215,8 @@ const mapItem = async (row: ItemRow, tagOptionsById: Map<string, TagOptionRow>) 
       indentLevel: listItem.indentLevel ?? 0,
       kind: listItem.kind,
       text: listItem.text,
+      ...(listItem.plain ? { plain: true } : {}),
+      ...(listItem.bold ? { bold: true } : {}),
     })),
     mediaItems,
     mediaUrl,

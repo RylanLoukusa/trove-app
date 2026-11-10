@@ -43,9 +43,6 @@ export const getFolderHierarchyRows = (folders: Folder[]): FolderHierarchyRow[] 
   return rows;
 };
 
-export const getItemsInFolder = (items: SavedItem[], folderId: string): SavedItem[] =>
-  items.filter((item) => item.folderId === folderId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
 export const getFolderById = (folders: Folder[], folderId?: string | null): Folder | undefined =>
   folderId ? folders.find((folder) => folder.id === folderId) : undefined;
 

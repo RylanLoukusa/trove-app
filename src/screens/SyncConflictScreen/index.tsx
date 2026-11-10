@@ -58,12 +58,12 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
 
   const entityKindLabels: Record<SyncEntityKind, string> = {
     folders: "folder",
-    items: "item",
-    listEntries: "list item",
+    items: "list",
+    listEntries: "line",
     tagGroups: "tag group",
     tagOptions: "tag",
   };
-  const entityKindLabel = conflict ? entityKindLabels[conflict.entityKind] : "item";
+  const entityKindLabel = conflict ? entityKindLabels[conflict.entityKind] : "list";
   const choices = useMemo(() => {
     if (!conflict?.fields) return {};
 

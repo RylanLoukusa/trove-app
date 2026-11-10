@@ -8,12 +8,11 @@ import { SkeletonBlock, SkeletonText } from "../../components";
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton } from "../../components/NavBar";
 import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader, SectionLink } from "../../components/Rows";
-import { SpotlightMessageCard } from "../../components/SpotlightTour";
 import { useListRowActions } from "../../components/useListRowActions";
 import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
-import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
+import { useOnboardingTour, WELCOME_NOTE } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -30,7 +29,7 @@ export const HomeScreen = ({ navigation }: Props) => {
   const { folders, isReady, items, listEntries, syncSnapshot, syncToRemote, createItem } = useTrove();
   const { session, signOut } = useAuth();
   const { isPro, isLoading: isEntitlementLoading, presentPaywall } = useEntitlement();
-  const { currentStep, next, skip, maybeStart } = useOnboardingTour();
+  const { showWelcome, dismissWelcome, maybeStart } = useOnboardingTour();
   const { openListActions, overlays } = useListRowActions();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -113,8 +112,6 @@ export const HomeScreen = ({ navigation }: Props) => {
         },
   ];
 
-  const showWelcome = currentStep?.screen === "Home" && currentStep.mode === "message";
-
   return (
     <View style={styles.screen}>
       <NavBar
@@ -169,6 +166,22 @@ export const HomeScreen = ({ navigation }: Props) => {
           <Text style={styles.searchText}>Search</Text>
         </Pressable>
 
+        {isReady && showWelcome && (
+          <View style={styles.welcome}>
+            <Text style={styles.welcomeTitle}>{WELCOME_NOTE.title}</Text>
+            <Text style={styles.welcomeBody}>{WELCOME_NOTE.body}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Got it"
+              hitSlop={8}
+              onPress={dismissWelcome}
+              style={({ pressed }) => [styles.welcomeButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.welcomeButtonText}>Got it</Text>
+            </Pressable>
+          </View>
+        )}
+
         {!isReady ? (
           <View style={styles.skeleton}>
             <SkeletonBlock height={46} radius={14} width="58%" />
@@ -217,16 +230,6 @@ export const HomeScreen = ({ navigation }: Props) => {
       </ScrollView>
 
       {isReady && <ComposeButton onPress={onNewList} />}
-
-      {showWelcome && currentStep ? (
-        <SpotlightMessageCard
-          title={currentStep.title}
-          body={currentStep.body}
-          primaryLabel="Got it"
-          onPrimary={next}
-          onSkip={skip}
-        />
-      ) : null}
 
       <MenuSheet visible={menuOpen} actions={menuActions} onClose={() => setMenuOpen(false)} />
       {overlays}
