@@ -8,17 +8,23 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  Circle,
+  CircleCheck,
   Flag,
+  FolderInput,
   GripVertical,
   Info,
   ListChecks,
   ListIndentDecrease,
   ListIndentIncrease,
   Plus,
+  Star,
+  Trash2,
   Undo2,
 } from "lucide-react-native";
 
 import { ChoiceSheet } from "./ChoiceSheet";
+import { MoveTarget, MoveToListSheet, useRecentMoveTargets } from "./MoveToListSheet";
 import { FocusListChoice, ListEntrySheet } from "./ListEntrySheet";
 import { useListViewSettings } from "../storage/listViewSettings";
 import { spacing, ThemeColors } from "../theme/theme";
@@ -69,6 +75,14 @@ type Props = {
   focusLists?: FocusListChoice[];
   focusMembership?: Record<string, string[]>;
   onToggleFocusList?: (entryId: string, focusListId: string) => void;
+  // Adds several lines to a focus list at once (select mode).
+  onAddToFocusList?: (entryIds: string[], focusListId: string) => void;
+  // Lists a line can be moved to, and the move itself. Returns the target's
+  // title and an undo, or null when nothing moved.
+  moveTargets?: MoveTarget[];
+  onMoveEntries?: (entryIds: string[], listId: string) => { listTitle: string; undo: () => void } | null;
+  // Puts deleted lines back (Undo).
+  onRestoreEntries?: (entries: ListEntry[]) => void;
   headerAccessory?: ReactNode;
   emptyText?: string;
   // Bump to put the cursor in the "New item" line (e.g. after a list's title).
@@ -116,6 +130,10 @@ export const ListEntriesView = ({
   focusLists,
   focusMembership,
   onToggleFocusList,
+  onAddToFocusList,
+  moveTargets,
+  onMoveEntries,
+  onRestoreEntries,
   headerAccessory,
   emptyText = "Nothing on this list yet.",
   focusAddSignal,
@@ -133,7 +151,13 @@ export const ListEntriesView = ({
   );
   const hiddenCount = entries.length - visibleEntries.length;
   const doneCount = entries.filter((entry) => entry.checked).length;
-  const canReorder = canEdit && settings.sortMode === "manual";
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moveIds, setMoveIds] = useState<string[] | null>(null);
+  const [focusPickIds, setFocusPickIds] = useState<string[] | null>(null);
+  const [recentTargets, rememberTarget] = useRecentMoveTargets();
+  // Drag works in any sort; dropping a line switches the list to your order.
+  const canReorder = canEdit && !selecting;
 
   const heightsRef = useRef<Record<string, number>>({});
   const [dragging, setDragging] = useState<{ id: string; startIndex: number } | null>(null);
@@ -170,9 +194,15 @@ export const ListEntriesView = ({
       const after = others[targetIndex - 1] ?? null;
       const before = others[targetIndex] ?? null;
       onMoveEntry(id, after?.id ?? null, before?.id ?? null);
+      if (settings.sortMode !== "manual") {
+        updateSettings({ sortMode: "manual" });
+        showToastRef.current?.(`Now sorted by ${listSortLabels.manual}`);
+      }
     },
-    [onMoveEntry, visibleEntries],
+    [onMoveEntry, settings.sortMode, updateSettings, visibleEntries],
   );
+
+  const showToastRef = useRef<((message: string, undo?: () => void) => void) | null>(null);
 
   const draggingHeight = dragging ? heightsRef.current[dragging.id] ?? 56 : 0;
   const shiftFor = (index: number): number => {
@@ -228,6 +258,8 @@ export const ListEntriesView = ({
     setToast({ message, undo });
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
+
+  showToastRef.current = showToast;
 
   // Lines that live on another list, or that a rule pulled in: they can be
   // edited here but not deleted by emptying them.
@@ -315,6 +347,91 @@ export const ListEntriesView = ({
     onUpdateEntry(focusedEntry.id, { tagOptionIds: withPriority(focusedEntry.tagOptionIds, priorityOptions, next?.id ?? null) });
   };
 
+  // --- Moving, focus lists, deleting (swipe and select mode) ---------------
+  const canMove = !!onMoveEntries && !!moveTargets;
+  const canFocus = !!focusLists?.length && (!!onToggleFocusList || !!onAddToFocusList);
+
+  const exitSelecting = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+
+  const startMove = (ids: string[]) => {
+    if (!canMove || ids.length === 0) return;
+    Keyboard.dismiss();
+    setMoveIds(ids);
+  };
+
+  const finishMove = (listId: string) => {
+    const ids = moveIds ?? [];
+    setMoveIds(null);
+    const result = onMoveEntries?.(ids, listId);
+    if (!result) return;
+    rememberTarget(listId);
+    exitSelecting();
+    showToast(
+      ids.length === 1 ? `Moved to ${result.listTitle}` : `Moved ${ids.length} items to ${result.listTitle}`,
+      result.undo,
+    );
+  };
+
+  const applyFocus = (ids: string[], focusListId: string) => {
+    const focusList = focusLists?.find((candidate) => candidate.id === focusListId);
+    if (!focusList) return;
+    if (ids.length === 1 && onToggleFocusList) {
+      const wasIn = !!focusMembership?.[ids[0]]?.includes(focusListId);
+      onToggleFocusList(ids[0], focusListId);
+      showToast(wasIn ? `Removed from ${focusList.title}` : `Added to ${focusList.title}`);
+    } else if (onAddToFocusList) {
+      onAddToFocusList(ids, focusListId);
+      showToast(`Added ${ids.length} items to ${focusList.title}`);
+    }
+    exitSelecting();
+  };
+
+  const startFocus = (ids: string[]) => {
+    if (!canFocus || ids.length === 0 || !focusLists) return;
+    if (focusLists.length === 1) applyFocus(ids, focusLists[0].id);
+    else setFocusPickIds(ids);
+  };
+
+  const deleteLines = (ids: string[]) => {
+    const removable = ids.filter((id) => !ruleEntryIds?.has(id));
+    if (removable.length === 0) return;
+    const restorable = removable
+      .filter((id) => !referenceSources?.[id])
+      .map((id) => entries.find((entry) => entry.id === id))
+      .filter((entry): entry is ListEntry => !!entry);
+    removable.forEach((id) => onDeleteEntry(id));
+    exitSelecting();
+    const label = removable.length === 1 ? "Deleted 1 item" : `Deleted ${removable.length} items`;
+    showToast(
+      label,
+      onRestoreEntries && restorable.length === removable.length ? () => onRestoreEntries(restorable) : undefined,
+    );
+  };
+
+  const checkSelected = () => {
+    const chosen = entries.filter((entry) => selectedIds.has(entry.id) && entry.kind === "check");
+    const allDone = chosen.length > 0 && chosen.every((entry) => entry.checked);
+    chosen.filter((entry) => entry.checked === allDone).forEach((entry) => onToggleEntry(entry));
+    exitSelecting();
+  };
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const selectedList = [...selectedIds].filter((id) => entries.some((entry) => entry.id === id));
+  const moveSubject =
+    moveIds && moveIds.length === 1
+      ? `"${entries.find((entry) => entry.id === moveIds[0])?.text ?? "item"}"`
+      : `${moveIds?.length ?? 0} items`;
+
   const keyboardBar = focusedId ? (
     <View style={styles.bar}>
       {datesOpen && focusedEntry ? (
@@ -385,6 +502,14 @@ export const ListEntriesView = ({
               styles={styles}
             />
           )}
+          {!!focusedEntry && canMove && (
+            <BarButton
+              accessibilityLabel="Move to another list"
+              icon={<FolderInput size={18} color={colors.accentDark} />}
+              onPress={() => startMove([focusedEntry.id])}
+              styles={styles}
+            />
+          )}
           {!!focusedEntry && (
             <BarButton
               accessibilityLabel="Line details"
@@ -410,6 +535,48 @@ export const ListEntriesView = ({
 
   return (
     <View style={styles.block}>
+      {selecting ? (
+        <View style={styles.selectBar}>
+          <Text style={styles.selectCount}>
+            {selectedList.length === 0 ? "Tap lines to select" : `${selectedList.length} selected`}
+          </Text>
+          <View style={styles.selectActions}>
+            {canMove && (
+              <BarButton
+                label="Move"
+                icon={<FolderInput size={16} color={colors.accentDark} />}
+                disabled={selectedList.length === 0}
+                onPress={() => startMove(selectedList)}
+                styles={styles}
+              />
+            )}
+            {canFocus && (
+              <BarButton
+                label="Focus"
+                icon={<Star size={16} color={colors.accentDark} />}
+                disabled={selectedList.length === 0}
+                onPress={() => startFocus(selectedList)}
+                styles={styles}
+              />
+            )}
+            <BarButton
+              label="Check"
+              icon={<CheckCheck size={16} color={colors.accentDark} />}
+              disabled={selectedList.length === 0}
+              onPress={checkSelected}
+              styles={styles}
+            />
+            <BarButton
+              label="Delete"
+              icon={<Trash2 size={16} color={colors.danger} />}
+              disabled={selectedList.length === 0}
+              onPress={() => deleteLines(selectedList)}
+              styles={styles}
+            />
+            <BarButton label="Done" strong onPress={exitSelecting} styles={styles} />
+          </View>
+        </View>
+      ) : (
       <View style={styles.toolbar}>
         <Pressable
           accessibilityRole="button"
@@ -431,13 +598,28 @@ export const ListEntriesView = ({
             {settings.completedMode === "hide" ? "Done hidden" : settings.completedMode === "bottom" ? "Done at bottom" : "Done in place"}
           </Text>
         </Pressable>
+        {canEdit && entries.length > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Select lines"
+            onPress={() => {
+              Keyboard.dismiss();
+              setSelecting(true);
+            }}
+            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+          >
+            <CircleCheck size={14} color={colors.accentDark} />
+            <Text style={styles.chipText}>Select</Text>
+          </Pressable>
+        )}
         {doneCount > 0 && (
           <Text style={styles.count}>
             {doneCount} of {entries.length} done
           </Text>
         )}
       </View>
-      {headerAccessory}
+      )}
+      {!selecting && headerAccessory}
 
       {visibleEntries.map((entry, index) => (
         <EntryRow
@@ -473,6 +655,12 @@ export const ListEntriesView = ({
           }}
           onBlurLine={() => setFocusedId((current) => (current === entry.id ? null : current))}
           belowRow={focusedId === entry.id ? inlineBar : null}
+          selecting={selecting}
+          selected={selectedIds.has(entry.id)}
+          onToggleSelect={() => toggleSelected(entry.id)}
+          onSwipeMove={canMove ? () => startMove([entry.id]) : undefined}
+          onSwipeFocus={canFocus ? () => startFocus([entry.id]) : undefined}
+          onSwipeDelete={ruleEntryIds?.has(entry.id) ? undefined : () => deleteLines([entry.id])}
           onDragStart={() => startDrag(entry.id, index)}
           onDragUpdate={(translationY) => updateDrag(index, translationY)}
           onDragEnd={() => endDrag(entry.id, index)}
@@ -491,7 +679,7 @@ export const ListEntriesView = ({
         </Pressable>
       )}
 
-      {canEdit && (
+      {canEdit && !selecting && (
         <Pressable
           accessible={false}
           onPress={() => focusLine(ADD_ROW_ID)}
@@ -561,6 +749,37 @@ export const ListEntriesView = ({
         onSelect={(completedMode) => updateSettings({ completedMode })}
         onClose={() => setSheet(null)}
       />
+      {canMove && (
+        <MoveToListSheet
+          visible={!!moveIds}
+          subject={moveSubject}
+          targets={moveTargets ?? []}
+          recentIds={recentTargets}
+          onMove={finishMove}
+          onClose={() => setMoveIds(null)}
+        />
+      )}
+      {canFocus && (
+        <ChoiceSheet<string>
+          visible={!!focusPickIds}
+          title="Focus list"
+          options={(focusLists ?? []).map((focusList) => ({
+            value: focusList.id,
+            label: focusList.title,
+            detail:
+              focusPickIds?.length === 1 && focusMembership?.[focusPickIds[0]]?.includes(focusList.id)
+                ? "Already in it. Tap to take it out"
+                : undefined,
+          }))}
+          selectedValue=""
+          onSelect={(focusListId) => {
+            const ids = focusPickIds ?? [];
+            setFocusPickIds(null);
+            applyFocus(ids, focusListId);
+          }}
+          onClose={() => setFocusPickIds(null)}
+        />
+      )}
       <ListEntrySheet
         entry={openEntry}
         priorityOptions={priorityOptions}
@@ -612,6 +831,12 @@ type EntryRowProps = {
   onBlurLine: () => void;
   onBlurEmpty: () => void;
   belowRow?: ReactNode;
+  selecting: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onSwipeMove?: () => void;
+  onSwipeFocus?: () => void;
+  onSwipeDelete?: () => void;
 };
 
 const dueToneColor = (tone: DueTone, colors: ThemeColors): string =>
@@ -642,6 +867,12 @@ const EntryRow = ({
   onBlurLine,
   onBlurEmpty,
   belowRow,
+  selecting,
+  selected,
+  onToggleSelect,
+  onSwipeMove,
+  onSwipeFocus,
+  onSwipeDelete,
 }: EntryRowProps) => {
   const dragY = useSharedValue(0);
   const [draft, setDraft] = useState(entry.text);
@@ -676,13 +907,25 @@ const EntryRow = ({
   };
   const swipeRef = useRef<SwipeableMethods>(null);
   const due = entry.dueDate ? describeDueDate(entry.dueDate) : null;
-  // Swiping a checklist line to the right checks it off (or back on).
-  const canSwipe = canEdit && entry.kind === "check" && !isDragging;
+  // Swipe right checks a checklist line off (or back on); swipe left shows
+  // Move, Focus and Delete.
+  const canSwipeRight = entry.kind === "check";
+  const hasSwipeActions = !!onSwipeMove || !!onSwipeFocus || !!onSwipeDelete;
+  const canSwipe = canEdit && !isDragging && !selecting && (canSwipeRight || hasSwipeActions);
+  // A long press on the checkbox starts a drag; its tap must not also toggle.
+  const lastDragAt = useRef(0);
+  const markDrag = useCallback(() => {
+    lastDragAt.current = Date.now();
+  }, []);
+  const toggleUnlessDragged = () => {
+    if (Date.now() - lastDragAt.current > 500) onToggle();
+  };
 
-  const dragGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY([-6, 6])
+  const makeDragGesture = (longPress: boolean) => {
+    const pan = Gesture.Pan();
+    if (longPress) pan.activateAfterLongPress(250);
+    else pan.activeOffsetY([-6, 6]);
+    return pan
         .onStart(() => {
           dragY.value = 0;
           runOnJS(onDragStart)();
@@ -693,10 +936,14 @@ const EntryRow = ({
         })
         .onEnd(() => {
           dragY.value = 0;
+          runOnJS(markDrag)();
           runOnJS(onDragEnd)();
-        }),
-    [dragY, onDragEnd, onDragStart, onDragUpdate],
-  );
+        });
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dragGesture = useMemo(() => makeDragGesture(false), [dragY, onDragEnd, onDragStart, onDragUpdate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const holdGesture = useMemo(() => makeDragGesture(true), [dragY, onDragEnd, onDragStart, onDragUpdate, markDrag]);
 
   const animatedStyle = useAnimatedStyle(() => {
     if (isDragging) return { transform: [{ translateY: dragY.value }], zIndex: 10, opacity: 0.92 };
@@ -710,7 +957,7 @@ const EntryRow = ({
       style={[styles.row, isDragging && styles.rowDragging, animatedStyle]}
       onLayout={(event) => onLayoutHeight(event.nativeEvent.layout.height)}
     >
-      {canReorder && (
+      {canReorder && !selecting && (
         <GestureDetector gesture={dragGesture}>
           <View accessibilityLabel="Drag to reorder" style={styles.handle}>
             <GripVertical size={16} color={colors.muted} />
@@ -718,21 +965,42 @@ const EntryRow = ({
         </GestureDetector>
       )}
       <View style={[styles.rowContent, showIndent && { marginLeft: Math.min(entry.indentLevel, 3) * spacing.lg }]}>
-        {entry.kind === "check" ? (
+        {selecting ? (
           <Pressable
-            accessibilityLabel={entry.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: entry.checked }}
-            onPress={onToggle}
-            style={({ pressed }) => [styles.checkbox, pressed && styles.checkboxPressed]}
+            accessibilityLabel={`Select ${entry.text}`}
+            accessibilityState={{ checked: selected }}
+            onPress={onToggleSelect}
+            style={styles.checkbox}
           >
-            <Text style={styles.marker}>{entry.checked ? "☑" : "☐"}</Text>
+            {selected ? <CircleCheck size={22} color={colors.accentDark} /> : <Circle size={22} color={colors.muted} />}
           </Pressable>
+        ) : entry.kind === "check" ? (
+          <GestureDetector gesture={canReorder ? holdGesture : Gesture.Tap().enabled(false)}>
+            <Pressable
+              accessibilityLabel={entry.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: entry.checked }}
+              accessibilityHint={canReorder ? "Hold to drag the line" : undefined}
+              onPress={toggleUnlessDragged}
+              style={({ pressed }) => [styles.checkbox, pressed && styles.checkboxPressed]}
+            >
+              <Text style={styles.marker}>{entry.checked ? "☑" : "☐"}</Text>
+            </Pressable>
+          </GestureDetector>
         ) : (
-          <Text style={[styles.marker, styles.bullet]}>{bulletGlyphForIndent(entry.indentLevel)}</Text>
+          <GestureDetector gesture={canReorder ? holdGesture : Gesture.Tap().enabled(false)}>
+            <View accessibilityHint={canReorder ? "Hold to drag the line" : undefined}>
+              <Text style={[styles.marker, styles.bullet]}>{bulletGlyphForIndent(entry.indentLevel)}</Text>
+            </View>
+          </GestureDetector>
         )}
         <View style={styles.textBlock}>
-          {canEdit ? (
+          {selecting ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={entry.text} onPress={onToggleSelect}>
+              <Text style={[styles.text, entry.checked && styles.textDone]}>{entry.text}</Text>
+            </Pressable>
+          ) : canEdit ? (
             <TextInput
               ref={registerInput}
               testID="list-line-input"
@@ -823,14 +1091,66 @@ const EntryRow = ({
       ref={swipeRef}
       friction={1.5}
       leftThreshold={56}
+      rightThreshold={40}
       overshootLeft={false}
-      renderLeftActions={() => (
-        <View style={[styles.swipeAction, entry.checked && styles.swipeActionUndo]}>
-          {entry.checked ? <Undo2 size={18} color={colors.onAccent} /> : <Check size={18} color={colors.onAccent} />}
-          <Text style={styles.swipeActionText}>{entry.checked ? "Undo" : "Check off"}</Text>
-        </View>
-      )}
-      onSwipeableOpen={() => {
+      overshootRight={false}
+      renderLeftActions={
+        canSwipeRight
+          ? () => (
+              <View style={[styles.swipeAction, entry.checked && styles.swipeActionUndo]}>
+                {entry.checked ? <Undo2 size={18} color={colors.onAccent} /> : <Check size={18} color={colors.onAccent} />}
+                <Text style={styles.swipeActionText}>{entry.checked ? "Undo" : "Check off"}</Text>
+              </View>
+            )
+          : undefined
+      }
+      renderRightActions={
+        hasSwipeActions
+          ? () => (
+              <View style={styles.swipeButtons}>
+                {!!onSwipeMove && (
+                  <SwipeButton
+                    label="Move"
+                    icon={<FolderInput size={18} color={colors.onAccent} />}
+                    tone={colors.blue}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeMove();
+                    }}
+                    styles={styles}
+                  />
+                )}
+                {!!onSwipeFocus && (
+                  <SwipeButton
+                    label="Focus"
+                    icon={<Star size={18} color={colors.onAccent} />}
+                    tone={colors.accentDark}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeFocus();
+                    }}
+                    styles={styles}
+                  />
+                )}
+                {!!onSwipeDelete && (
+                  <SwipeButton
+                    label="Delete"
+                    icon={<Trash2 size={18} color={colors.onAccent} />}
+                    tone={colors.danger}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeDelete();
+                    }}
+                    styles={styles}
+                  />
+                )}
+              </View>
+            )
+          : undefined
+      }
+      onSwipeableOpen={(direction) => {
+        // "right": the row moved right, showing the check-off action.
+        if (direction !== "right") return;
         onToggle();
         swipeRef.current?.close();
       }}
@@ -840,6 +1160,30 @@ const EntryRow = ({
   );
   return belowRow ? <>{swipeable}{belowRow}</> : swipeable;
 };
+
+const SwipeButton = ({
+  label,
+  icon,
+  tone,
+  onPress,
+  styles,
+}: {
+  label: string;
+  icon: ReactNode;
+  tone: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) => (
+  <Pressable
+    accessibilityRole="button"
+    accessibilityLabel={label}
+    onPress={onPress}
+    style={({ pressed }) => [styles.swipeButton, { backgroundColor: tone }, pressed && styles.barButtonDim]}
+  >
+    {icon}
+    <Text style={styles.swipeButtonText}>{label}</Text>
+  </Pressable>
+);
 
 const BarButton = ({
   label,
@@ -1057,6 +1401,40 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       fontSize: 16,
       minHeight: 44,
+    },
+    swipeButtons: {
+      flexDirection: "row",
+      gap: 4,
+      marginLeft: 4,
+      marginVertical: 2,
+    },
+    swipeButton: {
+      alignItems: "center",
+      borderRadius: 12,
+      justifyContent: "center",
+      minWidth: 64,
+      paddingHorizontal: spacing.xs,
+    },
+    swipeButtonText: {
+      color: colors.onAccent,
+      fontSize: 12,
+      fontWeight: "800",
+      marginTop: 2,
+    },
+    selectBar: {
+      gap: 4,
+      marginBottom: spacing.sm,
+    },
+    selectCount: {
+      color: colors.ink,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+    selectActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 2,
     },
     textInput: {
       margin: 0,

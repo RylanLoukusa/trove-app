@@ -11,12 +11,28 @@ jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
   const React = jest.requireActual("react");
   const { Pressable, Text, View } = jest.requireActual("react-native");
   const MockSwipeable = React.forwardRef(
-    ({ children, onSwipeableOpen }: { children: React.ReactNode; onSwipeableOpen: () => void }, _ref: unknown) => (
+    (
+      {
+        children,
+        onSwipeableOpen,
+        renderLeftActions,
+        renderRightActions,
+      }: {
+        children: React.ReactNode;
+        onSwipeableOpen: (direction: string) => void;
+        renderLeftActions?: () => React.ReactNode;
+        renderRightActions?: () => React.ReactNode;
+      },
+      _ref: unknown,
+    ) => (
       <View>
-        <Pressable accessibilityLabel="Simulate swipe" onPress={() => onSwipeableOpen()}>
-          <Text>swipe</Text>
-        </Pressable>
+        {!!renderLeftActions && (
+          <Pressable accessibilityLabel="Simulate swipe" onPress={() => onSwipeableOpen("right")}>
+            <Text>swipe</Text>
+          </Pressable>
+        )}
         {children}
+        {renderRightActions?.()}
       </View>
     ),
   );
@@ -85,8 +101,8 @@ describe("ListEntriesView", () => {
     await waitFor(async () =>
       expect(JSON.parse((await AsyncStorage.getItem("trove:listView:list-1"))!)).toMatchObject({ sortMode: "priority" }),
     );
-    // Reordering by drag is only offered in your own order.
-    expect(screen.queryByLabelText("Drag to reorder")).toBeNull();
+    // Dragging still works; dropping a line switches back to your own order.
+    expect(screen.getAllByLabelText("Drag to reorder")).toHaveLength(2);
   });
 
   it("hides completed items and offers to show them again", async () => {
@@ -259,6 +275,104 @@ describe("ListEntriesView", () => {
     await fireEvent.press(screen.getByLabelText("Simulate swipe"));
 
     expect(handlers.onToggleEntry).toHaveBeenCalledWith(cake);
+  });
+
+  it("moves a line to another list from its swipe actions, with undo", async () => {
+    const undo = jest.fn();
+    const onMoveEntries = jest.fn(() => ({ listTitle: "Groceries", undo }));
+    await renderScreen(
+      <ListEntriesView
+        listId="list-1"
+        entries={[entry("Cake")]}
+        priorityOptions={[]}
+        canEdit
+        moveTargets={[
+          { id: "groceries", title: "Groceries", folderLabel: "Home" },
+          { id: "party", title: "Party", folderLabel: "Events" },
+        ]}
+        onMoveEntries={onMoveEntries}
+        {...handlers}
+      />,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Move"));
+    await fireEvent.press(screen.getByLabelText("Move to Groceries"));
+
+    expect(onMoveEntries).toHaveBeenCalledWith(["Cake"], "groceries");
+    expect(screen.getByText("Moved to Groceries")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Undo"));
+    expect(undo).toHaveBeenCalled();
+  });
+
+  it("deletes a line from its swipe actions and can put it back", async () => {
+    const cake = entry("Cake");
+    const onRestoreEntries = jest.fn();
+    await renderScreen(
+      <ListEntriesView listId="list-1" entries={[cake]} priorityOptions={[]} canEdit onRestoreEntries={onRestoreEntries} {...handlers} />,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Delete"));
+    expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
+    await fireEvent.press(screen.getByText("Undo"));
+    expect(onRestoreEntries).toHaveBeenCalledWith([cake]);
+  });
+
+  it("adds a line to the only focus list in one swipe", async () => {
+    const onToggleFocusList = jest.fn();
+    await renderScreen(
+      <ListEntriesView
+        listId="list-1"
+        entries={[entry("Cake")]}
+        priorityOptions={[]}
+        canEdit
+        focusLists={[{ id: "today", title: "Today" }]}
+        focusMembership={{}}
+        onToggleFocusList={onToggleFocusList}
+        {...handlers}
+      />,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Focus"));
+
+    expect(onToggleFocusList).toHaveBeenCalledWith("Cake", "today");
+    expect(screen.getByText("Added to Today")).toBeTruthy();
+  });
+
+  it("selects several lines and moves them together", async () => {
+    const onMoveEntries = jest.fn(() => ({ listTitle: "Party", undo: jest.fn() }));
+    await renderScreen(
+      <ListEntriesView
+        listId="list-1"
+        entries={[entry("Cake"), entry("Venue"), entry("Band")]}
+        priorityOptions={[]}
+        canEdit
+        moveTargets={[{ id: "party", title: "Party", folderLabel: "Events" }]}
+        onMoveEntries={onMoveEntries}
+        {...handlers}
+      />,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Select lines"));
+    await fireEvent.press(screen.getByLabelText("Select Cake"));
+    await fireEvent.press(screen.getByLabelText("Select Band"));
+    expect(screen.getByText("2 selected")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Move"));
+    await fireEvent.press(screen.getByLabelText("Move to Party"));
+
+    expect(onMoveEntries).toHaveBeenCalledWith(["Cake", "Band"], "party");
+    expect(screen.getByText("Moved 2 items to Party")).toBeTruthy();
+    expect(screen.queryByText("2 selected")).toBeNull();
+  });
+
+  it("checks off selected lines together", async () => {
+    await renderList([entry("Cake"), entry("Venue")]);
+
+    await fireEvent.press(screen.getByLabelText("Select lines"));
+    await fireEvent.press(screen.getByLabelText("Select Cake"));
+    await fireEvent.press(screen.getByLabelText("Select Venue"));
+    await fireEvent.press(screen.getByText("Check"));
+
+    expect(handlers.onToggleEntry).toHaveBeenCalledTimes(2);
   });
 
   it("is read-only without edit access", async () => {

@@ -58,6 +58,8 @@ const line = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
 });
 
 const actions = {
+  relocateListEntries: jest.fn(() => []),
+  restoreListEntries: jest.fn(),
   updateItem: jest.fn(),
   updateListEntry: jest.fn(),
   insertListEntries: jest.fn(() => []),
@@ -74,6 +76,7 @@ const today = list({ id: "today", title: "Today", listMode: "focus", focusRule: 
 
 const setup = (focus: SavedItem, entries: ListEntry[]) => {
   mockUseTrove.mockReturnValue({
+    folders: [],
     items: [list({}), focus],
     listEntries: entries,
     tagGroups: [],

@@ -290,6 +290,59 @@ describe("TroveProvider focus lists", () => {
   const today = (result: { current: ReturnType<typeof useTrove> }, id: string) =>
     result.current.items.find((item) => item.id === id)!;
 
+  it("moves lines to another list, keeps them in focus lists, and can move them back", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    let groceriesId = "";
+    await act(async () => {
+      groceriesId = result.current.createItem({ folderId: "folder-1", title: "Groceries", type: "list", tagOptionIds: [] })!.id;
+    });
+    await act(async () => {
+      result.current.insertListEntries(groceriesId, null, [{ text: "Milk" }]);
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+    });
+
+    let previous: ReturnType<ReturnType<typeof useTrove>["relocateListEntries"]> = [];
+    await act(async () => {
+      // The focus-list line moves its original.
+      previous = result.current.relocateListEntries([
+        { entryId: `${todayId}>list-1~a`, listId: groceriesId },
+        { entryId: "list-1~b", listId: groceriesId },
+      ]);
+    });
+
+    const lines = (id: string) => result.current.items.find((item) => item.id === id)!.listItems!.map((line) => line.text);
+    expect(lines(groceriesId)).toEqual(["Milk", "Book florist", "Order cake"]);
+    expect(lines("list-1")).toEqual([]);
+    expect(lines(todayId)).toEqual(["Book florist"]);
+
+    await act(async () => {
+      result.current.relocateListEntries(previous);
+    });
+    expect(lines("list-1")).toEqual(["Book florist", "Order cake"]);
+    expect(lines(groceriesId)).toEqual(["Milk"]);
+  });
+
+  it("won't move a line into a focus list", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      expect(result.current.relocateListEntries([{ entryId: "list-1~a", listId: todayId }])).toEqual([]);
+    });
+  });
+
+  it("puts a deleted line back with Undo", async () => {
+    const { result } = await renderTrove();
+    const removed = result.current.listEntries.find((entry) => entry.id === "list-1~a")!;
+    await act(async () => {
+      result.current.deleteListEntry(removed.id);
+    });
+    await act(async () => {
+      expect(result.current.restoreListEntries([removed])).toBe(1);
+    });
+    expect(result.current.items[0].listItems!.map((line) => line.text)).toEqual(["Book florist", "Order cake"]);
+  });
+
   it("pulls lines in from other lists without moving them", async () => {
     const { result } = await renderTrove();
     const todayId = await createToday(result);
