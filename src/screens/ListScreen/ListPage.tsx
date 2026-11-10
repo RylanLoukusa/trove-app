@@ -221,7 +221,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     (list: SavedItem): ListTarget => ({
       id: list.id,
       title: titleOf(list),
-      folderLabel: list.folderId ? getFolderPathLabel(folders, list.folderId) : HOME_LABEL,
+      folderLabel: getFolderPathLabel(folders, list.folderId),
     }),
     [folders, titleOf],
   );
@@ -483,7 +483,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     });
   };
 
-  const folderLabel = item.folderId ? getFolderPathLabel(folders, item.folderId) : HOME_LABEL;
+  const folderLabel = getFolderPathLabel(folders, item.folderId);
   const iconTone = colors.accentDark;
   const menuActions: MenuAction[] = [
     ...(canEdit && entries.length > 0
@@ -568,7 +568,15 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
         <TextInput
           accessibilityLabel="List title"
           value={titleDraft}
-          onChangeText={(next) => setTitleDraft(next.replace(/[\r\n]+/g, " "))}
+          onChangeText={(next) => {
+            setTitleDraft(next.replace(/[\r\n]+/g, " "));
+            // Where Return types a line break instead of submitting, a break
+            // at the end of the title still moves on to the first line.
+            if (/[\r\n]$/.test(next)) {
+              commitTitle();
+              setFocusAddSignal((count) => count + 1);
+            }
+          }}
           onFocus={() => setTitleFocused(true)}
           onBlur={() => {
             setTitleFocused(false);

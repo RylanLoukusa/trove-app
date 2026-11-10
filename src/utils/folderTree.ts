@@ -63,7 +63,7 @@ export const getFolderPath = (folders: Folder[], folderId?: string | null): Fold
 
 export const getFolderPathLabel = (folders: Folder[], folderId?: string | null): string => {
   const path = getFolderPath(folders, folderId);
-  return path.length > 0 ? path.map((folder) => folder.name).join(" > ") : "Home";
+  return path.length > 0 ? path.map((folder) => folder.name).join(" > ") : "Trove";
 };
 
 // A folder's emoji and name, for a row that says where a list is kept.

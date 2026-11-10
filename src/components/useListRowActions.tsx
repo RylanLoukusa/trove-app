@@ -53,7 +53,7 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
                 {
                   key: "folder",
                   label: "Move to folder",
-                  detail: actionList.folderId ? getFolderPathLabel(folders, actionList.folderId) : "Trove",
+                  detail: getFolderPathLabel(folders, actionList.folderId),
                   icon: <FolderInput size={20} color={colors.accentDark} />,
                   onPress: () => setMovingListId(actionList.id),
                 },

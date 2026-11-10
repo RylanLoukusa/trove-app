@@ -6,6 +6,7 @@ import { AppButton } from "../../components/AppButton";
 import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { emojiCategories } from "../../data/emojiPalette";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { HOME_LABEL } from "../../navigation/backLabel";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { spacing } from "../../theme/theme";
@@ -375,7 +376,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             <Text style={styles.parentSummaryIconText}>{selectedParentFolder?.icon ?? "⌂"}</Text>
           </View>
           <View style={styles.parentSummaryCopy}>
-            <Text style={styles.parentSummaryTitle}>{selectedParentFolder?.name ?? "Home"}</Text>
+            <Text style={styles.parentSummaryTitle}>{selectedParentFolder?.name ?? HOME_LABEL}</Text>
             <Text style={styles.parentSummaryMeta}>
               {selectedParentFolder ? getFolderPathLabel(folders, selectedParentFolder.id) : "Top-level folder"}
             </Text>
@@ -419,7 +420,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
               <Text style={styles.homeIconText}>⌂</Text>
             </View>
             <View style={styles.homeCopy}>
-              <Text style={[styles.homeTitle, parentFolderId === null && styles.homeTitleSelected]}>Home</Text>
+              <Text style={[styles.homeTitle, parentFolderId === null && styles.homeTitleSelected]}>{HOME_LABEL}</Text>
               <Text style={styles.homeMeta}>Top-level folder</Text>
             </View>
             {parentFolderId === null && <Text style={styles.homeCheck}>✓</Text>}

@@ -5,6 +5,7 @@ import { Check } from "lucide-react-native";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
+import { RowGroup } from "./Rows";
 
 export type ListTarget = { id: string; title: string; folderLabel: string };
 
@@ -186,13 +187,13 @@ export const SendToListSheet = ({
           {recent.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Recent</Text>
-              <View style={styles.group}>{recent.map((target) => row(target, "recent"))}</View>
+              <RowGroup>{recent.map((target) => row(target, "recent"))}</RowGroup>
             </View>
           )}
           {groups.map((group) => (
             <View key={group.folderLabel} style={styles.section}>
               <Text style={styles.sectionTitle}>{group.folderLabel}</Text>
-              <View style={styles.group}>{group.lists.map((target) => row(target, "all"))}</View>
+              <RowGroup>{group.lists.map((target) => row(target, "all"))}</RowGroup>
             </View>
           ))}
           {groups.length === 0 && (
@@ -287,11 +288,6 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: spacing.xs,
       paddingHorizontal: spacing.xs,
       textTransform: "uppercase",
-    },
-    group: {
-      backgroundColor: colors.surface,
-      borderRadius: 14,
-      overflow: "hidden",
     },
     row: {
       alignItems: "center",

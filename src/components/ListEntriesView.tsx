@@ -938,7 +938,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       {!!toast && (
         <View
           accessibilityLiveRegion="polite"
-          style={[styles.toast, selecting && { bottom: SELECT_BAR_HEIGHT + insets.bottom + spacing.sm }]}
+          style={[
+            styles.toast,
+            // Above the select bar, or the home indicator when no keyboard is up.
+            { bottom: (selecting ? SELECT_BAR_HEIGHT : 0) + (focusedId ? 0 : insets.bottom) + spacing.sm },
+          ]}
         >
           <Text style={styles.toastText}>{toast.message}</Text>
           {!!toast.undo && (
@@ -1720,7 +1724,6 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
       backgroundColor: colors.ink,
       borderRadius: 14,
-      bottom: spacing.sm,
       flexDirection: "row",
       gap: spacing.md,
       justifyContent: "space-between",

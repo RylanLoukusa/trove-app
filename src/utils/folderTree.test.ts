@@ -62,8 +62,8 @@ describe("getFolderPath / getFolderPathLabel", () => {
   });
 
   it("returns 'Home' for a missing/undefined folderId", () => {
-    expect(getFolderPathLabel(smallTree, undefined)).toBe("Home");
-    expect(getFolderPathLabel(smallTree, "does-not-exist")).toBe("Home");
+    expect(getFolderPathLabel(smallTree, undefined)).toBe("Trove");
+    expect(getFolderPathLabel(smallTree, "does-not-exist")).toBe("Trove");
   });
 
   it("terminates instead of looping forever on a corrupt parent cycle", () => {
