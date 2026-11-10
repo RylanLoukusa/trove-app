@@ -1,4 +1,4 @@
-import type { ListEntry, TagGroup, TagOption } from "../types/models";
+import type { FocusRule, ListEntry, TagGroup, TagOption } from "../types/models";
 import { comparePositions } from "./listEntries";
 
 export type ListSortMode = "manual" | "due" | "priority" | "alpha" | "newest";
@@ -151,4 +151,57 @@ export const orderEntriesForView = (
   const open = sorted.filter((entry) => !entry.checked);
   if (settings.completedMode === "hide") return open;
   return [...open, ...sorted.filter((entry) => entry.checked)];
+};
+
+// ---------------------------------------------------------------------------
+// Smart focus list rules
+// ---------------------------------------------------------------------------
+
+export const focusRuleLabels: Record<FocusRule, string> = {
+  due_today: "Due today or overdue",
+  due_week: "Due in the next 7 days",
+  due_weekend: "Due this weekend",
+  high_priority: "Highest priority",
+};
+
+// The Saturday and Sunday of "this weekend" (the coming one, or the current
+// one if today is already Saturday or Sunday).
+const weekendKeys = (today: Date): [string, string] => {
+  const weekday = today.getDay();
+  const saturday = weekday === 6 ? today : weekday === 0 ? addDays(today, -1) : addDays(today, 6 - weekday);
+  return [toDateKey(saturday), toDateKey(addDays(saturday, 1))];
+};
+
+// Whether a line belongs in a focus list with this rule. Open lines match on
+// their due date or priority; done lines stay only on the day they were done,
+// so today's progress shows and tomorrow starts clean.
+export const matchesFocusRule = (
+  entry: ListEntry,
+  rule: FocusRule,
+  priorityOptions: TagOption[],
+  today: Date = new Date(),
+): boolean => {
+  if (entry.kind !== "check") return false;
+  if (entry.checked && (!entry.completedAt || toDateKey(new Date(entry.completedAt)) !== toDateKey(today))) return false;
+
+  const todayKey = toDateKey(today);
+  switch (rule) {
+    case "due_today":
+      return !!entry.dueDate && entry.dueDate <= todayKey;
+    case "due_week":
+      return !!entry.dueDate && entry.dueDate <= toDateKey(addDays(today, 6));
+    case "due_weekend": {
+      const [saturday, sunday] = weekendKeys(today);
+      return entry.dueDate === saturday || entry.dueDate === sunday;
+    }
+    case "high_priority": {
+      const top = priorityOptions.reduce<TagOption | undefined>(
+        (best, option) => (!best || option.sortOrder > best.sortOrder ? option : best),
+        undefined,
+      );
+      return !!top && entry.tagOptionIds.includes(top.id);
+    }
+    default:
+      return false;
+  }
 };

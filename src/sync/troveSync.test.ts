@@ -293,12 +293,13 @@ describe("list entries sync", () => {
     const focusUpsert = rpcCalls.find(
       ([name, params]) => name === "trove_upsert_item_for_current_user" && params.target_item_id === "today",
     )?.[1];
-    expect(focusUpsert).toMatchObject({ target_list_mode: "focus" });
+    // A focus list without a rule sends "none" so a rule set elsewhere is cleared.
+    expect(focusUpsert).toMatchObject({ target_list_mode: "focus", target_focus_rule: "none" });
     // Older apps and public links see the referenced line's text.
     expect(focusUpsert?.target_list_items).toEqual([
       { id: "today>e1", kind: "check", text: "Book florist", checked: false, indentLevel: 0 },
     ]);
-    expect(args("trove_upsert_item_for_current_user")).toMatchObject({ target_list_mode: null });
+    expect(args("trove_upsert_item_for_current_user")).toMatchObject({ target_list_mode: null, target_focus_rule: null });
   });
 
   it("pulls focus lists and their references", async () => {
@@ -306,7 +307,7 @@ describe("list entries sync", () => {
       ...emptyResponses,
       trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
       trove_folders: { data: [folderRow()], error: null },
-      trove_items: { data: [itemRow(), itemRow({ id: "today", title: "Today", list_mode: "focus" })], error: null },
+      trove_items: { data: [itemRow(), itemRow({ id: "today", title: "Today", list_mode: "focus", focus_rule: "due_week" })], error: null },
       trove_list_entries: {
         data: [entryRow("e1"), entryRow("today>e1", { list_id: "today", text: "", ref_entry_id: "e1" })],
         error: null,
@@ -317,7 +318,7 @@ describe("list entries sync", () => {
 
     expect(result.kind).toBe("applied");
     if (result.kind !== "applied") return;
-    expect(result.data.items.find((item) => item.id === "today")?.listMode).toBe("focus");
+    expect(result.data.items.find((item) => item.id === "today")).toMatchObject({ listMode: "focus", focusRule: "due_week" });
     expect(result.data.items.find((item) => item.id === "list-1")?.listMode).toBeUndefined();
     expect(result.data.listEntries.find((entry) => entry.id === "today>e1")?.refEntryId).toBe("e1");
   });

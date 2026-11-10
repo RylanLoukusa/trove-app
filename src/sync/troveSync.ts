@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AccessRole, Folder, ListEntry, SavedItem, ShareScope, TagGroup, TagOption, TroveData } from "../types/models";
+import type { AccessRole, FocusRule, Folder, ListEntry, SavedItem, ShareScope, TagGroup, TagOption, TroveData } from "../types/models";
 import {
   baselineFromTroveData,
   loadSyncBaseline,
@@ -88,6 +88,7 @@ type ItemRow = {
   tags: unknown; // holds tag-option ids, not free text (column name kept for continuity)
   notes: string | null;
   list_mode: string | null;
+  focus_rule: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -400,6 +401,10 @@ const folderRowToFolder = (row: FolderRow, userId: string, share?: ShareRow): Fo
   updatedAt: row.updated_at,
 });
 
+const FOCUS_RULES: FocusRule[] = ["due_today", "due_week", "due_weekend", "high_priority"];
+const focusRuleValue = (value: string | null): FocusRule | undefined =>
+  FOCUS_RULES.find((rule) => rule === value);
+
 const itemRowToSavedItem = (
   row: ItemRow,
   userId: string,
@@ -437,6 +442,7 @@ const itemRowToSavedItem = (
     accessRole: row.owner_id === userId ? "owner" : row.folder_id ? folderAccessById.get(row.folder_id) ?? "viewer" : "viewer",
     notes: row.notes ?? undefined,
     listMode: row.type === "list" && row.list_mode === "focus" ? "focus" : undefined,
+    focusRule: row.type === "list" && row.list_mode === "focus" ? focusRuleValue(row.focus_rule) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -494,6 +500,8 @@ const savedItemToRow = (
     tags: normalizedItem.tagOptionIds ?? [],
     notes: optional(normalizedItem.notes),
     list_mode: isFocusList(normalizedItem) ? "focus" : null,
+    // "none" clears a rule; null (sent by older apps) would keep it.
+    focus_rule: isFocusList(normalizedItem) ? normalizedItem.focusRule ?? "none" : null,
     created_at: normalizedItem.createdAt,
     updated_at: normalizedItem.updatedAt,
   };
@@ -614,6 +622,7 @@ const upsertItemRowForCurrentUser = async (
     target_expected_updated_at: expectedUpdatedAt ?? null,
     target_folder_id: itemRow.folder_id,
     target_list_mode: itemRow.list_mode,
+    target_focus_rule: itemRow.focus_rule,
     target_item_id: itemRow.id,
     target_list_items: itemRow.list_items,
     target_media: itemRow.media,
@@ -888,6 +897,7 @@ const fetchNormalizedTroveDataForUser = async (
           "tags",
           "notes",
           "list_mode",
+          "focus_rule",
           "created_at",
           "updated_at",
         ].join(", "),
@@ -1080,6 +1090,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "tagOptionIds",
     "notes",
     "listMode",
+    "focusRule",
   ]);
 
 const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>

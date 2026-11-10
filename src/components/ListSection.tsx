@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { Eraser, ListPlus } from "lucide-react-native";
+import { Eraser, ListPlus, Sparkles } from "lucide-react-native";
 
 import { ChoiceSheet } from "./ChoiceSheet";
 import { FocusListPicker, FocusPickerList } from "./FocusListPicker";
@@ -8,9 +8,17 @@ import { ListEntriesView } from "./ListEntriesView";
 import { useTrove } from "../storage/storage";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import type { ListEntry, SavedItem } from "../types/models";
-import { isFocusList, legacyEntryPosition, resolveEntries, sortEntries } from "../utils/listEntries";
-import { priorityOptionsFor } from "../utils/listView";
+import type { FocusRule, ListEntry, SavedItem } from "../types/models";
+import {
+  focusReferenceId,
+  generatePositionBetween,
+  generatePositionsBetween,
+  isFocusList,
+  legacyEntryPosition,
+  resolveEntries,
+  sortEntries,
+} from "../utils/listEntries";
+import { focusRuleLabels, matchesFocusRule, priorityOptionsFor } from "../utils/listView";
 
 type Props = { item: SavedItem };
 
@@ -18,6 +26,16 @@ type ClearChoice = "done" | "all";
 const clearOptions: Array<{ value: ClearChoice; label: string; detail: string }> = [
   { value: "done", label: "Clear done items", detail: "Takes finished lines off this list" },
   { value: "all", label: "Clear everything", detail: "Start this list fresh" },
+];
+
+type RuleChoice = FocusRule | "none";
+const ruleOptions: Array<{ value: RuleChoice; label: string; detail?: string }> = [
+  { value: "none", label: "No rule", detail: "Only lines you add yourself" },
+  ...(Object.keys(focusRuleLabels) as FocusRule[]).map((value) => ({
+    value,
+    label: focusRuleLabels[value],
+    detail: "Pulls in matching lines from all your lists",
+  })),
 ];
 
 // The lines of a list item, for both regular and focus lists. A focus list's
@@ -30,11 +48,13 @@ export const ListSection = ({ item }: Props) => {
     listEntries,
     tagGroups,
     tagOptions,
+    updateItem,
     updateListEntry,
     createListEntry,
     moveListEntry,
     deleteListEntry,
     addToFocusList,
+    positionListEntry,
     removeFromFocusList,
     clearFocusList,
     canEditItem,
@@ -43,6 +63,8 @@ export const ListSection = ({ item }: Props) => {
   const canEdit = canEditItem(item.id);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [ruleOpen, setRuleOpen] = useState(false);
+  const rule = isFocus ? item.focusRule : undefined;
 
   const allEntries = listEntries ?? [];
   const entriesById = useMemo(() => new Map(allEntries.map((entry) => [entry.id, entry])), [allEntries]);
@@ -68,19 +90,47 @@ export const ListSection = ({ item }: Props) => {
     return sortEntries(listEntries.filter((entry) => entry.listId === item.id));
   }, [item, listEntries]);
 
-  const entries = useMemo(
+  const pinnedEntries = useMemo(
     () => (isFocus ? resolveEntries(rawEntries, entriesById) : rawEntries),
     [entriesById, isFocus, rawEntries],
   );
 
+  // Lines a smart focus list's rule pulls in that aren't already on it. They
+  // follow the list's own lines, soonest due first, and aren't stored: drag
+  // one to pin it in place.
+  const autoEntries = useMemo<ListEntry[]>(() => {
+    if (!rule) return [];
+    const pinned = new Set(rawEntries.map((entry) => entry.refEntryId).filter(Boolean));
+    const matches = sortEntries(
+      allEntries.filter((entry) => {
+        if (entry.refEntryId || pinned.has(entry.id)) return false;
+        const list = itemsById.get(entry.listId);
+        return !!list && list.type === "list" && !isFocusList(list) && matchesFocusRule(entry, rule, priorityOptions);
+      }),
+    ).sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
+    const lastPosition = rawEntries[rawEntries.length - 1]?.position ?? null;
+    const positions = generatePositionsBetween(lastPosition, null, matches.length);
+    return matches.map((source, index) => ({
+      ...source,
+      id: focusReferenceId(item.id, source.id),
+      listId: item.id,
+      position: positions[index],
+      indentLevel: 0,
+      refEntryId: source.id,
+    }));
+  }, [allEntries, item.id, itemsById, priorityOptions, rawEntries, rule]);
+
+  const autoIds = useMemo(() => new Set(autoEntries.map((entry) => entry.id)), [autoEntries]);
+  const entries = useMemo(() => [...pinnedEntries, ...autoEntries], [autoEntries, pinnedEntries]);
+
   // For a focus list: shown line id -> the original line it stands for.
   const targetIds = useMemo(() => {
     const targets = new Map<string, string>();
-    rawEntries.forEach((entry) => {
+    [...rawEntries, ...autoEntries].forEach((entry) => {
       if (entry.refEntryId) targets.set(entry.id, entry.refEntryId);
     });
     return targets;
-  }, [rawEntries]);
+  }, [autoEntries, rawEntries]);
   const targetOf = useCallback((entryId: string) => targetIds.get(entryId) ?? entryId, [targetIds]);
 
   const referenceSources = useMemo(() => {
@@ -133,7 +183,26 @@ export const ListSection = ({ item }: Props) => {
       .filter((list) => list.entries.length > 0);
   }, [allEntries, isFocus, item.id, items]);
 
-  const selectedSourceIds = useMemo(() => new Set(targetIds.values()), [targetIds]);
+  const selectedSourceIds = useMemo(
+    () => new Set(rawEntries.map((entry) => entry.refEntryId).filter((id): id is string => !!id)),
+    [rawEntries],
+  );
+
+  // In a focus list, moves are worked out from what's on screen, since lines
+  // a rule pulled in have no stored position until they're pinned.
+  const onMoveFocusEntry = useCallback(
+    (entryId: string, afterId: string | null, beforeId: string | null) => {
+      const byId = new Map(entries.map((entry) => [entry.id, entry]));
+      const lower = afterId ? byId.get(afterId)?.position ?? null : null;
+      let upper = beforeId ? byId.get(beforeId)?.position ?? null : null;
+      if (lower !== null && upper !== null && lower >= upper) upper = null;
+      const position = generatePositionBetween(lower, upper);
+      const sourceId = targetIds.get(entryId);
+      if (autoIds.has(entryId) && sourceId) addToFocusList(item.id, [sourceId], position);
+      else positionListEntry(entryId, position);
+    },
+    [addToFocusList, autoIds, entries, item.id, positionListEntry, targetIds],
+  );
 
   const onToggleEntry = useCallback(
     (entry: ListEntry) => {
@@ -162,8 +231,19 @@ export const ListSection = ({ item }: Props) => {
     );
   };
 
-  const focusActions = isFocus && canEdit && (
+  const focusActions = isFocus && (canEdit || !!rule) && (
     <View style={styles.focusActions}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={rule ? `Rule: ${focusRuleLabels[rule]}` : "Add a rule"}
+        disabled={!canEdit}
+        onPress={() => setRuleOpen(true)}
+        style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}
+      >
+        <Sparkles size={16} color={colors.accentDark} />
+        <Text style={styles.clearButtonText}>{rule ? focusRuleLabels[rule] : "Add a rule"}</Text>
+      </Pressable>
+      {canEdit && (
       <Pressable
         accessibilityRole="button"
         onPress={() => setPickerOpen(true)}
@@ -172,7 +252,8 @@ export const ListSection = ({ item }: Props) => {
         <ListPlus size={16} color={colors.onAccent} />
         <Text style={styles.focusButtonText}>Add from lists</Text>
       </Pressable>
-      {entries.length > 0 && (
+      )}
+      {canEdit && pinnedEntries.length > 0 && (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Clear this list"
@@ -195,14 +276,16 @@ export const ListSection = ({ item }: Props) => {
         canEdit={canEdit}
         onToggleEntry={onToggleEntry}
         onUpdateEntry={(entryId, updates) => updateListEntry(targetOf(entryId), updates)}
-        onMoveEntry={moveListEntry}
+        onMoveEntry={isFocus ? onMoveFocusEntry : moveListEntry}
         onAddEntry={(text) => createListEntry(item.id, { text })}
         onDeleteEntry={(entryId) => {
+          if (autoIds.has(entryId)) return;
           if (targetIds.has(entryId)) removeFromFocusList(item.id, entryId);
           else deleteListEntry(entryId);
         }}
         captions={captions}
         referenceSources={referenceSources}
+        ruleEntryIds={autoIds}
         focusLists={focusLists.map((focusList) => ({ id: focusList.id, title: focusList.title }))}
         focusMembership={focusMembership}
         onToggleFocusList={
@@ -214,7 +297,13 @@ export const ListSection = ({ item }: Props) => {
             : undefined
         }
         headerAccessory={focusActions || undefined}
-        emptyText={isFocus ? "Add lines from your other lists, or type one below." : undefined}
+        emptyText={
+          isFocus
+            ? rule
+              ? "Nothing matches this list's rule right now."
+              : "Add lines from your other lists, or type one below."
+            : undefined
+        }
       />
       {isFocus && (
         <>
@@ -238,6 +327,17 @@ export const ListSection = ({ item }: Props) => {
               if (value) onClear(value);
             }}
             onClose={() => setClearOpen(false)}
+          />
+          <ChoiceSheet<RuleChoice>
+            visible={ruleOpen}
+            title="Pull in lines automatically"
+            options={ruleOptions}
+            selectedValue={rule ?? "none"}
+            onSelect={(value) => {
+              setRuleOpen(false);
+              updateItem(item.id, { focusRule: value === "none" ? undefined : value });
+            }}
+            onClose={() => setRuleOpen(false)}
           />
         </>
       )}

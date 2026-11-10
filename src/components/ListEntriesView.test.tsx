@@ -6,6 +6,23 @@ import { ListEntriesView } from "./ListEntriesView";
 import { renderScreen } from "../test-utils/renderScreen";
 import type { ListEntry, TagOption } from "../types/models";
 
+// Stand-in for the swipe gesture: a button that "completes" the swipe.
+jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
+  const React = jest.requireActual("react");
+  const { Pressable, Text, View } = jest.requireActual("react-native");
+  const MockSwipeable = React.forwardRef(
+    ({ children, onSwipeableOpen }: { children: React.ReactNode; onSwipeableOpen: () => void }, _ref: unknown) => (
+      <View>
+        <Pressable accessibilityLabel="Simulate swipe" onPress={() => onSwipeableOpen()}>
+          <Text>swipe</Text>
+        </Pressable>
+        {children}
+      </View>
+    ),
+  );
+  return { __esModule: true, default: MockSwipeable };
+});
+
 const high: TagOption = { id: "high", groupId: "priority", name: "High", color: "#D98A8A", sortOrder: 2, createdAt: "", updatedAt: "" };
 const low: TagOption = { ...high, id: "low", name: "Low", sortOrder: 0 };
 
@@ -168,10 +185,20 @@ describe("ListEntriesView", () => {
     expect(onToggleFocusList).toHaveBeenCalledWith("Cake", "weekend");
   });
 
+  it("checks a line off by swiping it", async () => {
+    const cake = entry("Cake");
+    await renderList([cake]);
+
+    await fireEvent.press(screen.getByLabelText("Simulate swipe"));
+
+    expect(handlers.onToggleEntry).toHaveBeenCalledWith(cake);
+  });
+
   it("is read-only without edit access", async () => {
     await renderList([entry("Cake")], false);
 
     expect(screen.queryByLabelText("Add an item to this list")).toBeNull();
     expect(screen.queryByLabelText("Drag to reorder")).toBeNull();
+    expect(screen.queryByLabelText("Simulate swipe")).toBeNull();
   });
 });

@@ -14,6 +14,8 @@ type Props = {
   canEdit: boolean;
   // Set when this line is shown in a focus list but belongs to another list.
   sourceListTitle?: string;
+  // The line is on a smart focus list because it matches the list's rule.
+  fromRule?: boolean;
   focusLists?: FocusListChoice[];
   selectedFocusListIds?: string[];
   onToggleFocusList?: (focusListId: string) => void;
@@ -28,6 +30,7 @@ export const ListEntrySheet = ({
   priorityOptions,
   canEdit,
   sourceListTitle,
+  fromRule = false,
   focusLists,
   selectedFocusListIds = [],
   onToggleFocusList,
@@ -89,7 +92,10 @@ export const ListEntrySheet = ({
         </View>
 
         {!!sourceListTitle && (
-          <Text style={styles.sourceNote}>From {sourceListTitle}. Changes here show up there too.</Text>
+          <Text style={styles.sourceNote}>
+            From {sourceListTitle}. Changes here show up there too.
+            {fromRule ? " It's here because it matches this list's rule." : ""}
+          </Text>
         )}
 
         <TextInput
@@ -184,7 +190,7 @@ export const ListEntrySheet = ({
           </>
         )}
 
-        {canEdit && (
+        {canEdit && !fromRule && (
           <Pressable
             accessibilityRole="button"
             onPress={onDelete}

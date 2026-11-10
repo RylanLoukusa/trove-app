@@ -6,6 +6,8 @@ export type AccessRole = "owner" | "editor" | "viewer";
 export type ShareScope = "folder_only" | "folder_and_subfolders";
 export type CommentTargetType = "item" | "folder";
 export type CommentReactionType = string;
+// Smart focus lists pull in every line matching their rule.
+export type FocusRule = "due_today" | "due_week" | "due_weekend" | "high_priority";
 
 export type Folder = {
   id: string;
@@ -104,6 +106,7 @@ export type SavedItem = {
   // "focus" marks a list (type "list") that can pull in lines from other
   // lists, such as Today or This weekend.
   listMode?: "focus";
+  focusRule?: FocusRule;
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];

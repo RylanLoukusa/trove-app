@@ -58,6 +58,7 @@ import {
   generatePositionsBetween,
   hydrateItemsWithEntries,
   isFocusList,
+  isValidPosition,
   pruneReferencesToRemoved,
   sortEntries,
 } from "../utils/listEntries";
@@ -103,7 +104,11 @@ type TroveContextValue = TroveData & {
   // Focus lists: add lines from other lists (appended, skipping ones already
   // there), take one back out, or clear the list. Removing or clearing never
   // touches the original lines; clearing does delete the focus list's own.
-  addToFocusList: (focusListId: string, entryIds: string[]) => number;
+  // `position` places a single added line (used when dragging in a line a
+  // rule pulled in); otherwise lines go at the end.
+  addToFocusList: (focusListId: string, entryIds: string[], position?: string) => number;
+  // Moves an entry to an exact position key.
+  positionListEntry: (entryId: string, position: string) => boolean;
   removeFromFocusList: (focusListId: string, entryId: string) => boolean;
   clearFocusList: (focusListId: string, which: "done" | "all") => number;
   createTagGroup: (
@@ -831,7 +836,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [canEditListRecord, markLocalChangePending]);
 
-  const addToFocusList = useCallback<TroveContextValue["addToFocusList"]>((focusListId, entryIds) => {
+  const addToFocusList = useCallback<TroveContextValue["addToFocusList"]>((focusListId, entryIds, position) => {
     const { items, listEntries } = dataRef.current;
     const focusList = items.find((candidate) => candidate.id === focusListId);
     if (!isFocusList(focusList) || !canEditListRecord(focusListId)) {
@@ -854,7 +859,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     if (sources.length === 0) return 0;
 
     const siblings = sortEntries(listEntries.filter((entry) => entry.listId === focusListId));
-    const positions = generatePositionsBetween(siblings[siblings.length - 1]?.position ?? null, null, sources.length);
+    const positions =
+      position && sources.length === 1
+        ? [position]
+        : generatePositionsBetween(siblings[siblings.length - 1]?.position ?? null, null, sources.length);
     const timestamp = new Date().toISOString();
     const references: ListEntry[] = sources.map((source, index) => ({
       id: focusReferenceId(focusListId, source.id),
@@ -880,6 +888,21 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     markLocalChangePending();
     return references.length;
   }, [activeUserId, canEditListRecord, markLocalChangePending, setData]);
+
+  const positionListEntry = useCallback<TroveContextValue["positionListEntry"]>((entryId, position) => {
+    const entry = dataRef.current.listEntries.find((candidate) => candidate.id === entryId);
+    if (!entry || !canEditListRecord(entry.listId) || !isValidPosition(position)) return false;
+    if (entry.position === position) return true;
+    const timestamp = new Date().toISOString();
+    setData((current) => ({
+      ...current,
+      listEntries: current.listEntries.map((candidate) =>
+        candidate.id === entryId ? { ...candidate, position, updatedAt: timestamp } : candidate,
+      ),
+    }));
+    markLocalChangePending();
+    return true;
+  }, [canEditListRecord, markLocalChangePending, setData]);
 
   const removeFromFocusList = useCallback<TroveContextValue["removeFromFocusList"]>((focusListId, entryId) => {
     const reference = dataRef.current.listEntries.find(
@@ -1273,6 +1296,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       moveListEntry,
       deleteListEntry,
       addToFocusList,
+      positionListEntry,
       removeFromFocusList,
       clearFocusList,
       createTagGroup,
@@ -1307,6 +1331,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       moveListEntry,
       deleteListEntry,
       addToFocusList,
+      positionListEntry,
       removeFromFocusList,
       clearFocusList,
       createTagGroup,
