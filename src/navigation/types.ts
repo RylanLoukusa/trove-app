@@ -11,7 +11,8 @@ export type RootStackParamList = {
   Folder: { folderId: string };
   AddEditFolder: { folderId?: string; parentFolderId?: string | null } | undefined;
   AddEditItem: { itemId?: string; folderId?: string; sharedImportId?: string } | undefined;
-  ItemDetail: { itemId: string };
+  // `newList`: just created from a folder; the cursor starts in the title.
+  ItemDetail: { itemId: string; newList?: boolean };
   Search: { query?: string } | undefined;
   ShareFolder: { folderId: string };
   Profile: undefined;

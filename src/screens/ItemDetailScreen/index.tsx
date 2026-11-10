@@ -225,7 +225,14 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
           windowSize={3}
           onMomentumScrollEnd={handleMomentumScrollEnd}
-          renderItem={({ item: pageItem }) => <ItemDetailPage item={pageItem} width={width} navigation={navigation} />}
+          renderItem={({ item: pageItem }) => (
+            <ItemDetailPage
+              item={pageItem}
+              width={width}
+              navigation={navigation}
+              autoFocusTitle={!!route.params.newList && pageItem.id === route.params.itemId}
+            />
+          )}
         />
       </KeyboardAvoidingView>
       {isMessageStepHere && currentStep ? (

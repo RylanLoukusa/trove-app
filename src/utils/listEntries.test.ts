@@ -1,6 +1,8 @@
 import type { ListEntry, SavedItem } from "../types/models";
 import { normalizeTroveData } from "./itemTypes";
 import {
+  parsePastedLines,
+  splitEnteredText,
   applyListItemsToEntries,
   focusReferenceId,
   groupResolvedEntriesByList,
@@ -318,5 +320,68 @@ describe("focus list references", () => {
     expect(pruneReferencesToRemoved([source, reference, hidden, own], [reference, hidden, own])).toEqual([hidden, own]);
     const unchanged = [source, reference];
     expect(pruneReferencesToRemoved(unchanged, unchanged)).toBe(unchanged);
+  });
+});
+
+describe("parsePastedLines", () => {
+  it("cleans bullets, numbers and checkboxes and skips blank rows", () => {
+    expect(parsePastedLines("- Milk\n\n* Eggs\n• Bread\n1. Butter\n2) Jam\n[ ] Rice\n- [x] Beans\n☑ Salt")).toEqual([
+      { text: "Milk", checked: false, indentLevel: 0 },
+      { text: "Eggs", checked: false, indentLevel: 0 },
+      { text: "Bread", checked: false, indentLevel: 0 },
+      { text: "Butter", checked: false, indentLevel: 0 },
+      { text: "Jam", checked: false, indentLevel: 0 },
+      { text: "Rice", checked: false, indentLevel: 0 },
+      { text: "Beans", checked: true, indentLevel: 0 },
+      { text: "Salt", checked: true, indentLevel: 0 },
+    ]);
+  });
+
+  it("reads leading tabs and spaces as indents, up to the limit", () => {
+    expect(parsePastedLines("Trip\r\n  Passport\n\tTickets\n          Deep").map((line) => line.indentLevel)).toEqual([0, 1, 1, 3]);
+  });
+
+  it("keeps text that only looks like a marker", () => {
+    expect(parsePastedLines("-5 degrees\n2024 taxes")).toEqual([
+      { text: "-5 degrees", checked: false, indentLevel: 0 },
+      { text: "2024 taxes", checked: false, indentLevel: 0 },
+    ]);
+  });
+});
+
+describe("splitEnteredText", () => {
+  it("treats Return at the end as a new empty line", () => {
+    expect(splitEnteredText("Milk", "Milk\n")).toEqual({
+      keep: "Milk",
+      added: [{ text: "", checked: false, indentLevel: 0 }],
+      isPaste: false,
+    });
+  });
+
+  it("splits a line at the cursor on Return", () => {
+    expect(splitEnteredText("Milkeggs", "Milk\neggs").added[0].text).toBe("eggs");
+  });
+
+  it("still starts a new line when autocorrect changes the word as Return is pressed", () => {
+    const result = splitEnteredText("Mlik", "Milk \n");
+    expect(result.isPaste).toBe(false);
+    expect(result.keep).toBe("Milk ");
+  });
+
+  it("turns a paste into an empty line into one line per row", () => {
+    expect(splitEnteredText("", "- Milk\n- Eggs\n- Bread")).toEqual({
+      keep: "Milk",
+      added: [
+        { text: "Eggs", checked: false, indentLevel: 0 },
+        { text: "Bread", checked: false, indentLevel: 0 },
+      ],
+      isPaste: true,
+    });
+  });
+
+  it("keeps a line's own text when lines are pasted after it", () => {
+    const result = splitEnteredText("Party: ", "Party: cake\nballoons\ncandles");
+    expect(result.keep).toBe("Party: cake");
+    expect(result.added.map((line) => line.text)).toEqual(["balloons", "candles"]);
   });
 });

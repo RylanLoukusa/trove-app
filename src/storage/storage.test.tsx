@@ -191,6 +191,33 @@ describe("TroveProvider list entry actions", () => {
     });
   });
 
+  it("inserts lines right after a line, in order, keeping indent and checked state", async () => {
+    const { result } = await renderTrove();
+    const [florist] = result.current.items[0].listItems!;
+
+    await act(async () => {
+      result.current.insertListEntries("list-1", florist.id, [
+        { text: " Roses ", indentLevel: 1, checked: false },
+        { text: "Tulips", indentLevel: 9, checked: true },
+      ]);
+    });
+
+    const lines = result.current.items[0].listItems!;
+    expect(lines.map((line) => line.text)).toEqual(["Book florist", "Roses", "Tulips", "Order cake"]);
+    expect(lines.map((line) => line.indentLevel)).toEqual([0, 1, 3, 0]);
+    expect(lines[2].checked).toBe(true);
+  });
+
+  it("adds pasted lines at the end when there's no line to follow", async () => {
+    const { result } = await renderTrove();
+
+    await act(async () => {
+      result.current.insertListEntries("list-1", null, [{ text: "Venue" }, { text: "Band" }]);
+    });
+
+    expect(result.current.items[0].listItems!.map((line) => line.text)).toEqual(["Book florist", "Order cake", "Venue", "Band"]);
+  });
+
   it("moves a line between two others by changing only its position", async () => {
     const { result } = await renderTrove();
     await act(async () => {

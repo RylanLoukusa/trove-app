@@ -60,7 +60,7 @@ const line = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
 const actions = {
   updateItem: jest.fn(),
   updateListEntry: jest.fn(),
-  createListEntry: jest.fn(),
+  insertListEntries: jest.fn(() => []),
   moveListEntry: jest.fn(),
   deleteListEntry: jest.fn(),
   addToFocusList: jest.fn(),
@@ -84,7 +84,7 @@ const setup = (focus: SavedItem, entries: ListEntry[]) => {
 };
 
 const shownTexts = () =>
-  screen.getAllByRole("button", { name: /^Edit / }).map((button) => button.props.accessibilityLabel.replace(/^Edit /, ""));
+  screen.getAllByTestId("list-line-input").map((input) => input.props.value);
 
 describe("ListSection smart focus lists", () => {
   beforeEach(async () => {

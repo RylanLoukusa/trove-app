@@ -367,3 +367,55 @@ export const applyListItemsToEntries = ({
 
   return [...otherEntries, ...nextListEntries];
 };
+
+export const MAX_ENTRY_INDENT = 3;
+
+export type PastedLine = { text: string; checked: boolean; indentLevel: number };
+
+// Leading list markers people paste in from Notes, Reminders, messages or
+// Markdown: bullets, numbers, and [ ] / [x] checkboxes.
+const bulletMarker = /^(?:[-*+•◦▪‣–—]|\d{1,3}[.)])\s+/;
+const checkboxMarker = /^(?:\[( |x|X)\]|([☐□])|([☑☒✓✔✅]))\s*/;
+
+// Turns pasted text into list lines: one per non-blank row, markers removed,
+// leading tabs or pairs of spaces as indents, and [x] lines already checked.
+export const parsePastedLines = (raw: string): PastedLine[] =>
+  raw
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((row) => {
+      const leading = row.match(/^[ \t]*/)?.[0] ?? "";
+      const width = [...leading].reduce((sum, char) => sum + (char === "\t" ? 2 : 1), 0);
+      let text = row.slice(leading.length).trimEnd();
+      let checked = false;
+      text = text.replace(bulletMarker, "");
+      const box = text.match(checkboxMarker);
+      if (box) {
+        checked = (!!box[1] && box[1].toLowerCase() === "x") || !!box[3];
+        text = text.slice(box[0].length);
+      }
+      return { text: text.trim(), checked, indentLevel: Math.min(Math.floor(width / 2), MAX_ENTRY_INDENT) };
+    })
+    .filter((line) => line.text.length > 0);
+
+// What a line's text box should do with new text that contains line breaks:
+// either Return was pressed (split the line at the cursor, like a notes app,
+// and always start a new line), or several lines were pasted (one new line
+// per pasted row, markers cleaned off).
+export const splitEnteredText = (
+  previous: string,
+  next: string,
+): { keep: string; added: PastedLine[]; isPaste: boolean } => {
+  const normalized = next.replace(/\r\n?/g, "\n");
+  const [head, ...rest] = normalized.split("\n");
+  const tail = rest.join("\n");
+  const isPaste = rest.length > 1 || (!!tail.trim() && normalized.length - previous.length > 1);
+  if (!isPaste) {
+    return { keep: head, added: [{ text: tail.trim(), checked: false, indentLevel: 0 }], isPaste };
+  }
+  if (!previous.trim()) {
+    const lines = parsePastedLines(normalized);
+    return { keep: lines[0]?.text ?? "", added: lines.slice(1), isPaste };
+  }
+  return { keep: head, added: parsePastedLines(tail), isPaste };
+};

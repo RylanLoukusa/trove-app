@@ -59,6 +59,7 @@ import {
   hydrateItemsWithEntries,
   isFocusList,
   isValidPosition,
+  MAX_ENTRY_INDENT,
   pruneReferencesToRemoved,
   sortEntries,
 } from "../utils/listEntries";
@@ -98,6 +99,13 @@ type TroveContextValue = TroveData & {
     listId: string,
     input: Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "dueDate" | "tagOptionIds">>,
   ) => ListEntry | null;
+  // Adds lines right after `afterEntryId` (or at the end when it's null or not
+  // on this list), in order. Used for Return and for pasting many lines.
+  insertListEntries: (
+    listId: string,
+    afterEntryId: string | null,
+    inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel">>>,
+  ) => ListEntry[];
   // Places the entry between two neighbours (either may be null for the ends).
   moveListEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => boolean;
   deleteListEntry: (entryId: string) => boolean;
@@ -797,6 +805,45 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return entry;
   }, [activeUserId, canEditListRecord, markLocalChangePending]);
 
+  const insertListEntries = useCallback<TroveContextValue["insertListEntries"]>((listId, afterEntryId, inputs) => {
+    const list = dataRef.current.items.find((candidate) => candidate.id === listId);
+    if (!list || !canEditListRecord(listId)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return [];
+    }
+    if (inputs.length === 0) return [];
+
+    const siblings = sortEntries(dataRef.current.listEntries.filter((entry) => entry.listId === listId));
+    const afterIndex = afterEntryId ? siblings.findIndex((entry) => entry.id === afterEntryId) : -1;
+    const after = afterIndex >= 0 ? siblings[afterIndex] : siblings[siblings.length - 1];
+    const before = afterIndex >= 0 ? siblings[afterIndex + 1] : undefined;
+    const positions = generatePositionsBetween(after?.position ?? null, before?.position ?? null, inputs.length);
+    const fallbackKind = after?.kind ?? siblings[siblings.length - 1]?.kind ?? "check";
+    const timestamp = new Date().toISOString();
+    const created: ListEntry[] = inputs.map((input, index) => {
+      const kind = input.kind ?? fallbackKind;
+      const checked = kind === "check" && !!input.checked;
+      return {
+        id: createId("entry"),
+        listId,
+        kind,
+        text: input.text.trim(),
+        checked,
+        completedAt: checked ? timestamp : undefined,
+        indentLevel: Math.max(0, Math.min(input.indentLevel ?? 0, MAX_ENTRY_INDENT)),
+        position: positions[index],
+        tagOptionIds: [],
+        ownerId: list.ownerId ?? activeUserId ?? undefined,
+        createdBy: activeUserId ?? undefined,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    });
+    setData((current) => ({ ...current, listEntries: [...current.listEntries, ...created] }));
+    markLocalChangePending();
+    return created;
+  }, [activeUserId, canEditListRecord, markLocalChangePending]);
+
   const moveListEntry = useCallback<TroveContextValue["moveListEntry"]>((entryId, afterEntryId, beforeEntryId) => {
     const entries = dataRef.current.listEntries;
     const entry = entries.find((candidate) => candidate.id === entryId);
@@ -1293,6 +1340,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       deleteItem,
       updateListEntry,
       createListEntry,
+      insertListEntries,
       moveListEntry,
       deleteListEntry,
       addToFocusList,
@@ -1328,6 +1376,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       deleteItem,
       updateListEntry,
       createListEntry,
+      insertListEntries,
       moveListEntry,
       deleteListEntry,
       addToFocusList,

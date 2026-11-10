@@ -1,9 +1,22 @@
-import React, { ReactNode, useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReanimatedSwipeable, { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { ArrowUpDown, CalendarDays, Check, CheckCheck, GripVertical, ListChecks, Plus, Undo2 } from "lucide-react-native";
+import {
+  ArrowUpDown,
+  CalendarDays,
+  Check,
+  CheckCheck,
+  Flag,
+  GripVertical,
+  Info,
+  ListChecks,
+  ListIndentDecrease,
+  ListIndentIncrease,
+  Plus,
+  Undo2,
+} from "lucide-react-native";
 
 import { ChoiceSheet } from "./ChoiceSheet";
 import { FocusListChoice, ListEntrySheet } from "./ListEntrySheet";
@@ -12,6 +25,7 @@ import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry, TagOption } from "../types/models";
 import { bulletGlyphForIndent } from "../utils/itemTypes";
+import { MAX_ENTRY_INDENT, PastedLine, splitEnteredText } from "../utils/listEntries";
 import {
   CompletedMode,
   completedModeLabels,
@@ -21,7 +35,16 @@ import {
   ListSortMode,
   listSortLabels,
   orderEntriesForView,
+  quickDueDates,
+  withPriority,
 } from "../utils/listView";
+
+export type EntryUpdates = Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds" | "indentLevel">>;
+
+// Shared by every line's text box so iOS shows one bar above the keyboard.
+const KEYBOARD_BAR_ID = "trove-list-keyboard-bar";
+const ADD_ROW_ID = "__add";
+const COMMIT_DELAY_MS = 700;
 
 type Props = {
   listId: string;
@@ -29,9 +52,10 @@ type Props = {
   priorityOptions: TagOption[];
   canEdit: boolean;
   onToggleEntry: (entry: ListEntry) => void;
-  onUpdateEntry: (entryId: string, updates: Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds">>) => void;
+  onUpdateEntry: (entryId: string, updates: EntryUpdates) => void;
   onMoveEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => void;
-  onAddEntry: (text: string) => void;
+  // Adds lines right after a line (null: at the end) and returns their ids.
+  onInsertEntries: (afterEntryId: string | null, lines: PastedLine[]) => string[];
   onDeleteEntry: (entryId: string) => void;
   // Small line under an entry's text, such as the list a focus-list line
   // comes from, or the focus lists a line is in.
@@ -47,6 +71,8 @@ type Props = {
   onToggleFocusList?: (entryId: string, focusListId: string) => void;
   headerAccessory?: ReactNode;
   emptyText?: string;
+  // Bump to put the cursor in the "New item" line (e.g. after a list's title).
+  focusAddSignal?: number;
 };
 
 const sortOptions = (Object.keys(listSortLabels) as ListSortMode[]).map((value) => ({ value, label: listSortLabels[value] }));
@@ -82,7 +108,7 @@ export const ListEntriesView = ({
   onToggleEntry,
   onUpdateEntry,
   onMoveEntry,
-  onAddEntry,
+  onInsertEntries,
   onDeleteEntry,
   captions,
   referenceSources,
@@ -92,6 +118,7 @@ export const ListEntriesView = ({
   onToggleFocusList,
   headerAccessory,
   emptyText = "Nothing on this list yet.",
+  focusAddSignal,
 }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -155,12 +182,229 @@ export const ListEntriesView = ({
     return 0;
   };
 
-  const submitDraft = () => {
+  // --- Typing in place -----------------------------------------------------
+  const inputRefs = useRef(new Map<string, TextInput>());
+  const pendingFocusRef = useRef<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quickDates = useMemo(() => quickDueDates(), [focusedId]);
+
+  const registerInput = useCallback((id: string, input: TextInput | null) => {
+    if (input) inputRefs.current.set(id, input);
+    else inputRefs.current.delete(id);
+  }, []);
+
+  const focusLine = useCallback((id: string) => {
+    const input = inputRefs.current.get(id);
+    if (input) {
+      input.focus();
+      pendingFocusRef.current = null;
+    } else {
+      // Not rendered yet (just created): focus it after the next render.
+      pendingFocusRef.current = id;
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = pendingFocusRef.current;
+    if (id && inputRefs.current.has(id)) {
+      pendingFocusRef.current = null;
+      requestAnimationFrame(() => inputRefs.current.get(id)?.focus());
+    }
+  });
+
+  useEffect(() => {
+    if (focusAddSignal) focusLine(ADD_ROW_ID);
+  }, [focusAddSignal, focusLine]);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const showToast = useCallback((message: string, undo?: () => void) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, undo });
+    toastTimer.current = setTimeout(() => setToast(null), 5000);
+  }, []);
+
+  // Lines that live on another list, or that a rule pulled in: they can be
+  // edited here but not deleted by emptying them.
+  const isBorrowed = useCallback(
+    (id: string) => !!referenceSources?.[id] || !!ruleEntryIds?.has(id),
+    [referenceSources, ruleEntryIds],
+  );
+
+  const announcePaste = useCallback(
+    (ids: string[]) => {
+      if (ids.length < 2) return;
+      showToast(`Added ${ids.length} items`, () => ids.forEach((id) => onDeleteEntry(id)));
+    },
+    [onDeleteEntry, showToast],
+  );
+
+  // Return or a paste inside an existing line.
+  const splitLine = useCallback(
+    (entry: ListEntry, previous: string, next: string) => {
+      const { keep, added, isPaste } = splitEnteredText(previous, next);
+      if (keep.trim() && keep.trim() !== entry.text) onUpdateEntry(entry.id, { text: keep.trim() });
+      if (!isPaste && !keep.trim() && !added[0]?.text) {
+        // Return on an empty line ends typing, like a notes app.
+        Keyboard.dismiss();
+        return keep;
+      }
+      const lines = added.map((line) => ({
+        ...line,
+        kind: entry.kind,
+        indentLevel: isPaste ? Math.min(line.indentLevel + entry.indentLevel, MAX_ENTRY_INDENT) : entry.indentLevel,
+      }));
+      if (lines.length === 0) return keep;
+      const ids = onInsertEntries(entry.id, lines);
+      if (ids.length) focusLine(ids[ids.length - 1]);
+      if (isPaste) announcePaste(ids);
+      return keep;
+    },
+    [announcePaste, focusLine, onInsertEntries, onUpdateEntry],
+  );
+
+  // Return or a paste in the "New item" line at the bottom.
+  const changeAddDraft = (next: string) => {
+    if (!/[\r\n]/.test(next)) {
+      setDraft(next);
+      return;
+    }
+    const { keep, added, isPaste } = splitEnteredText(draft, next);
+    const lines: PastedLine[] = [
+      ...(keep.trim() ? [{ text: keep.trim(), checked: false, indentLevel: 0 }] : []),
+      ...(isPaste ? added : []),
+    ];
+    setDraft("");
+    if (lines.length === 0) {
+      Keyboard.dismiss();
+      return;
+    }
+    const ids = onInsertEntries(null, lines);
+    if (isPaste) announcePaste(ids);
+  };
+
+  const commitAddDraft = () => {
     const text = draft.trim();
     if (!text) return;
-    onAddEntry(text);
+    onInsertEntries(null, [{ text, checked: false, indentLevel: 0 }]);
     setDraft("");
   };
+
+  // Backspace in an empty line: go to the end of the line above. The empty
+  // line is then deleted when it loses focus.
+  const backspaceEmpty = (entryId: string) => {
+    const index = visibleEntries.findIndex((entry) => entry.id === entryId);
+    const above = index > 0 ? visibleEntries[index - 1] : null;
+    if (above) focusLine(above.id);
+  };
+
+  const focusedEntry = focusedId && focusedId !== ADD_ROW_ID ? entries.find((entry) => entry.id === focusedId) ?? null : null;
+  const canIndentFocused = !!focusedEntry && settings.sortMode === "manual" && !isBorrowed(focusedEntry.id);
+  const focusedPriority = focusedEntry ? entryPriority(focusedEntry, priorityOptions) : undefined;
+
+  const cyclePriority = () => {
+    if (!focusedEntry || priorityOptions.length === 0) return;
+    const ordered = [...priorityOptions].sort((a, b) => a.sortOrder - b.sortOrder);
+    const index = focusedPriority ? ordered.findIndex((option) => option.id === focusedPriority.id) : -1;
+    const next = ordered[index + 1] ?? null;
+    onUpdateEntry(focusedEntry.id, { tagOptionIds: withPriority(focusedEntry.tagOptionIds, priorityOptions, next?.id ?? null) });
+  };
+
+  const keyboardBar = focusedId ? (
+    <View style={styles.bar}>
+      {datesOpen && focusedEntry ? (
+        <View style={styles.barRow}>
+          {quickDates.map((quick) => (
+            <BarButton
+              key={quick.key}
+              label={quick.label}
+              selected={focusedEntry.dueDate === quick.value}
+              onPress={() => {
+                onUpdateEntry(focusedEntry.id, { dueDate: focusedEntry.dueDate === quick.value ? undefined : quick.value });
+                setDatesOpen(false);
+              }}
+              styles={styles}
+            />
+          ))}
+          {!!focusedEntry.dueDate && (
+            <BarButton
+              label="Clear"
+              onPress={() => {
+                onUpdateEntry(focusedEntry.id, { dueDate: undefined });
+                setDatesOpen(false);
+              }}
+              styles={styles}
+            />
+          )}
+        </View>
+      ) : (
+        <View style={styles.barRow}>
+          {canIndentFocused && (
+            <>
+              <BarButton
+                accessibilityLabel="Outdent line"
+                disabled={!focusedEntry || focusedEntry.indentLevel <= 0}
+                icon={<ListIndentDecrease size={18} color={colors.accentDark} />}
+                onPress={() =>
+                  focusedEntry && onUpdateEntry(focusedEntry.id, { indentLevel: Math.max(focusedEntry.indentLevel - 1, 0) })
+                }
+                styles={styles}
+              />
+              <BarButton
+                accessibilityLabel="Indent line"
+                disabled={!focusedEntry || focusedEntry.indentLevel >= MAX_ENTRY_INDENT}
+                icon={<ListIndentIncrease size={18} color={colors.accentDark} />}
+                onPress={() =>
+                  focusedEntry &&
+                  onUpdateEntry(focusedEntry.id, { indentLevel: Math.min(focusedEntry.indentLevel + 1, MAX_ENTRY_INDENT) })
+                }
+                styles={styles}
+              />
+            </>
+          )}
+          {!!focusedEntry && (
+            <BarButton
+              accessibilityLabel="Set due date"
+              icon={<CalendarDays size={18} color={colors.accentDark} />}
+              label={focusedEntry.dueDate ? describeDueDate(focusedEntry.dueDate)?.label : undefined}
+              onPress={() => setDatesOpen(true)}
+              styles={styles}
+            />
+          )}
+          {!!focusedEntry && priorityOptions.length > 0 && (
+            <BarButton
+              accessibilityLabel={`Priority: ${focusedPriority?.name ?? "none"}. Tap to change`}
+              icon={<Flag size={18} color={focusedPriority?.color ?? colors.accentDark} />}
+              label={focusedPriority?.name}
+              onPress={cyclePriority}
+              styles={styles}
+            />
+          )}
+          {!!focusedEntry && (
+            <BarButton
+              accessibilityLabel="Line details"
+              icon={<Info size={18} color={colors.accentDark} />}
+              onPress={() => {
+                const id = focusedEntry.id;
+                Keyboard.dismiss();
+                setFocusedId(null);
+                setOpenEntryId(id);
+              }}
+              styles={styles}
+            />
+          )}
+          <View style={styles.barSpacer} />
+          <BarButton label="Done" strong onPress={() => Keyboard.dismiss()} styles={styles} />
+        </View>
+      )}
+    </View>
+  ) : null;
+  const inlineBar = Platform.OS !== "ios" ? keyboardBar : null;
 
   const openEntry = entries.find((entry) => entry.id === openEntryId) ?? null;
 
@@ -214,6 +458,21 @@ export const ListEntriesView = ({
           }}
           onToggle={() => onToggleEntry(entry)}
           onOpen={() => setOpenEntryId(entry.id)}
+          registerInput={(input) => registerInput(entry.id, input)}
+          onCommitText={(text) => {
+            if (text !== entry.text) onUpdateEntry(entry.id, { text });
+          }}
+          onSplit={(previous, next) => splitLine(entry, previous, next)}
+          onBackspaceEmpty={() => backspaceEmpty(entry.id)}
+          onFocusLine={() => {
+            setDatesOpen(false);
+            setFocusedId(entry.id);
+          }}
+          onBlurEmpty={() => {
+            if (!isBorrowed(entry.id)) onDeleteEntry(entry.id);
+          }}
+          onBlurLine={() => setFocusedId((current) => (current === entry.id ? null : current))}
+          belowRow={focusedId === entry.id ? inlineBar : null}
           onDragStart={() => startDrag(entry.id, index)}
           onDragUpdate={(translationY) => updateDrag(index, translationY)}
           onDragEnd={() => endDrag(entry.id, index)}
@@ -233,25 +492,57 @@ export const ListEntriesView = ({
       )}
 
       {canEdit && (
-        <View style={styles.addRow}>
+        <Pressable
+          accessible={false}
+          onPress={() => focusLine(ADD_ROW_ID)}
+          style={styles.addRow}
+        >
           <Plus size={18} color={colors.muted} />
           <TextInput
+            ref={(input) => registerInput(ADD_ROW_ID, input)}
             accessibilityLabel="Add an item to this list"
+            accessibilityHint="Press return for the next line. Pasting several lines adds them all."
             value={draft}
-            onChangeText={setDraft}
-            onSubmitEditing={submitDraft}
-            placeholder="Add an item"
+            onChangeText={changeAddDraft}
+            onFocus={() => {
+              setDatesOpen(false);
+              setFocusedId(ADD_ROW_ID);
+            }}
+            onBlur={() => {
+              commitAddDraft();
+              setFocusedId((current) => (current === ADD_ROW_ID ? null : current));
+            }}
+            placeholder="New item"
             placeholderTextColor={colors.muted}
-            returnKeyType="done"
-            blurOnSubmit={false}
+            multiline
+            scrollEnabled={false}
+            inputAccessoryViewID={KEYBOARD_BAR_ID}
             style={styles.addInput}
           />
-          {!!draft.trim() && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Add item" hitSlop={8} onPress={submitDraft}>
-              <Text style={styles.addButton}>Add</Text>
+        </Pressable>
+      )}
+      {focusedId === ADD_ROW_ID && inlineBar}
+
+      {!!toast && (
+        <View accessibilityLiveRegion="polite" style={styles.toast}>
+          <Text style={styles.toastText}>{toast.message}</Text>
+          {!!toast.undo && (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                toast.undo?.();
+                setToast(null);
+              }}
+            >
+              <Text style={styles.toastAction}>Undo</Text>
             </Pressable>
           )}
         </View>
+      )}
+
+      {canEdit && Platform.OS === "ios" && (
+        <InputAccessoryView nativeID={KEYBOARD_BAR_ID}>{keyboardBar}</InputAccessoryView>
       )}
 
       <ChoiceSheet
@@ -312,6 +603,15 @@ type EntryRowProps = {
   onDragStart: () => void;
   onDragUpdate: (translationY: number) => void;
   onDragEnd: () => void;
+  registerInput: (input: TextInput | null) => void;
+  onCommitText: (text: string) => void;
+  // Text with a line break in it (Return or a paste); returns what stays.
+  onSplit: (previous: string, next: string) => string;
+  onBackspaceEmpty: () => void;
+  onFocusLine: () => void;
+  onBlurLine: () => void;
+  onBlurEmpty: () => void;
+  belowRow?: ReactNode;
 };
 
 const dueToneColor = (tone: DueTone, colors: ThemeColors): string =>
@@ -334,8 +634,46 @@ const EntryRow = ({
   onDragStart,
   onDragUpdate,
   onDragEnd,
+  registerInput,
+  onCommitText,
+  onSplit,
+  onBackspaceEmpty,
+  onFocusLine,
+  onBlurLine,
+  onBlurEmpty,
+  belowRow,
 }: EntryRowProps) => {
   const dragY = useSharedValue(0);
+  const [draft, setDraft] = useState(entry.text);
+  const focusedRef = useRef(false);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Follow changes from elsewhere (sync, the details sheet) unless typing.
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(entry.text);
+  }, [entry.text]);
+
+  useEffect(() => () => {
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+  }, []);
+
+  const commit = (text: string) => {
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = null;
+    const trimmed = text.trim();
+    if (trimmed) onCommitText(trimmed);
+  };
+
+  const changeText = (next: string) => {
+    if (/[\r\n]/.test(next)) {
+      if (commitTimer.current) clearTimeout(commitTimer.current);
+      setDraft(onSplit(draft, next).trim());
+      return;
+    }
+    setDraft(next);
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(() => commit(next), COMMIT_DELAY_MS);
+  };
   const swipeRef = useRef<SwipeableMethods>(null);
   const due = entry.dueDate ? describeDueDate(entry.dueDate) : null;
   // Swiping a checklist line to the right checks it off (or back on).
@@ -393,15 +731,56 @@ const EntryRow = ({
         ) : (
           <Text style={[styles.marker, styles.bullet]}>{bulletGlyphForIndent(entry.indentLevel)}</Text>
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={canEdit ? `Edit ${entry.text}` : entry.text}
-          accessibilityHint={canEdit ? "Opens due date, priority and notes" : undefined}
-          disabled={!canEdit && !hasMeta}
-          onPress={onOpen}
-          style={styles.textBlock}
-        >
-          <Text style={[styles.text, entry.checked && styles.textDone]}>{entry.text}</Text>
+        <View style={styles.textBlock}>
+          {canEdit ? (
+            <TextInput
+              ref={registerInput}
+              testID="list-line-input"
+              accessibilityLabel={entry.text || "Empty line"}
+              accessibilityHint="Edit the text. Return adds a line below."
+              value={draft}
+              onChangeText={changeText}
+              onFocus={() => {
+                focusedRef.current = true;
+                onFocusLine();
+              }}
+              onBlur={() => {
+                focusedRef.current = false;
+                if (draft.trim()) commit(draft);
+                else {
+                  if (commitTimer.current) clearTimeout(commitTimer.current);
+                  setDraft(entry.text);
+                  onBlurEmpty();
+                }
+                onBlurLine();
+              }}
+              onKeyPress={(event) => {
+                if (event.nativeEvent.key === "Backspace" && draft === "") onBackspaceEmpty();
+              }}
+              multiline
+              scrollEnabled={false}
+              inputAccessoryViewID={KEYBOARD_BAR_ID}
+              placeholder="New item"
+              placeholderTextColor={colors.muted}
+              style={[styles.text, styles.textInput, entry.checked && styles.textDone]}
+            />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={entry.text}
+              accessibilityHint={hasMeta ? "Shows due date, priority and notes" : undefined}
+              disabled={!hasMeta}
+              onPress={onOpen}
+            >
+              <Text style={[styles.text, entry.checked && styles.textDone]}>{entry.text}</Text>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Details for ${entry.text}`}
+            disabled={!hasMeta && !caption}
+            onPress={onOpen}
+          >
           {!!caption && (
             <View style={styles.metaItem}>
               <ListChecks size={12} color={colors.muted} />
@@ -431,14 +810,15 @@ const EntryRow = ({
               )}
             </View>
           )}
-        </Pressable>
+          </Pressable>
+        </View>
       </View>
     </Animated.View>
   );
 
-  if (!canSwipe) return row;
+  if (!canSwipe) return belowRow ? <>{row}{belowRow}</> : row;
 
-  return (
+  const swipeable = (
     <ReanimatedSwipeable
       ref={swipeRef}
       friction={1.5}
@@ -458,7 +838,45 @@ const EntryRow = ({
       {row}
     </ReanimatedSwipeable>
   );
+  return belowRow ? <>{swipeable}{belowRow}</> : swipeable;
 };
+
+const BarButton = ({
+  label,
+  icon,
+  accessibilityLabel,
+  selected = false,
+  disabled = false,
+  strong = false,
+  onPress,
+  styles,
+}: {
+  label?: string;
+  icon?: ReactNode;
+  accessibilityLabel?: string;
+  selected?: boolean;
+  disabled?: boolean;
+  strong?: boolean;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) => (
+  <Pressable
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel ?? label}
+    accessibilityState={{ selected, disabled }}
+    disabled={disabled}
+    hitSlop={4}
+    onPress={onPress}
+    style={({ pressed }) => [
+      styles.barButton,
+      selected && styles.barButtonSelected,
+      (pressed || disabled) && styles.barButtonDim,
+    ]}
+  >
+    {icon}
+    {!!label && <Text style={[styles.barButtonText, strong && styles.barButtonStrong]}>{label}</Text>}
+  </Pressable>
+);
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -640,9 +1058,73 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 16,
       minHeight: 44,
     },
-    addButton: {
+    textInput: {
+      margin: 0,
+      paddingBottom: 0,
+      paddingHorizontal: 0,
+      paddingTop: 0,
+    },
+    bar: {
+      backgroundColor: colors.surface,
+      borderTopColor: colors.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 6,
+    },
+    barRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 4,
+    },
+    barSpacer: {
+      flex: 1,
+    },
+    barButton: {
+      alignItems: "center",
+      borderRadius: 10,
+      flexDirection: "row",
+      gap: 4,
+      minHeight: 36,
+      minWidth: 36,
+      justifyContent: "center",
+      paddingHorizontal: 8,
+    },
+    barButtonSelected: {
+      backgroundColor: colors.background,
+    },
+    barButtonDim: {
+      opacity: 0.45,
+    },
+    barButtonText: {
       color: colors.accentDark,
-      fontSize: 15,
-      fontWeight: "800",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    barButtonStrong: {
+      fontWeight: "900",
+    },
+    toast: {
+      alignItems: "center",
+      backgroundColor: colors.ink,
+      borderRadius: 12,
+      flexDirection: "row",
+      gap: spacing.md,
+      justifyContent: "space-between",
+      marginTop: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    toastText: {
+      color: colors.background,
+      flexShrink: 1,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    toastAction: {
+      color: colors.background,
+      fontSize: 14,
+      fontWeight: "900",
+      textDecorationLine: "underline",
     },
   });
