@@ -44,16 +44,17 @@ import {
   resolveLegacyItemTagOptionIds,
   seedDefaultTagGroups,
 } from "./tagBackfill";
-import { Folder, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
+import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { requiresProForSync } from "../utils/limits";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
 import { normalizeTroveData } from "../utils/itemTypes";
+import { applyListItemsToEntries, hydrateItemsWithEntries } from "../utils/listEntries";
 
 const STORAGE_KEY_PREFIX = "trove:data:v1";
-const emptyData: TroveData = { folders: [], items: [], tagGroups: [], tagOptions: [] };
+const emptyData: TroveData = { folders: [], items: [], listEntries: [], tagGroups: [], tagOptions: [] };
 const FOREGROUND_REFRESH_INTERVAL_MS = 30_000;
 
 const hasTroveData = (data: TroveData): boolean =>
@@ -79,6 +80,10 @@ type TroveContextValue = TroveData & {
   createItem: (input: Omit<SavedItem, "id" | "createdAt" | "updatedAt">) => SavedItem | null;
   updateItem: (itemId: string, updates: Partial<Omit<SavedItem, "id" | "createdAt">>) => void;
   deleteItem: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
+  updateListEntry: (
+    entryId: string,
+    updates: Partial<Pick<ListEntry, "text" | "checked" | "kind" | "indentLevel" | "notes" | "dueDate" | "tagOptionIds">>,
+  ) => boolean;
   createTagGroup: (
     input: Pick<TagGroup, "name"> & Partial<Pick<TagGroup, "selectionMode" | "allowInlineCreate" | "isSystem" | "sortOrder">>,
   ) => TagGroup;
@@ -461,7 +466,15 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const mediaResult = await deleteStoredMediaForItems(itemsToDelete);
     if (!mediaResult.ok) return mediaResult;
 
-    setData((current) => ({ ...current, ...deleteFolderRecursively(current.folders, current.items, folderId) }));
+    setData((current) => {
+      const remaining = deleteFolderRecursively(current.folders, current.items, folderId);
+      const remainingItemIds = new Set(remaining.items.map((item) => item.id));
+      return {
+        ...current,
+        ...remaining,
+        listEntries: current.listEntries.filter((entry) => remainingItemIds.has(entry.listId)),
+      };
+    });
     markLocalChangePending();
     return { ok: true };
   }, [markLocalChangePending]);
@@ -474,8 +487,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const timestamp = new Date().toISOString();
+    const { listItems, ...itemInput } = input;
     const item: SavedItem = {
-      ...input,
+      ...itemInput,
       id: createId("item"),
       title: input.title.trim() || "Untitled idea",
       tagOptionIds: input.tagOptionIds,
@@ -485,16 +499,31 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    setData((current) => ({ ...current, items: [item, ...current.items] }));
-    markLocalChangePending();
-    return item;
-  }, [activeUserId, markLocalChangePending]);
-
-  const updateItem = useCallback<TroveContextValue["updateItem"]>((itemId, updates) => {
-    let didUpdate = false;
     setData((current) => ({
       ...current,
-      items: current.items.map((item) => {
+      items: [item, ...current.items],
+      listEntries: listItems
+        ? applyListItemsToEntries({
+            listId: item.id,
+            listItems,
+            entries: current.listEntries,
+            timestamp,
+            ownerId: item.ownerId,
+            userId: activeUserId ?? undefined,
+            createId: () => createId("entry"),
+          })
+        : current.listEntries,
+    }));
+    markLocalChangePending();
+    return listItems ? { ...item, listItems } : item;
+  }, [activeUserId, markLocalChangePending]);
+
+  const updateItem = useCallback<TroveContextValue["updateItem"]>((itemId, allUpdates) => {
+    let didUpdate = false;
+    const { listItems, ...updates } = allUpdates;
+    setData((current) => {
+      let nextListEntries = current.listEntries;
+      const items = current.items.map((item) => {
         if (item.id !== itemId) return item;
         const currentFolder = current.folders.find((folder) => folder.id === item.folderId);
         const nextFolderId = updates.folderId ?? item.folderId;
@@ -511,17 +540,37 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         }
 
         didUpdate = true;
-        return {
+        const timestamp = new Date().toISOString();
+        const nextItem: SavedItem = {
           ...item,
           ...updates,
           title: updates.title?.trim() || item.title,
           tagOptionIds: updates.tagOptionIds ?? item.tagOptionIds,
           ownerId: nextFolder?.ownerId ?? item.ownerId ?? activeUserId ?? undefined,
           accessRole: nextFolder?.accessRole ?? item.accessRole ?? (activeUserId ? "owner" : undefined),
-          updatedAt: new Date().toISOString(),
         };
-      }),
-    }));
+
+        if (listItems) {
+          nextListEntries = applyListItemsToEntries({
+            listId: item.id,
+            listItems,
+            entries: current.listEntries,
+            timestamp,
+            ownerId: nextItem.ownerId,
+            userId: activeUserId ?? undefined,
+            createId: () => createId("entry"),
+          });
+        }
+
+        // Editing only the list's lines leaves the item row untouched, so
+        // checking off a line never conflicts with an edit to the list itself.
+        const itemChanged = (Object.keys(nextItem) as Array<keyof SavedItem>).some(
+          (key) => JSON.stringify(nextItem[key]) !== JSON.stringify(item[key]),
+        );
+        return itemChanged ? { ...nextItem, updatedAt: timestamp } : item;
+      });
+      return { ...current, items, listEntries: nextListEntries };
+    });
     if (didUpdate) {
       markLocalChangePending();
     }
@@ -576,6 +625,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
             ? { ...item, tagOptionIds: item.tagOptionIds.filter((id) => !optionIdsInGroup.has(id)) }
             : item,
         ),
+        listEntries: current.listEntries.map((entry) =>
+          entry.tagOptionIds.some((id) => optionIdsInGroup.has(id))
+            ? { ...entry, tagOptionIds: entry.tagOptionIds.filter((id) => !optionIdsInGroup.has(id)) }
+            : entry,
+        ),
       };
     });
     markLocalChangePending();
@@ -625,8 +679,39 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
               : item,
           )
         : current.items,
+      listEntries: current.listEntries.some((entry) => entry.tagOptionIds.includes(optionId))
+        ? current.listEntries.map((entry) =>
+            entry.tagOptionIds.includes(optionId)
+              ? { ...entry, tagOptionIds: entry.tagOptionIds.filter((id) => id !== optionId) }
+              : entry,
+          )
+        : current.listEntries,
     }));
     markLocalChangePending();
+  }, [markLocalChangePending]);
+
+  const updateListEntry = useCallback<TroveContextValue["updateListEntry"]>((entryId, updates) => {
+    const entry = dataRef.current.listEntries.find((candidate) => candidate.id === entryId);
+    const list = dataRef.current.items.find((candidate) => candidate.id === entry?.listId);
+    const folder = dataRef.current.folders.find((candidate) => candidate.id === list?.folderId);
+    if (!entry || !canEditItemRecord(list, folder)) {
+      Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
+      return false;
+    }
+
+    const timestamp = new Date().toISOString();
+    setData((current) => ({
+      ...current,
+      listEntries: current.listEntries.map((candidate) => {
+        if (candidate.id !== entryId) return candidate;
+        const next: ListEntry = { ...candidate, ...updates, updatedAt: timestamp };
+        if (next.kind !== "check") next.checked = false;
+        if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
+        return next;
+      }),
+    }));
+    markLocalChangePending();
+    return true;
   }, [markLocalChangePending]);
 
   const canManageFolder = useCallback<TroveContextValue["canManageFolder"]>((folderId) => {
@@ -669,7 +754,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       }
 
       void deleteStoredMediaForItems(itemToDelete ? [itemToDelete] : []);
-      setData((current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }));
+      setData((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.id !== itemId),
+      listEntries: current.listEntries.filter((entry) => entry.listId !== itemId),
+    }));
       markLocalChangePending();
       return { ok: true };
     }
@@ -679,7 +768,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       if (!mediaResult.ok) return mediaResult;
     }
 
-    setData((current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }));
+    setData((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.id !== itemId),
+      listEntries: current.listEntries.filter((entry) => entry.listId !== itemId),
+    }));
     markLocalChangePending();
     return { ok: true };
   }, [activeUserId, markLocalChangePending]);
@@ -718,9 +811,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         setData((current) => {
           const survivingTagGroups = current.tagGroups.filter((tagGroup) => !tagGroup.ownerId || tagGroup.ownerId === userId);
           const survivingTagGroupIds = new Set(survivingTagGroups.map((tagGroup) => tagGroup.id));
+          const survivingItems = current.items.filter((item) => !item.ownerId || item.ownerId === userId);
+          const survivingItemIds = new Set(survivingItems.map((item) => item.id));
           return {
             folders: current.folders.filter((folder) => !folder.ownerId || folder.ownerId === userId),
-            items: current.items.filter((item) => !item.ownerId || item.ownerId === userId),
+            items: survivingItems,
+            listEntries: current.listEntries.filter((entry) => survivingItemIds.has(entry.listId)),
             tagGroups: survivingTagGroups,
             tagOptions: current.tagOptions.filter((tagOption) => survivingTagGroupIds.has(tagOption.groupId)),
           };
@@ -828,6 +924,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       const nextBaseline: SyncBaseline = {
         folders: { ...baseline.folders },
         items: { ...baseline.items },
+        listEntries: { ...baseline.listEntries },
         tagGroups: { ...baseline.tagGroups },
         tagOptions: { ...baseline.tagOptions },
       };
@@ -954,9 +1051,17 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   }, [createTagGroup, createTagOption]);
   const clearLocalData = useCallback(() => setData(emptyData), []);
 
+  // Screens read list lines as `item.listItems`; they are derived from the
+  // entry records here rather than stored on the item.
+  const hydratedItems = useMemo(
+    () => hydrateItemsWithEntries(data.items, data.listEntries),
+    [data.items, data.listEntries],
+  );
+
   const value = useMemo<TroveContextValue>(
     () => ({
       ...data,
+      items: hydratedItems,
       isReady,
       syncSnapshot,
       createFolder,
@@ -965,6 +1070,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createItem,
       updateItem,
       deleteItem,
+      updateListEntry,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,
@@ -983,6 +1089,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     }),
     [
       data,
+      hydratedItems,
       isReady,
       syncSnapshot,
       createFolder,
@@ -991,6 +1098,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       createItem,
       updateItem,
       deleteItem,
+      updateListEntry,
       createTagGroup,
       updateTagGroup,
       deleteTagGroup,

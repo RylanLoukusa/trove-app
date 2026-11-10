@@ -5,6 +5,7 @@ import type { TroveData } from "../types/models";
 export type SyncBaseline = {
   folders: Record<string, string>;
   items: Record<string, string>;
+  listEntries: Record<string, string>;
   tagGroups: Record<string, string>;
   tagOptions: Record<string, string>;
 };
@@ -35,6 +36,7 @@ export type SyncConflictSummary = {
 const emptyBaseline: SyncBaseline = {
   folders: {},
   items: {},
+  listEntries: {},
   tagGroups: {},
   tagOptions: {},
 };
@@ -47,6 +49,9 @@ export const baselineFromTroveData = (troveData: TroveData): SyncBaseline => ({
   ),
   items: Object.fromEntries(
     troveData.items.map((item) => [item.id, item.updatedAt]),
+  ),
+  listEntries: Object.fromEntries(
+    (troveData.listEntries ?? []).map((entry) => [entry.id, entry.updatedAt]),
   ),
   tagGroups: Object.fromEntries(
     troveData.tagGroups.map((tagGroup) => [tagGroup.id, tagGroup.updatedAt]),
@@ -65,6 +70,7 @@ export const loadSyncBaseline = async (userId: string): Promise<SyncBaseline> =>
     return {
       folders: parsed.folders ?? {},
       items: parsed.items ?? {},
+      listEntries: parsed.listEntries ?? {},
       tagGroups: parsed.tagGroups ?? {},
       tagOptions: parsed.tagOptions ?? {},
     };

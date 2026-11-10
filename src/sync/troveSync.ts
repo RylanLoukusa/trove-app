@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AccessRole, Folder, SavedItem, ShareScope, TagGroup, TagOption, TroveData } from "../types/models";
+import type { AccessRole, Folder, ListEntry, SavedItem, ShareScope, TagGroup, TagOption, TroveData } from "../types/models";
 import {
   baselineFromTroveData,
   loadSyncBaseline,
@@ -16,6 +16,7 @@ import {
   normalizeSavedItem,
   normalizeTroveData,
 } from "../utils/itemTypes";
+import { entryToListItem, groupEntriesByList } from "../utils/listEntries";
 
 const remoteUpdatedAtKey = (userId: string) =>
   `trove:remoteUpdatedAt:${userId}`;
@@ -89,6 +90,42 @@ type ItemRow = {
   created_at: string;
   updated_at: string;
 };
+
+type ListEntryRow = {
+  id: string;
+  list_id: string;
+  owner_id: string;
+  created_by: string | null;
+  kind: ListEntry["kind"];
+  text: string;
+  checked: boolean;
+  indent_level: number;
+  position: string;
+  notes: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  tags: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
+const LIST_ENTRY_COLUMNS = [
+  "id",
+  "list_id",
+  "owner_id",
+  "created_by",
+  "kind",
+  "text",
+  "checked",
+  "indent_level",
+  "position",
+  "notes",
+  "due_date",
+  "completed_at",
+  "tags",
+  "created_at",
+  "updated_at",
+].join(", ");
 
 type TagGroupRow = {
   id: string;
@@ -206,7 +243,24 @@ const objectValue = <T>(value: unknown): T | undefined =>
   value && typeof value === "object" ? (value as T) : undefined;
 
 const hasTroveData = (data: TroveData): boolean =>
-  data.folders.length > 0 || data.items.length > 0 || data.tagGroups.length > 0 || data.tagOptions.length > 0;
+  data.folders.length > 0 ||
+  data.items.length > 0 ||
+  data.listEntries.length > 0 ||
+  data.tagGroups.length > 0 ||
+  data.tagOptions.length > 0;
+
+// Items this user may write: their own unfiled items, and anything in a
+// folder they can edit.
+const writableItemsForUser = (troveData: TroveData, userId: string): SavedItem[] => {
+  const foldersById = new Map(troveData.folders.map((folder) => [folder.id, folder]));
+  return troveData.items.filter((item) => {
+    if (!item.folderId) {
+      return (item.ownerId ?? userId) === userId;
+    }
+
+    return canEditFolderContentRecord(foldersById.get(item.folderId));
+  });
+};
 
 const latestTimestamp = (timestamps: Array<string | null | undefined>) => {
   const validTimestamps = timestamps.filter(
@@ -399,6 +453,7 @@ const savedItemToRow = (
   item: SavedItem,
   userId: string,
   foldersById: Map<string, Folder>,
+  entriesByList: Map<string, ListEntry[]> = new Map(),
 ): ItemRow => {
   const normalizedItem = normalizeSavedItem(item);
   const folderOwnerId = normalizedItem.folderId
@@ -423,7 +478,13 @@ const savedItemToRow = (
     media: optional(normalizedItem.media),
     media_items: optionalArray(normalizedItem.mediaItems),
     attachments: optionalArray(normalizedItem.attachments),
-    list_items: optionalArray(normalizedItem.listItems),
+    // Snapshot of the entries for older app versions and the public-link
+    // function, which still read list lines from trove_items.list_items.
+    list_items: entriesByList.has(normalizedItem.id)
+      ? (entriesByList.get(normalizedItem.id) ?? []).map(entryToListItem)
+      : normalizedItem.type === "list"
+        ? []
+        : optionalArray(normalizedItem.listItems),
     rich_text: optional(normalizedItem.richText),
     connections: optionalArray(normalizedItem.connections),
     tags: normalizedItem.tagOptionIds ?? [],
@@ -432,6 +493,40 @@ const savedItemToRow = (
     updated_at: normalizedItem.updatedAt,
   };
 };
+
+const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
+  id: row.id,
+  listId: row.list_id,
+  kind: row.kind === "bullet" ? "bullet" : "check",
+  text: row.text ?? "",
+  checked: !!row.checked,
+  indentLevel: row.indent_level ?? 0,
+  position: row.position,
+  notes: row.notes ?? undefined,
+  dueDate: row.due_date ?? undefined,
+  completedAt: row.completed_at ?? undefined,
+  tagOptionIds: stringArray(row.tags),
+  ownerId: row.owner_id,
+  createdBy: row.created_by ?? undefined,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const listEntryToPayload = (entry: ListEntry) => ({
+  id: entry.id,
+  list_id: entry.listId,
+  kind: entry.kind,
+  text: entry.text,
+  checked: entry.checked,
+  indent_level: entry.indentLevel,
+  position: entry.position,
+  notes: entry.notes ?? null,
+  due_date: entry.dueDate ?? null,
+  completed_at: entry.completedAt ?? null,
+  tags: entry.tagOptionIds ?? [],
+  created_at: entry.createdAt,
+  updated_at: entry.updatedAt,
+});
 
 const tagGroupRowToTagGroup = (row: TagGroupRow): TagGroup => ({
   id: row.id,
@@ -581,6 +676,60 @@ const upsertTagOptionRowForCurrentUser = async (
   }
 };
 
+const upsertListEntriesForCurrentUser = async (
+  supabase: SupabaseClient,
+  entries: ListEntry[],
+  knownUpdatedAt: Record<string, string>,
+  skipConflictCheck: boolean,
+): Promise<void> => {
+  if (entries.length === 0) return;
+
+  const { error } = await supabase.rpc("trove_upsert_list_entries_for_current_user", {
+    known_updated_at: knownUpdatedAt,
+    skip_conflict_check: skipConflictCheck,
+    target_entries: entries.map(listEntryToPayload),
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
+const deleteMissingListEntriesForCurrentUser = async (
+  supabase: SupabaseClient,
+  listIds: string[],
+  entryIds: string[],
+  knownUpdatedAt: Record<string, string>,
+  skipConflictCheck: boolean,
+): Promise<void> => {
+  if (listIds.length === 0) return;
+
+  const { error } = await supabase.rpc("trove_delete_missing_list_entries_for_current_user", {
+    known_updated_at: knownUpdatedAt,
+    local_entry_ids: entryIds,
+    local_list_ids: listIds,
+    skip_conflict_check: skipConflictCheck,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
+const fetchRemoteListEntryStamps = async (
+  supabase: SupabaseClient,
+): Promise<Map<string, string>> => {
+  const { data, error } = await supabase.from("trove_list_entries").select("id, updated_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return new Map(
+    ((data ?? []) as Array<Pick<ListEntryRow, "id" | "updated_at">>).map((row) => [row.id, row.updated_at]),
+  );
+};
+
 const deleteOwnedRowsMissing = async (
   supabase: SupabaseClient,
   table: "trove_folders" | "trove_items" | "trove_tag_groups" | "trove_tag_options",
@@ -682,7 +831,15 @@ const fetchNormalizedTroveDataForUser = async (
     }
   | { kind: "error" }
 > => {
-  const [syncStateResult, foldersResult, itemsResult, sharesResult, tagGroupsResult, tagOptionsResult] = await Promise.all([
+  const [
+    syncStateResult,
+    foldersResult,
+    itemsResult,
+    sharesResult,
+    tagGroupsResult,
+    tagOptionsResult,
+    listEntriesResult,
+  ] = await Promise.all([
     supabase
       .from("trove_sync_state")
       .select("updated_at, normalized_initialized")
@@ -732,6 +889,7 @@ const fetchNormalizedTroveDataForUser = async (
     supabase
       .from("trove_tag_options")
       .select("id, group_id, name, color, sort_order, created_at, updated_at"),
+    supabase.from("trove_list_entries").select(LIST_ENTRY_COLUMNS),
   ]);
 
   if (syncStateResult.error) {
@@ -764,6 +922,11 @@ const fetchNormalizedTroveDataForUser = async (
     return { kind: "error" };
   }
 
+  if (listEntriesResult.error) {
+    console.warn("Failed to pull remote Trove list entries", listEntriesResult.error);
+    return { kind: "error" };
+  }
+
   const folderRows = (foldersResult.data ?? []) as unknown as FolderRow[];
   const shares = (sharesResult.data ?? []) as unknown as ShareRow[];
   const folderRowsById = new Map(folderRows.map((folder) => [folder.id, folder]));
@@ -778,10 +941,12 @@ const fetchNormalizedTroveDataForUser = async (
   );
   const tagGroups = ((tagGroupsResult.data ?? []) as unknown as TagGroupRow[]).map(tagGroupRowToTagGroup);
   const tagOptions = ((tagOptionsResult.data ?? []) as unknown as TagOptionRow[]).map(tagOptionRowToTagOption);
+  const listEntryRows = (listEntriesResult.data ?? []) as unknown as ListEntryRow[];
 
   const latestRowUpdatedAt = latestTimestamp([
     ...folders.map((folder) => folder.updatedAt),
     ...items.map((item) => item.updatedAt),
+    ...listEntryRows.map((entry) => entry.updated_at),
     ...shares.map((share) => share.updated_at),
     ...tagGroups.map((tagGroup) => tagGroup.updatedAt),
     ...tagOptions.map((tagOption) => tagOption.updatedAt),
@@ -789,7 +954,15 @@ const fetchNormalizedTroveDataForUser = async (
 
   return {
     kind: "data",
-    data: { folders, items, tagGroups, tagOptions },
+    // Normalizing migrates lists that only have the legacy list_items
+    // snapshot (e.g. saved by an older app version) into entries.
+    data: normalizeTroveData({
+      folders,
+      items,
+      listEntries: listEntryRows.map(listEntryRowToListEntry),
+      tagGroups,
+      tagOptions,
+    }),
     latestRowUpdatedAt,
     syncState: (syncStateResult.data as SyncStateRow | null) ?? null,
   };
@@ -889,7 +1062,6 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "media",
     "mediaItems",
     "attachments",
-    "listItems",
     "richText",
     "connections",
     "tagOptionIds",
@@ -913,6 +1085,90 @@ const tagOptionConflictFields = (local: TagOption, remote: TagOption): SyncConfl
     "sortOrder",
   ]);
 
+const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConflictField[] =>
+  changedFields(local as unknown as Record<string, unknown>, remote as unknown as Record<string, unknown>, [
+    "text",
+    "kind",
+    "checked",
+    "indentLevel",
+    "position",
+    "notes",
+    "dueDate",
+    "completedAt",
+    "tagOptionIds",
+  ]);
+
+// Entries are compared one by one so two people editing different lines of
+// the same list never conflict. Lines someone else added since the last pull
+// are not a conflict either; they simply arrive with the next pull.
+const firstListEntryConflict = (
+  localData: TroveData,
+  remoteData: TroveData,
+  userId: string,
+  baseline: Record<string, string>,
+): SyncConflictSummary | null => {
+  const writableListIds = new Set(writableItemsForUser(localData, userId).map((item) => item.id));
+  const localEntriesById = new Map(
+    localData.listEntries.filter((entry) => writableListIds.has(entry.listId)).map((entry) => [entry.id, entry]),
+  );
+  const remoteEntriesById = new Map(
+    remoteData.listEntries.filter((entry) => writableListIds.has(entry.listId)).map((entry) => [entry.id, entry]),
+  );
+
+  for (const remoteEntry of remoteEntriesById.values()) {
+    const localEntry = localEntriesById.get(remoteEntry.id);
+    const baselineUpdatedAt = baseline[remoteEntry.id];
+
+    if (localEntry) {
+      if (
+        localEntry.updatedAt !== remoteEntry.updatedAt &&
+        remoteChangedSinceBaseline(remoteEntry.updatedAt, baselineUpdatedAt)
+      ) {
+        const fields = listEntryConflictFields(localEntry, remoteEntry);
+        if (fields.length === 0) continue;
+        return {
+          entityId: remoteEntry.id,
+          entityKind: "listEntries",
+          fields,
+          localLabel: localEntry.text,
+          localUpdatedAt: localEntry.updatedAt,
+          reason: "remote_changed",
+          remoteLabel: remoteEntry.text,
+          remoteUpdatedAt: remoteEntry.updatedAt,
+        };
+      }
+    } else if (remoteChangedSinceBaseline(remoteEntry.updatedAt, baselineUpdatedAt)) {
+      return {
+        entityId: remoteEntry.id,
+        entityKind: "listEntries",
+        reason: "remote_changed",
+        remoteLabel: remoteEntry.text,
+        remoteUpdatedAt: remoteEntry.updatedAt,
+      };
+    }
+  }
+
+  for (const localEntry of localEntriesById.values()) {
+    const baselineUpdatedAt = baseline[localEntry.id];
+    if (
+      baselineUpdatedAt &&
+      !remoteEntriesById.has(localEntry.id) &&
+      localEntry.updatedAt !== baselineUpdatedAt
+    ) {
+      return {
+        entityId: localEntry.id,
+        entityKind: "listEntries",
+        localLabel: localEntry.text,
+        localUpdatedAt: localEntry.updatedAt,
+        reason: "remote_deleted",
+        remoteUpdatedAt: baselineUpdatedAt,
+      };
+    }
+  }
+
+  return null;
+};
+
 const firstSyncConflict = async (
   supabase: SupabaseClient,
   userId: string,
@@ -922,6 +1178,7 @@ const firstSyncConflict = async (
   const hasBaseline =
     Object.keys(baseline.folders).length > 0 ||
     Object.keys(baseline.items).length > 0 ||
+    Object.keys(baseline.listEntries).length > 0 ||
     Object.keys(baseline.tagGroups).length > 0 ||
     Object.keys(baseline.tagOptions).length > 0;
 
@@ -1084,6 +1341,11 @@ const firstSyncConflict = async (
     }
   }
 
+  const listEntryConflict = firstListEntryConflict(normalizedData, remoteResult.data, userId, baseline.listEntries);
+  if (listEntryConflict) {
+    return listEntryConflict;
+  }
+
   const remoteTagGroups = remoteResult.data.tagGroups.filter((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
   const remoteTagGroupIds = new Set(remoteTagGroups.map((tagGroup) => tagGroup.id));
   for (const remoteTagGroup of remoteTagGroups) {
@@ -1205,13 +1467,10 @@ const replaceNormalizedTroveDataForUser = async (
   const ownedFolders = normalizedData.folders.filter((folder) =>
     (folder.ownerId ?? userId) === userId && canManageFolderRecord(folder),
   );
-  const writableItems = normalizedData.items.filter((item) => {
-    if (!item.folderId) {
-      return (item.ownerId ?? userId) === userId;
-    }
-
-    return canEditFolderContentRecord(foldersById.get(item.folderId));
-  });
+  const writableItems = writableItemsForUser(normalizedData, userId);
+  const writableListIds = new Set(writableItems.map((item) => item.id));
+  const writableEntries = normalizedData.listEntries.filter((entry) => writableListIds.has(entry.listId));
+  const entriesByList = groupEntriesByList(normalizedData.listEntries);
 
   try {
     const baseline = await loadSyncBaseline(userId);
@@ -1238,7 +1497,7 @@ const replaceNormalizedTroveDataForUser = async (
       );
     }
 
-    const itemRows = writableItems.map((item) => savedItemToRow(item, userId, foldersById));
+    const itemRows = writableItems.map((item) => savedItemToRow(item, userId, foldersById, entriesByList));
     for (const itemRow of itemRows) {
       await upsertItemRowForCurrentUser(
         supabase,
@@ -1246,6 +1505,40 @@ const replaceNormalizedTroveDataForUser = async (
         options.skipConflictCheck ? undefined : baseline.items[itemRow.id],
       );
     }
+
+    // An entry someone else deleted that this device never changed is not
+    // re-uploaded; the next pull removes it locally. Its baseline stamp is
+    // kept below so later pushes keep skipping it until then.
+    const remoteEntryStamps = options.skipConflictCheck
+      ? null
+      : await fetchRemoteListEntryStamps(supabase);
+    const remotelyDeletedEntryIds = new Set(
+      remoteEntryStamps
+        ? writableEntries
+            .filter((entry) => {
+              const baselineUpdatedAt = baseline.listEntries[entry.id];
+              return (
+                baselineUpdatedAt !== undefined &&
+                !remoteEntryStamps.has(entry.id) &&
+                entry.updatedAt === baselineUpdatedAt
+              );
+            })
+            .map((entry) => entry.id)
+        : [],
+    );
+    await upsertListEntriesForCurrentUser(
+      supabase,
+      writableEntries.filter((entry) => !remotelyDeletedEntryIds.has(entry.id)),
+      baseline.listEntries,
+      options.skipConflictCheck ?? false,
+    );
+    await deleteMissingListEntriesForCurrentUser(
+      supabase,
+      [...writableListIds],
+      writableEntries.map((entry) => entry.id),
+      baseline.listEntries,
+      options.skipConflictCheck ?? false,
+    );
 
     const ownedTagGroups = normalizedData.tagGroups.filter((tagGroup) => (tagGroup.ownerId ?? userId) === userId);
     const ownedTagGroupIds = new Set(ownedTagGroups.map((tagGroup) => tagGroup.id));
@@ -1306,14 +1599,33 @@ const replaceNormalizedTroveDataForUser = async (
     );
 
     const updatedAt = await upsertSyncState(supabase, userId);
-    await writeStoredRemoteUpdatedAt(userId, updatedAt);
     const remoteAfterPush = await fetchNormalizedTroveDataForUser(supabase, userId);
-    await saveSyncBaseline(
-      userId,
+    const nextBaseline =
       remoteAfterPush.kind === "data"
         ? baselineFromTroveData(remoteAfterPush.data)
-        : baselineFromTroveData(normalizedData),
+        : baselineFromTroveData(normalizedData);
+    // Only entries this device holds count as "seen": entries added elsewhere
+    // stay unknown until they are pulled, so the next push never deletes them.
+    const localEntryIds = new Set(normalizedData.listEntries.map((entry) => entry.id));
+    nextBaseline.listEntries = Object.fromEntries(
+      Object.entries(nextBaseline.listEntries).filter(([entryId]) => localEntryIds.has(entryId)),
     );
+    remotelyDeletedEntryIds.forEach((entryId) => {
+      nextBaseline.listEntries[entryId] = baseline.listEntries[entryId];
+    });
+    await saveSyncBaseline(userId, nextBaseline);
+
+    // If someone else added entries this device hasn't pulled yet, leave the
+    // stored remote timestamp unset so the next pull applies them instead of
+    // treating this device as up to date.
+    const hasUnpulledEntries =
+      remoteAfterPush.kind === "data" &&
+      remoteAfterPush.data.listEntries.some((entry) => !localEntryIds.has(entry.id));
+    if (hasUnpulledEntries) {
+      await clearStoredRemoteUpdatedAt(userId);
+    } else {
+      await writeStoredRemoteUpdatedAt(userId, updatedAt);
+    }
 
     return { ok: true, updatedAt };
   } catch (error) {
@@ -1574,6 +1886,11 @@ const subscribeTroveRealtimeForUser = (
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "trove_items" },
+      scheduleRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "trove_list_entries" },
       scheduleRefresh,
     )
     .on(

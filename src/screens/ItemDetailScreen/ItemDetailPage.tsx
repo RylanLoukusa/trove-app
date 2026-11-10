@@ -33,7 +33,7 @@ type Props = {
 export const ItemDetailPage = ({ item, width, navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, tagGroups, tagOptions, updateItem, createTagOption, canEditItem } = useTrove();
+  const { folders, tagGroups, tagOptions, updateItem, updateListEntry, createTagOption, canEditItem } = useTrove();
   const { isPro } = useEntitlement();
   const canEditCurrentItem = canEditItem(item.id);
   const videoLocked = requiresProForVideoPlayback(isPro, item.accessRole);
@@ -49,17 +49,12 @@ export const ItemDetailPage = ({ item, width, navigation }: Props) => {
 
   const onPressToggleChecklistItem = useCallback(
     (listItemId: string): void => {
-      if (!item.listItems || !canEditCurrentItem) return;
+      const listItem = item.listItems?.find((entry) => entry.id === listItemId);
+      if (!listItem || listItem.kind !== "check" || !canEditCurrentItem) return;
 
-      const listItems = item.listItems.map((listItem) =>
-        listItem.id === listItemId && listItem.kind === "check"
-          ? { ...listItem, checked: !listItem.checked }
-          : listItem,
-      );
-
-      updateItem(item.id, { listItems });
+      updateListEntry(listItemId, { checked: !listItem.checked });
     },
-    [canEditCurrentItem, item, updateItem],
+    [canEditCurrentItem, item, updateListEntry],
   );
 
   const onPressOpenUrl = useCallback(() => {

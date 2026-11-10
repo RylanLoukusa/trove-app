@@ -200,7 +200,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOp
 export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, tagOptions, updateItem, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
+  const { folders, isReady, items, tagOptions, updateListEntry, deleteFolder, canManageFolder, canEditFolderContent, canEditItem } = useTrove();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
 
   const folder = getFolderById(folders, route.params.folderId);
@@ -241,22 +241,16 @@ export const FolderScreen = ({ navigation, route }: Props) => {
 
   const onToggleChecklistItem = useCallback(
     (itemId: string, listItemId: string): void => {
-      const currentItem = items.find((candidate) => candidate.id === itemId);
-      if (!currentItem?.listItems) return;
+      const listItem = items.find((candidate) => candidate.id === itemId)?.listItems?.find((entry) => entry.id === listItemId);
+      if (!listItem || listItem.kind !== "check") return;
       if (!canEditItem(itemId)) {
         Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
         return;
       }
 
-      const listItems = currentItem.listItems.map((listItem) =>
-        listItem.id === listItemId && listItem.kind === "check"
-          ? { ...listItem, checked: !listItem.checked }
-          : listItem,
-      );
-
-      updateItem(currentItem.id, { listItems });
+      updateListEntry(listItemId, { checked: !listItem.checked });
     },
-    [canEditItem, items, updateItem],
+    [canEditItem, items, updateListEntry],
   );
 
   const onPressEditFolder = useCallback(() => {
