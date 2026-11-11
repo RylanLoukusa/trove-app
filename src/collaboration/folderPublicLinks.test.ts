@@ -147,6 +147,59 @@ describe("fetchPublicFolder", () => {
     expect(result.error).toBeUndefined();
   });
 
+  it("keeps only the lists in a shared folder, each with its lines", async () => {
+    const stamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" };
+    const groceries = {
+      id: "list-1",
+      folderId: "folder-1",
+      title: "Groceries",
+      type: "list",
+      listItems: [
+        { id: "a", kind: "bullet", text: "Produce", plain: true, bold: true },
+        { id: "b", kind: "check", text: "Apples", checked: true, indentLevel: 1 },
+      ],
+      ...stamps,
+    };
+    const payload = {
+      folder: { id: "folder-1", name: "Recipes" },
+      folders: [{ id: "folder-1", name: "Recipes" }],
+      items: [
+        groceries,
+        { id: "note-1", folderId: "folder-1", title: "Old note", type: "text", richText: "Saved by an older app", ...stamps },
+        { id: "list-2", folderId: "folder-1", title: "Nothing yet", type: "list", ...stamps },
+        { id: "photo-1", folderId: "folder-1", title: "Old photo", type: "media", mediaUrl: "https://example.com/a.jpg", ...stamps },
+        { id: "link-1", folderId: "folder-1", title: "Old link", type: "link", url: "https://example.com", ...stamps },
+      ],
+      link: { scope: "folder_only" as const },
+      ownerName: "Sam",
+    };
+    const invoke = jest.fn().mockResolvedValue({ data: payload, error: null });
+    const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];
+
+    const result = await fetchPublicFolder(supabase, "tok-lists-only");
+
+    expect(result.data?.items).toEqual([
+      groceries,
+      { id: "list-2", folderId: "folder-1", title: "Nothing yet", type: "list", listItems: [], ...stamps },
+    ]);
+    expect(result.data?.folder).toEqual(payload.folder);
+    expect(result.data?.ownerName).toBe("Sam");
+  });
+
+  it("copes with a response that has no items at all", async () => {
+    const payload = {
+      folder: { id: "folder-1", name: "Recipes" },
+      folders: [{ id: "folder-1", name: "Recipes" }],
+      link: { scope: "folder_only" as const },
+    };
+    const invoke = jest.fn().mockResolvedValue({ data: payload, error: null });
+    const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];
+
+    const result = await fetchPublicFolder(supabase, "tok-no-items");
+
+    expect(result.data?.items).toEqual([]);
+  });
+
   it("surfaces an invoke-level error", async () => {
     const invoke = jest.fn().mockResolvedValue({ data: null, error: { message: "network down" } });
     const supabase = { functions: { invoke } } as unknown as Parameters<typeof fetchPublicFolder>[0];

@@ -23,51 +23,25 @@ export type PublicFolderSummary = {
   parentFolderId?: string | null;
 };
 
-export type PublicFolderMediaItem = {
-  id: string;
-  mediaType?: "image" | "video";
-  url?: string;
-  thumbnailUrl?: string;
-};
-
-export type PublicFolderAttachment = {
-  id: string;
-  uri: string;
-  mediaType: "image" | "video";
-  caption?: string;
-};
-
+// A plain line reaches a public link as a bullet marked `plain`.
 export type PublicFolderListItem = {
   id: string;
   kind: "check" | "bullet";
   text: string;
   checked?: boolean;
   indentLevel?: number;
+  plain?: boolean;
+  bold?: boolean;
 };
 
-export type PublicFolderTag = {
-  id: string;
-  name: string;
-  color?: string;
-};
-
+// A list in a shared folder. Trove keeps lists only; anything else an older
+// app left in the folder is dropped when the link is read.
 export type PublicFolderItem = {
   id: string;
   folderId: string;
   title: string;
-  description?: string;
   type: string;
-  url?: string;
-  sourceUrl?: string;
-  sourcePlatform?: string;
-  sharedText?: string;
-  mediaUrl?: string;
-  thumbnailUrl?: string;
-  mediaItems: PublicFolderMediaItem[];
-  attachments: PublicFolderAttachment[];
   listItems: PublicFolderListItem[];
-  tags: PublicFolderTag[];
-  richText?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -135,16 +109,6 @@ const isMissingRpcError = (error: unknown, functionName: string): boolean => {
 
 export const buildPublicFolderLink = (token: string): string =>
   `https://trovecollections.app/shared/${encodeURIComponent(token)}`;
-
-// Mirrors resolveDisplayItems in src/components/MediaCollectionDisplay.tsx, except the
-// URLs here are already-signed (from get-public-folder) rather than storage paths that
-// need client-side signing -- public preview screens have no Supabase session to sign
-// anything with.
-export const resolveDisplayItems = (item: PublicFolderItem): PublicFolderMediaItem[] => {
-  if (item.mediaItems.length) return item.mediaItems;
-  if (item.mediaUrl) return [{ id: item.id, mediaType: "image", url: item.mediaUrl, thumbnailUrl: item.thumbnailUrl }];
-  return [];
-};
 
 export const loadPublicLinkStatus = async (
   supabase: SupabaseClient,
@@ -233,6 +197,12 @@ export const fetchPublicFolder = async (
     return { error: response?.error ?? "This link is no longer available." };
   }
 
-  publicFolderCache.set(token, response);
-  return { data: response };
+  const lists: PublicFolderData = {
+    ...response,
+    items: (response.items ?? [])
+      .filter((item) => item.type === "list")
+      .map((item) => ({ ...item, listItems: item.listItems ?? [] })),
+  };
+  publicFolderCache.set(token, lists);
+  return { data: lists };
 };

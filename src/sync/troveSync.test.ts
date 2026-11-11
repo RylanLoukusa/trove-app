@@ -10,16 +10,18 @@ type CannedResult = { data: unknown; error: unknown };
 
 /**
  * Minimal fake for Supabase's chainable query builder. Every chain method
- * (select/eq/in/order/maybeSingle/upsert/delete) returns the same builder so
- * any combination of chained calls is supported, and the builder itself is a
- * thenable that resolves to the canned result for that table -- so `await`ing
- * it at any point in the chain (matching however troveSync.ts calls it)
- * resolves correctly.
+ * (select/eq/neq/in/order/maybeSingle/upsert/delete) returns the same builder
+ * so any combination of chained calls is supported, and the builder itself is
+ * a thenable that resolves to the canned result for that table -- so
+ * `await`ing it at any point in the chain (matching however troveSync.ts
+ * calls it) resolves correctly. Filters are not applied: a query gets every
+ * canned row for its table whatever it asked for.
  */
 const makeQueryBuilder = (result: CannedResult) => {
   const builder: any = {
     select: () => builder,
     eq: () => builder,
+    neq: () => builder,
     in: () => builder,
     order: () => builder,
     upsert: () => builder,
@@ -31,11 +33,16 @@ const makeQueryBuilder = (result: CannedResult) => {
   return builder;
 };
 
-const createFakeSupabase = (responses: Record<string, CannedResult>) =>
-  ({
+const createFakeSupabase = (responses: Record<string, CannedResult>) => {
+  const removeStoredFiles = jest.fn(async (_paths: string[]): Promise<CannedResult> => ({ data: [], error: null }));
+  const storageFrom = jest.fn((_bucket: string) => ({ remove: removeStoredFiles }));
+  return {
     from: (table: string) => makeQueryBuilder(responses[table] ?? { data: [], error: null }),
     rpc: jest.fn(),
-  }) as any;
+    storage: { from: storageFrom },
+    removeStoredFiles,
+  } as any;
+};
 
 const userId = "user-1";
 
@@ -151,6 +158,74 @@ const entryRow = (id: string, overrides: Partial<Record<string, unknown>> = {}) 
   ...overrides,
 });
 
+const folder: Folder = {
+  id: "folder-1",
+  name: "Folder",
+  parentFolderId: null,
+  ownerId: userId,
+  accessRole: "owner",
+  createdAt: "2026-03-01T00:00:00.000Z",
+  updatedAt: "2026-03-01T00:00:00.000Z",
+};
+const list: SavedItem = {
+  id: "list-1",
+  folderId: "folder-1",
+  title: "Wedding",
+  type: "list",
+  tagOptionIds: [],
+  ownerId: userId,
+  accessRole: "owner",
+  createdAt: "2026-03-01T00:00:00.000Z",
+  updatedAt: "2026-03-01T00:00:00.000Z",
+};
+const localEntry = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
+  id,
+  listId: "list-1",
+  kind: "check",
+  text: id,
+  checked: false,
+  indentLevel: 0,
+  position: "V",
+  tagOptionIds: [],
+  createdAt: "2026-03-01T00:00:00.000Z",
+  updatedAt: "2026-03-01T00:00:00.000Z",
+  ...overrides,
+});
+
+const pushWith = async (
+  local: TroveData,
+  remoteEntries: unknown[],
+  baselineEntries: Record<string, string>,
+  remote: { items?: unknown[]; failingRpcs?: string[] } = {},
+) => {
+  await saveSyncBaseline(userId, {
+    folders: { "folder-1": folder.updatedAt },
+    items: { "list-1": list.updatedAt },
+    listEntries: baselineEntries,
+    tagGroups: {},
+    tagOptions: {},
+  });
+  const supabase = createFakeSupabase({
+    ...emptyResponses,
+    trove_sync_state: { data: { updated_at: "2026-03-02T00:00:00.000Z", normalized_initialized: true }, error: null },
+    trove_folders: { data: [folderRow()], error: null },
+    trove_items: { data: remote.items ?? [itemRow()], error: null },
+    trove_list_entries: { data: remoteEntries, error: null },
+  });
+  supabase.rpc.mockImplementation(async (name: string) => ({
+    error: remote.failingRpcs?.includes(name) ? { message: "Not right now" } : null,
+  }));
+  const result = await pushTroveDataForUser(supabase, userId, local);
+  const rpcCalls = supabase.rpc.mock.calls as Array<[string, Record<string, unknown>]>;
+  return {
+    result,
+    rpcCalls,
+    supabase,
+    args: (name: string) => rpcCalls.find(([called]) => called === name)?.[1],
+    allArgs: (name: string) => rpcCalls.filter(([called]) => called === name).map(([, params]) => params),
+  };
+};
+
 describe("list entries sync", () => {
   afterEach(async () => {
     await AsyncStorage.clear();
@@ -187,61 +262,6 @@ describe("list entries sync", () => {
       position: "V000001V",
     });
   });
-
-  const folder: Folder = {
-    id: "folder-1",
-    name: "Folder",
-    parentFolderId: null,
-    ownerId: userId,
-    accessRole: "owner",
-    createdAt: "2026-03-01T00:00:00.000Z",
-    updatedAt: "2026-03-01T00:00:00.000Z",
-  };
-  const list: SavedItem = {
-    id: "list-1",
-    folderId: "folder-1",
-    title: "Wedding",
-    type: "list",
-    tagOptionIds: [],
-    ownerId: userId,
-    accessRole: "owner",
-    createdAt: "2026-03-01T00:00:00.000Z",
-    updatedAt: "2026-03-01T00:00:00.000Z",
-  };
-  const localEntry = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
-    id,
-    listId: "list-1",
-    kind: "check",
-    text: id,
-    checked: false,
-    indentLevel: 0,
-    position: "V",
-    tagOptionIds: [],
-    createdAt: "2026-03-01T00:00:00.000Z",
-    updatedAt: "2026-03-01T00:00:00.000Z",
-    ...overrides,
-  });
-
-  const pushWith = async (local: TroveData, remoteEntries: unknown[], baselineEntries: Record<string, string>) => {
-    await saveSyncBaseline(userId, {
-      folders: { "folder-1": folder.updatedAt },
-      items: { "list-1": list.updatedAt },
-      listEntries: baselineEntries,
-      tagGroups: {},
-      tagOptions: {},
-    });
-    const supabase = createFakeSupabase({
-      ...emptyResponses,
-      trove_sync_state: { data: { updated_at: "2026-03-02T00:00:00.000Z", normalized_initialized: true }, error: null },
-      trove_folders: { data: [folderRow()], error: null },
-      trove_items: { data: [itemRow()], error: null },
-      trove_list_entries: { data: remoteEntries, error: null },
-    });
-    supabase.rpc.mockResolvedValue({ error: null });
-    const result = await pushTroveDataForUser(supabase, userId, local);
-    const rpcCalls = supabase.rpc.mock.calls as Array<[string, Record<string, unknown>]>;
-    return { result, rpcCalls, args: (name: string) => rpcCalls.find(([called]) => called === name)?.[1] };
-  };
 
   it("pushes entries in one batch and keeps the item's list_items snapshot for older apps", async () => {
     const local: TroveData = {
@@ -387,5 +407,197 @@ describe("list entries sync", () => {
     expect((upsert.target_entries as Array<{ id: string }>).map((entry) => entry.id)).toEqual(["e1"]);
     const baseline = JSON.parse((await AsyncStorage.getItem(`trove:syncBaseline:${userId}`))!);
     expect(baseline.listEntries.gone).toBe("2026-03-01T00:00:00.000Z");
+  });
+});
+
+describe("plain and bold lines sync", () => {
+  afterEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it("reads plain and bold lines from the tags they travel in", async () => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_folders: { data: [folderRow()], error: null },
+      trove_items: { data: [itemRow()], error: null },
+      trove_list_entries: {
+        data: [
+          entryRow("heading", { kind: "bullet", tags: ["fmt:text", "fmt:bold"], position: "V1" }),
+          entryRow("bullet", { kind: "bullet", position: "V2" }),
+          entryRow("task", { kind: "check", tags: ["fmt:bold"], position: "V3" }),
+        ],
+        error: null,
+      },
+    });
+
+    const result = await pullTroveDataForUser(supabase, userId);
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    const byId = new Map(result.data.listEntries.map((entry) => [entry.id, entry]));
+    expect(byId.get("heading")).toMatchObject({ kind: "text", bold: true, tagOptionIds: [] });
+    expect(byId.get("bullet")).toMatchObject({ kind: "bullet", tagOptionIds: [] });
+    expect(byId.get("bullet")?.bold).toBeUndefined();
+    expect(byId.get("task")).toMatchObject({ kind: "check", bold: true, tagOptionIds: [] });
+  });
+
+  it("sends plain and bold lines in a form older versions and shared links can show", async () => {
+    const local: TroveData = {
+      folders: [folder],
+      items: [list],
+      listEntries: [
+        localEntry("heading", { kind: "text", bold: true, text: "Produce", position: "V1" }),
+        localEntry("bullet", { kind: "bullet", text: "Apples", indentLevel: 1, position: "V2" }),
+        localEntry("task", { text: "Milk", checked: true, position: "V3" }),
+      ],
+      tagGroups: [],
+      tagOptions: [],
+    };
+
+    const { result, args } = await pushWith(local, [], {});
+
+    expect(result.ok).toBe(true);
+    const payload = args("trove_upsert_list_entries_for_current_user")!.target_entries as Array<{
+      id: string;
+      kind: string;
+      tags: string[];
+    }>;
+    expect(payload.map(({ id, kind, tags }) => ({ id, kind, tags }))).toEqual([
+      { id: "heading", kind: "bullet", tags: ["fmt:text", "fmt:bold"] },
+      { id: "bullet", kind: "bullet", tags: [] },
+      { id: "task", kind: "check", tags: [] },
+    ]);
+    expect(args("trove_upsert_item_for_current_user")!.target_list_items).toEqual([
+      { id: "heading", kind: "bullet", text: "Produce", checked: false, indentLevel: 0, plain: true, bold: true },
+      { id: "bullet", kind: "bullet", text: "Apples", checked: false, indentLevel: 1 },
+      { id: "task", kind: "check", text: "Milk", checked: true, indentLevel: 0 },
+    ]);
+  });
+});
+
+describe("notes, links and photos from before Trove kept only lists", () => {
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    // A delete that has to wait for the next sync is reported with a warning.
+    warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(async () => {
+    warn.mockRestore();
+    await AsyncStorage.clear();
+  });
+
+  const note = itemRow({ id: "note-1", type: "text", title: "Old note" });
+  const photo = itemRow({
+    id: "photo-1",
+    type: "media",
+    title: "Old photo",
+    media: { storagePath: "user-1/cover.jpg", thumbnailPath: "user-1/cover-thumb.jpg", mediaType: "image" },
+    media_items: [
+      { id: "m1", storagePath: "user-1/cover.jpg", mediaType: "image" },
+      { id: "m2", storagePath: "user-1/clip.mp4", thumbnailPath: "user-1/clip-thumb.jpg", mediaType: "video" },
+    ],
+  });
+  const someoneElsesLink = itemRow({ id: "their-link", type: "link", owner_id: "user-2", created_by: "user-2" });
+
+  const pullWith = async (items: unknown[], prepare?: (supabase: any) => void) => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_folders: { data: [folderRow()], error: null },
+      trove_items: { data: items, error: null },
+    });
+    supabase.rpc.mockResolvedValue({ error: null });
+    prepare?.(supabase);
+    const result = await pullTroveDataForUser(supabase, userId);
+    const deletedIds = (supabase.rpc.mock.calls as Array<[string, Record<string, unknown>]>)
+      .filter(([name]) => name === "trove_delete_item_for_current_user")
+      .map(([, params]) => params.target_item_id);
+    return { result, supabase, deletedIds };
+  };
+
+  it("keeps only lists on this device and deletes this person's old items from the server", async () => {
+    const { result, supabase, deletedIds } = await pullWith([itemRow(), note, photo, someoneElsesLink]);
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    expect(result.data.items.map((item) => item.id)).toEqual(["list-1"]);
+    expect(deletedIds).toEqual(["note-1", "photo-1"]);
+    expect(supabase.storage.from).toHaveBeenCalledWith("media");
+    expect(supabase.removeStoredFiles).toHaveBeenCalledTimes(1);
+    expect([...supabase.removeStoredFiles.mock.calls[0][0]].sort()).toEqual([
+      "user-1/clip-thumb.jpg",
+      "user-1/clip.mp4",
+      "user-1/cover-thumb.jpg",
+      "user-1/cover.jpg",
+    ]);
+  });
+
+  it("touches nothing on the server when there are only lists", async () => {
+    const { result, supabase, deletedIds } = await pullWith([itemRow(), itemRow({ id: "list-2" })]);
+
+    expect(result.kind).toBe("applied");
+    expect(deletedIds).toEqual([]);
+    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(supabase.storage.from).not.toHaveBeenCalled();
+  });
+
+  it("leaves a photo for the next sync when its stored files can't be removed yet", async () => {
+    const { result, deletedIds } = await pullWith([itemRow(), note, photo], (supabase) => {
+      supabase.removeStoredFiles.mockResolvedValue({ data: null, error: { message: "Storage is down" } });
+    });
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    expect(deletedIds).toEqual(["note-1"]);
+    expect(result.data.items.map((item) => item.id)).toEqual(["list-1"]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not remove 1 old Trove items"));
+  });
+
+  it("still finishes the pull when the server refuses a delete", async () => {
+    const { result, deletedIds } = await pullWith([itemRow(), note], (supabase) => {
+      supabase.rpc.mockRejectedValue(new Error("Network request failed"));
+    });
+
+    expect(deletedIds).toEqual(["note-1"]);
+    expect(result.kind).toBe("applied");
+  });
+
+  const localLists: TroveData = { folders: [folder], items: [list], listEntries: [], tagGroups: [], tagOptions: [] };
+
+  it("deletes old items on push and never hands a list to the delete", async () => {
+    const { result, supabase, args, allArgs } = await pushWith(localLists, [], {}, { items: [itemRow(), note, photo] });
+
+    expect(result.ok).toBe(true);
+    expect(allArgs("trove_delete_item_for_current_user").map((params) => params.target_item_id)).toEqual([
+      "note-1",
+      "photo-1",
+    ]);
+    expect(supabase.removeStoredFiles).toHaveBeenCalledTimes(1);
+    expect(args("trove_delete_missing_items_for_current_user")).toMatchObject({ local_item_ids: ["list-1"] });
+  });
+
+  it("does not push an old note or photo that is still in this device's storage", async () => {
+    const staleLocal = {
+      ...localLists,
+      items: [list, { ...list, id: "note-1", type: "text", title: "Old note" } as SavedItem],
+    };
+
+    const { result, allArgs } = await pushWith(staleLocal, [], {}, { items: [itemRow()] });
+
+    expect(result.ok).toBe(true);
+    expect(allArgs("trove_upsert_item_for_current_user").map((params) => params.target_item_id)).toEqual(["list-1"]);
+  });
+
+  it("keeps an old item it could not delete out of the clean-up, so the next sync tries again", async () => {
+    const { result, args } = await pushWith(localLists, [], {}, {
+      items: [itemRow(), note],
+      failingRpcs: ["trove_delete_item_for_current_user"],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(args("trove_delete_missing_items_for_current_user")).toMatchObject({ local_item_ids: ["list-1", "note-1"] });
   });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { CloudIcon, FolderIcon, Share2Icon, SparklesIcon, TagsIcon } from "lucide-react-native";
+import { ArrowLeftRightIcon, CloudIcon, FolderIcon, ListChecksIcon, Share2Icon, SparklesIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppButton } from "../../components/AppButton";
 import { RootStackParamList } from "../../navigation/types";
@@ -21,27 +21,32 @@ const steps: Step[] = [
   {
     icon: SparklesIcon,
     title: "Welcome to Trove",
-    body: "Trove is a place to collect links, notes, and media so nothing you find gets lost.",
+    body: "Trove is a fast, simple home for your lists: to-dos, plans, groceries, anything you want to keep track of.",
+  },
+  {
+    icon: ListChecksIcon,
+    title: "Lists that keep up",
+    body: "Type a line and press return for the next one. Check lines off, indent them, make headings bold, and mix checkboxes, bullets, and plain text.",
+  },
+  {
+    icon: ArrowLeftRightIcon,
+    title: "One line, many lists",
+    body: "Add a line from one list to another, like a chore to Today. Check it off in either place and both lists agree.",
   },
   {
     icon: FolderIcon,
     title: "Organize with folders",
-    body: "Group anything you save into folders, and nest folders inside each other however you like.",
-  },
-  {
-    icon: TagsIcon,
-    title: "Tag anything",
-    body: "Add your own tags to items so you can filter and find things fast, no matter which folder they're in.",
+    body: "Keep related lists together in folders, and nest folders inside each other however you like.",
   },
   {
     icon: Share2Icon,
     title: "Save from anywhere",
-    body: "Share a link, photo, or video into Trove from any app using the share sheet.",
+    body: "Share text or a link into Trove from any app and it lands as a line on your Inbox list.",
   },
   {
     icon: CloudIcon,
     title: "Sync across devices",
-    body: "Upgrade to Trove Pro any time to keep your folders backed up and in sync everywhere, and to share folders with others.",
+    body: "Upgrade to Trove Pro any time to keep your lists backed up and in sync everywhere, and to share folders with others.",
   },
 ];
 

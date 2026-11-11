@@ -5,15 +5,29 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { Folder } from "../types/models";
 import { getFolderHierarchyRows, getFolderPathLabel } from "../utils/folderTree";
 import { FolderChoiceRow } from "./FolderChoiceRow";
+import { OptionChoiceRow } from "./OptionChoiceRow";
 
 type Props = {
   visible: boolean;
   folders: Folder[];
   onClose: () => void;
+  // Called with "" for the top level when `rootLabel` is given.
   onSelectFolder: (folderId: string) => void;
+  title?: string;
+  // Adds a first row for the top level (no folder), with this name.
+  rootLabel?: string;
+  selectedFolderId?: string;
 };
 
-export const FolderTreeBrowserModal = ({ visible, folders, onClose, onSelectFolder }: Props) => {
+export const FolderTreeBrowserModal = ({
+  visible,
+  folders,
+  onClose,
+  onSelectFolder,
+  title = "All folders",
+  rootLabel,
+  selectedFolderId,
+}: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState("");
@@ -45,9 +59,9 @@ export const FolderTreeBrowserModal = ({ visible, folders, onClose, onSelectFold
     <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={close}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>All folders</Text>
-          <Pressable onPress={close}>
-            <Text style={styles.close}>Done</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Pressable accessibilityRole="button" onPress={close} hitSlop={8}>
+            <Text style={styles.close}>{rootLabel ? "Cancel" : "Done"}</Text>
           </Pressable>
         </View>
 
@@ -61,15 +75,19 @@ export const FolderTreeBrowserModal = ({ visible, folders, onClose, onSelectFold
           value={query}
         />
 
+        {!!rootLabel && !query.trim() && (
+          <OptionChoiceRow label={rootLabel} isSelected={selectedFolderId === ""} onPress={() => choose("")} />
+        )}
+
         {rows.length === 0 ? (
-          <Text style={styles.empty}>No folders found.</Text>
+          <Text style={styles.empty}>{folders.length === 0 ? "No folders yet." : "No folders found."}</Text>
         ) : (
           rows.map(({ folder, depth }) => (
             <FolderChoiceRow
               key={folder.id}
               folder={folder}
               depth={depth}
-              isSelected={false}
+              isSelected={selectedFolderId === folder.id}
               onPress={() => choose(folder.id)}
             />
           ))

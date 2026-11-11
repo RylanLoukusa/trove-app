@@ -204,7 +204,7 @@ describe("TroveProvider list entry actions", () => {
 
     const lines = result.current.items[0].listItems!;
     expect(lines.map((line) => line.text)).toEqual(["Book florist", "Roses", "Tulips", "Order cake"]);
-    expect(lines.map((line) => line.indentLevel)).toEqual([0, 1, 3, 0]);
+    expect(lines.map((line) => line.indentLevel)).toEqual([0, 1, 5, 0]);
     expect(lines[2].checked).toBe(true);
   });
 
@@ -323,12 +323,78 @@ describe("TroveProvider focus lists", () => {
     expect(lines(groceriesId)).toEqual(["Milk"]);
   });
 
-  it("won't move a line into a focus list", async () => {
+  it("moves a line onto a list that shows lines from other lists", async () => {
     const { result } = await renderTrove();
     const todayId = await createToday(result);
     await act(async () => {
-      expect(result.current.relocateListEntries([{ entryId: "list-1~a", listId: todayId }])).toEqual([]);
+      expect(result.current.relocateListEntries([{ entryId: "list-1~a", listId: todayId }])).toEqual([
+        expect.objectContaining({ entryId: "list-1~a", listId: "list-1" }),
+      ]);
     });
+
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Book florist"]);
+    expect(result.current.items.find((item) => item.id === "list-1")?.listItems?.map((line) => line.text)).toEqual([
+      "Order cake",
+    ]);
+  });
+
+  it("moving a line onto the list that already shows it leaves one copy there", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+    });
+    await act(async () => {
+      result.current.relocateListEntries([{ entryId: "list-1~a", listId: todayId }]);
+    });
+
+    const onToday = result.current.listEntries.filter((entry) => entry.listId === todayId);
+    expect(onToday.map((entry) => entry.id)).toEqual(["list-1~a"]);
+    expect(onToday[0].refEntryId).toBeUndefined();
+    expect(today(result, todayId).listItems?.map((line) => line.text)).toEqual(["Book florist"]);
+  });
+
+  it("lets any list pull lines in, and marks it the first time it does", async () => {
+    const { result } = await renderTrove();
+    let weekendId = "";
+    await act(async () => {
+      weekendId = result.current.createItem({ folderId: "", title: "Weekend", type: "list", tagOptionIds: [] })!.id;
+    });
+    expect(today(result, weekendId).listMode).toBeUndefined();
+
+    await act(async () => {
+      expect(result.current.addToFocusList(weekendId, ["list-1~a"])).toBe(1);
+    });
+
+    expect(today(result, weekendId).listMode).toBe("focus");
+    expect(today(result, weekendId).listItems?.map((line) => line.text)).toEqual(["Book florist"]);
+    expect(result.current.items.find((item) => item.id === "list-1")?.listItems).toHaveLength(2);
+  });
+
+  it("won't pull lines into a list whose own lines are shown elsewhere, or pull a pulling list's lines", async () => {
+    const { result } = await renderTrove();
+    const todayId = await createToday(result);
+    let weekendId = "";
+    let callMomId = "";
+    await act(async () => {
+      weekendId = result.current.createItem({ folderId: "", title: "Weekend", type: "list", tagOptionIds: [] })!.id;
+    });
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+      callMomId = result.current.createListEntry(todayId, { text: "Call mom" })!.id;
+      result.current.insertListEntries(weekendId, null, [{ text: "Sleep in" }]);
+    });
+    const sleepInId = result.current.listEntries.find((entry) => entry.text === "Sleep in")!.id;
+
+    await act(async () => {
+      // "To do" lends a line to Today, so it can't borrow.
+      expect(result.current.addToFocusList("list-1", [sleepInId])).toBe(0);
+      // Today's own line can't be shown on another list.
+      expect(result.current.addToFocusList(weekendId, [callMomId])).toBe(0);
+    });
+
+    expect(result.current.items.find((item) => item.id === "list-1")?.listMode).toBeUndefined();
+    expect(today(result, weekendId).listMode).toBeUndefined();
   });
 
   it("puts a deleted line back with Undo", async () => {
@@ -449,5 +515,135 @@ describe("TroveProvider focus lists", () => {
 
     expect(today(result, todayId).title).toBe("Today!");
     expect(result.current.listEntries).toEqual(before);
+  });
+});
+
+describe("TroveProvider line formatting", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  const entryById = (result: { current: ReturnType<typeof useTrove> }, id: string) =>
+    result.current.listEntries.find((entry) => entry.id === id)!;
+
+  it("turns a line into plain bold text and back, dropping its check when it stops being a checkbox", async () => {
+    const { result } = await renderTrove();
+    await act(async () => {
+      result.current.updateListEntry("list-1~a", { checked: true });
+    });
+    await act(async () => {
+      result.current.updateListEntry("list-1~a", { kind: "text", bold: true });
+    });
+
+    expect(entryById(result, "list-1~a")).toMatchObject({ kind: "text", bold: true, checked: false });
+    expect(result.current.items[0].listItems?.[0]).toMatchObject({ kind: "text", bold: true });
+
+    await act(async () => {
+      result.current.updateListEntry("list-1~a", { kind: "check", bold: false });
+    });
+    const entry = entryById(result, "list-1~a");
+    expect(entry.kind).toBe("check");
+    expect("bold" in entry).toBe(false);
+  });
+
+  it("adds lines with their own kind and bold", async () => {
+    const { result } = await renderTrove();
+    await act(async () => {
+      result.current.insertListEntries("list-1", null, [
+        { text: "Flowers", kind: "text", bold: true },
+        { text: "Peonies", kind: "bullet", indentLevel: 1, checked: true },
+      ]);
+    });
+
+    const [, , heading, bullet] = result.current.items[0].listItems!;
+    expect(heading).toMatchObject({ text: "Flowers", kind: "text", bold: true });
+    // Only a checkbox can be checked.
+    expect(bullet).toMatchObject({ text: "Peonies", kind: "bullet", indentLevel: 1, checked: false });
+  });
+
+  it("checks and unchecks several lines at once, counting only the ones that changed", async () => {
+    const { result } = await renderTrove();
+    await act(async () => {
+      result.current.insertListEntries("list-1", null, [{ text: "A note", kind: "text" }]);
+      result.current.updateListEntry("list-1~a", { checked: true });
+    });
+    const noteId = result.current.listEntries.find((entry) => entry.text === "A note")!.id;
+
+    await act(async () => {
+      expect(result.current.setEntriesChecked(["list-1~a", "list-1~b", noteId, "missing"], true)).toBe(1);
+    });
+    expect(entryById(result, "list-1~b")).toMatchObject({ checked: true });
+    expect(entryById(result, "list-1~b").completedAt).toBeTruthy();
+    expect(entryById(result, noteId).checked).toBe(false);
+
+    await act(async () => {
+      expect(result.current.setEntriesChecked(["list-1~a", "list-1~b"], false)).toBe(2);
+    });
+    expect(entryById(result, "list-1~a")).toMatchObject({ checked: false, completedAt: undefined });
+  });
+
+  it("checks a pulled-in line's original, and indents the pulled-in line only where it is shown", async () => {
+    const { result } = await renderTrove();
+    let todayId = "";
+    await act(async () => {
+      todayId = result.current.createItem({ folderId: "", title: "Today", type: "list", tagOptionIds: [] })!.id;
+    });
+    await act(async () => {
+      result.current.addToFocusList(todayId, ["list-1~a"]);
+    });
+    const referenceId = `${todayId}>list-1~a`;
+
+    await act(async () => {
+      expect(result.current.setEntriesChecked([referenceId], true)).toBe(1);
+      result.current.updateListEntry(referenceId, { indentLevel: 2, bold: true });
+    });
+
+    expect(entryById(result, "list-1~a")).toMatchObject({ checked: true, bold: true, indentLevel: 0 });
+    expect(entryById(result, referenceId).indentLevel).toBe(2);
+    const onToday = result.current.items.find((item) => item.id === todayId)!.listItems![0];
+    expect(onToday).toMatchObject({ text: "Book florist", checked: true, bold: true, indentLevel: 2 });
+  });
+
+  it("gives a list made with no title a placeholder one", async () => {
+    const { result } = await renderTrove();
+    await act(async () => {
+      expect(result.current.createItem({ folderId: "", title: "  ", type: "list", tagOptionIds: [] })?.title).toBe(
+        "Untitled list",
+      );
+    });
+  });
+});
+
+describe("TroveProvider keeps lists only", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  it("drops saved links, notes and media when it loads, and keeps lists and folders", async () => {
+    const stamp = "2026-01-01T00:00:00.000Z";
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...legacyData,
+        items: [
+          ...legacyData.items,
+          { id: "link-1", folderId: "folder-1", title: "Venue", type: "link", url: "https://example.com", tagOptionIds: [], createdAt: stamp, updatedAt: stamp },
+          { id: "note-1", folderId: "folder-1", title: "Vows", type: "text", description: "Draft", tagOptionIds: [], createdAt: stamp, updatedAt: stamp },
+          { id: "photo-1", folderId: "", title: "Dress", type: "media", media: { storagePath: "u/photo-1/1.jpg" }, tagOptionIds: [], createdAt: stamp, updatedAt: stamp },
+        ],
+      }),
+    );
+
+    const { result } = await renderTrove();
+
+    expect(result.current.items.map((item) => item.id)).toEqual(["list-1"]);
+    expect(result.current.folders.map((folder) => folder.id)).toEqual(["folder-1"]);
+    expect(result.current.items[0].listItems?.map((line) => line.text)).toEqual(["Book florist", "Order cake"]);
+    await waitFor(async () => {
+      expect((await storedData()).items.map((item) => item.id)).toEqual(["list-1"]);
+    });
   });
 });

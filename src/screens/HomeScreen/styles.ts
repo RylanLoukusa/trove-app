@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { spacing, ThemeColors } from "../../theme/theme";
+import { spacing, ThemeColors, withAlpha } from "../../theme/theme";
 
 export const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -11,136 +11,126 @@ export const createStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     content: {
-      padding: spacing.lg,
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.xl,
+      paddingBottom: 120,
+      paddingHorizontal: spacing.md,
     },
-    kicker: {
-      color: colors.accentDark,
-      fontSize: 14,
-      fontWeight: "800",
+    titleRow: {
+      alignItems: "flex-end",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.xs,
     },
     title: {
       color: colors.ink,
-      fontSize: 36,
-      fontWeight: "900",
-      letterSpacing: -1,
-      marginBottom: spacing.md,
+      fontSize: 34,
+      fontWeight: "800",
+      letterSpacing: -0.6,
+      lineHeight: 41,
+    },
+    pressed: {
+      opacity: 0.6,
     },
     upgradePill: {
       alignItems: "center",
-      backgroundColor: colors.accentDark,
+      backgroundColor: colors.buttonPrimaryBg,
       borderRadius: 999,
       flexDirection: "row",
       gap: 4,
+      marginRight: spacing.xs,
       paddingHorizontal: 10,
       paddingVertical: 6,
-    },
-    upgradePillPressed: {
-      opacity: 0.8,
     },
     upgradePillText: {
       color: colors.onAccent,
       fontSize: 12,
       fontWeight: "800",
     },
-    syncPill: {
-      alignSelf: "flex-start",
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderRadius: 999,
-      borderWidth: 1,
-      marginBottom: spacing.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
+    sync: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 6,
+      paddingBottom: 9,
     },
-    syncPillFailed: {
-      borderColor: colors.danger,
+    syncDot: {
+      backgroundColor: colors.accent,
+      borderRadius: 4,
+      height: 7,
+      width: 7,
     },
-    syncPillText: {
+    syncDotFailed: {
+      backgroundColor: colors.danger,
+    },
+    syncText: {
       color: colors.muted,
       fontSize: 13,
-      fontWeight: "800",
+      fontWeight: "600",
     },
-    syncPillTextFailed: {
+    syncTextFailed: {
       color: colors.danger,
     },
     search: {
-      backgroundColor: colors.surface,
-      borderRadius: 999,
-      padding: spacing.md,
+      alignItems: "center",
+      backgroundColor: withAlpha(colors.border, 0.75),
+      borderRadius: 12,
+      flexDirection: "row",
+      gap: spacing.xs,
+      height: 40,
+      marginTop: spacing.sm,
+      paddingHorizontal: 12,
     },
     searchText: {
       color: colors.muted,
+      fontSize: 17,
     },
-    actions: {
-      flexDirection: "row",
-      gap: spacing.sm,
+    welcome: {
+      backgroundColor: withAlpha(colors.accent, 0.16),
+      borderRadius: 14,
       marginTop: spacing.md,
+      padding: spacing.md,
     },
-    action: {
-      flex: 1,
-    },
-    rowHeader: {
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginTop: spacing.lg,
-    },
-    rowHeaderActions: {
-      flexDirection: "row",
-      gap: spacing.md,
-    },
-    section: {
+    welcomeTitle: {
       color: colors.ink,
-      fontSize: 20,
-      fontWeight: "900",
-      marginTop: spacing.lg,
-      marginBottom: spacing.xs,
+      fontSize: 17,
+      fontWeight: "700",
     },
-    link: {
+    welcomeBody: {
+      color: colors.ink,
+      fontSize: 15,
+      lineHeight: 21,
+      marginTop: 4,
+    },
+    welcomeButton: {
+      alignSelf: "flex-start",
+      marginTop: spacing.sm,
+    },
+    welcomeButtonText: {
       color: colors.accentDark,
-      fontWeight: "900",
+      fontSize: 15,
+      fontWeight: "700",
     },
-    legalLinks: {
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderRadius: 16,
-      borderWidth: 1,
-      overflow: "hidden",
-    },
-    legalLink: {
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "space-between",
-      minHeight: 52,
-      padding: spacing.md,
-    },
-    legalLinkPressed: {
-      opacity: 0.7,
-    },
-    legalLinkText: {
-      color: colors.ink,
-      fontSize: 16,
-      fontWeight: "800",
-    },
-    legalLinkArrow: {
+    hint: {
       color: colors.muted,
-      fontSize: 26,
-      lineHeight: 26,
+      fontSize: 14,
+      paddingHorizontal: spacing.xs,
     },
-    skeletonCard: {
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderRadius: 16,
-      borderWidth: 1,
-      marginTop: spacing.sm,
-      padding: spacing.md,
+    empty: {
+      alignItems: "center",
+      paddingTop: spacing.xl,
     },
-    skeletonCardText: {
-      marginTop: spacing.sm,
+    emptyTitle: {
+      color: colors.ink,
+      fontSize: 17,
+      fontWeight: "700",
     },
-    skeletonSection: {
+    emptyText: {
+      color: colors.muted,
+      fontSize: 15,
+      marginTop: 4,
+    },
+    skeleton: {
       marginTop: spacing.lg,
+    },
+    skeletonRow: {
+      marginTop: spacing.md,
     },
   });

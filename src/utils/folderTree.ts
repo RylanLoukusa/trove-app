@@ -43,9 +43,6 @@ export const getFolderHierarchyRows = (folders: Folder[]): FolderHierarchyRow[] 
   return rows;
 };
 
-export const getItemsInFolder = (items: SavedItem[], folderId: string): SavedItem[] =>
-  items.filter((item) => item.folderId === folderId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
 export const getFolderById = (folders: Folder[], folderId?: string | null): Folder | undefined =>
   folderId ? folders.find((folder) => folder.id === folderId) : undefined;
 
@@ -66,7 +63,13 @@ export const getFolderPath = (folders: Folder[], folderId?: string | null): Fold
 
 export const getFolderPathLabel = (folders: Folder[], folderId?: string | null): string => {
   const path = getFolderPath(folders, folderId);
-  return path.length > 0 ? path.map((folder) => folder.name).join(" > ") : "Home";
+  return path.length > 0 ? path.map((folder) => folder.name).join(" > ") : "Trove";
+};
+
+// A folder's emoji and name, for a row that says where a list is kept.
+export const folderLabel = (folders: Folder[], folderId?: string | null): string | undefined => {
+  const folder = getFolderById(folders, folderId);
+  return folder ? `${folder.icon ?? "📁"} ${folder.name}` : undefined;
 };
 
 export const getFolderDepth = (folders: Folder[], folderId?: string | null): number => getFolderPath(folders, folderId).length;

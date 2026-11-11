@@ -14,7 +14,6 @@ export type SharedImportPayload = {
 type SharedImportNativeModule = {
   clearImport: (importId: string) => Promise<boolean>;
   getLatestImportId?: () => Promise<string | null>;
-  markImportConsumed?: (importId: string) => Promise<boolean>;
   readImport: (importId: string) => Promise<SharedImportPayload | null>;
   syncFolderSnapshot?: (snapshot: ShareExtensionFolderSnapshot) => Promise<boolean>;
 };
@@ -58,31 +57,17 @@ export const clearSharedImport = async (importId: string): Promise<void> => {
   await nativeModule.clearImport(importId);
 };
 
-export const markSharedImportConsumed = async (importId: string): Promise<void> => {
-  if (Platform.OS !== "ios" || !nativeModule?.markImportConsumed) return;
-  await nativeModule.markImportConsumed(importId);
-};
+// Lines shared into Trove from other apps collect on a list with this title.
+export const SHARED_INBOX_TITLE = "Inbox";
 
-export const inferSourcePlatform = (sourceUrl?: string): string | undefined => {
-  if (!sourceUrl) return undefined;
+const MAX_SHARED_LINE_LENGTH = 500;
 
-  try {
-    const host = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
-    if (host.includes("instagram")) return "Instagram";
-    if (host.includes("tiktok")) return "TikTok";
-    if (host.includes("x.com") || host.includes("twitter")) return "X";
-    if (host.includes("youtube") || host.includes("youtu.be")) return "YouTube";
-    if (host.includes("threads")) return "Threads";
-    return host;
-  } catch {
-    return undefined;
-  }
-};
-
-export const titleFromSharedImport = (payload: SharedImportPayload): string => {
-  if (payload.title?.trim()) return payload.title.trim();
-  const platform = inferSourcePlatform(payload.sourceUrl);
-  if (platform) return `${platform} post`;
-  if (payload.sharedText?.trim()) return payload.sharedText.trim().slice(0, 72);
-  return "Shared item";
+// What a share becomes on a list: its words and its link on one line. Photos
+// and videos have no place on a list, so a share of only those gives "".
+export const lineFromSharedImport = (payload: Pick<SharedImportPayload, "sharedText" | "sourceUrl" | "title">): string => {
+  const clean = (value?: string): string => (value ?? "").replace(/\s+/g, " ").trim();
+  const url = clean(payload.sourceUrl);
+  const words = clean(payload.title) || clean(payload.sharedText);
+  const parts = words && url && words.includes(url) ? [words] : [words, url];
+  return parts.filter(Boolean).join(" ").slice(0, MAX_SHARED_LINE_LENGTH).trim();
 };

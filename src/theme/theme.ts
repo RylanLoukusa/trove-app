@@ -58,6 +58,13 @@ export const darkColors: ThemeColors = {
 // config). Components should prefer `useThemeColors()` so colors respond to theme.
 export const colors = lightColors;
 
+// A theme color at partial opacity, for hairlines and soft fills. Theme colors
+// are six-digit hex, so the alpha is appended as two more digits.
+export const withAlpha = (hex: string, alpha: number): string =>
+  `${hex}${Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0")}`;
+
 export const spacing = {
   xs: 6,
   sm: 10,

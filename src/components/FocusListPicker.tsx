@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { CalendarDays } from "lucide-react-native";
+import { CalendarDays, Plus } from "lucide-react-native";
 
-import { spacing, ThemeColors } from "../theme/theme";
+import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry } from "../types/models";
 import { describeDueDate } from "../utils/listView";
+import { CheckMark } from "./ListMarks";
 
 export type FocusPickerList = { id: string; title: string; entries: ListEntry[] };
 
@@ -70,31 +71,37 @@ export const FocusListPicker = ({ visible, focusListTitle, lists, selectedEntryI
           {sections.map((list) => (
             <View key={list.id} style={styles.section}>
               <Text style={styles.sectionTitle}>{list.title}</Text>
-              {list.entries.map((entry) => {
-                const selected = selectedEntryIds.has(entry.id);
-                const due = entry.dueDate ? describeDueDate(entry.dueDate) : null;
-                return (
-                  <Pressable
-                    key={entry.id}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`${entry.text}, from ${list.title}`}
-                    onPress={() => onToggle(entry)}
-                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  >
-                    <Text style={[styles.marker, selected && styles.markerSelected]}>{selected ? "✓" : "+"}</Text>
-                    <View style={styles.rowText}>
-                      <Text style={[styles.text, entry.checked && styles.textDone]}>{entry.text}</Text>
-                      {!!due && (
-                        <View style={styles.meta}>
-                          <CalendarDays size={12} color={colors.muted} />
-                          <Text style={styles.metaText}>{due.label}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
+              <View style={styles.group}>
+                {list.entries.map((entry, index) => {
+                  const selected = selectedEntryIds.has(entry.id);
+                  const due = entry.dueDate ? describeDueDate(entry.dueDate) : null;
+                  return (
+                    <Pressable
+                      key={entry.id}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={`${entry.text}, from ${list.title}`}
+                      onPress={() => onToggle(entry)}
+                      style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.rowPressed]}
+                    >
+                      <View style={styles.marker}>
+                        {selected ? <CheckMark checked colors={colors} /> : <Plus size={20} color={colors.muted} />}
+                      </View>
+                      <View style={styles.rowText}>
+                        <Text style={[styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone]}>
+                          {entry.text}
+                        </Text>
+                        {!!due && (
+                          <View style={styles.meta}>
+                            <CalendarDays size={12} color={colors.muted} />
+                            <Text style={styles.metaText}>{due.label}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           ))}
           {sections.length === 0 && (
@@ -126,12 +133,12 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       flex: 1,
       fontSize: 22,
-      fontWeight: "900",
+      fontWeight: "800",
     },
     done: {
       color: colors.accentDark,
-      fontSize: 16,
-      fontWeight: "800",
+      fontSize: 17,
+      fontWeight: "700",
     },
     search: {
       backgroundColor: colors.surface,
@@ -160,40 +167,42 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: spacing.xs,
       textTransform: "uppercase",
     },
+    group: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      overflow: "hidden",
+    },
     row: {
       alignItems: "center",
-      backgroundColor: colors.surface,
-      borderRadius: 12,
       flexDirection: "row",
       gap: spacing.sm,
-      marginBottom: 6,
       minHeight: 48,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
     },
+    rowDivided: {
+      borderTopColor: colors.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    },
     rowPressed: {
-      opacity: 0.7,
+      backgroundColor: withAlpha(colors.border, 0.5),
     },
     marker: {
-      color: colors.muted,
-      fontSize: 18,
-      fontWeight: "800",
-      textAlign: "center",
-      width: 24,
-    },
-    markerSelected: {
-      color: colors.accentDark,
+      alignItems: "center",
+      width: 28,
     },
     rowText: {
       flex: 1,
     },
     text: {
       color: colors.ink,
-      fontSize: 15,
+      fontSize: 16,
+    },
+    textBold: {
+      fontWeight: "700",
     },
     textDone: {
       color: colors.muted,
-      textDecorationLine: "line-through",
     },
     meta: {
       alignItems: "center",

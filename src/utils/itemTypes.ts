@@ -1,32 +1,9 @@
 import { Folder, ItemType, ListEntry, SavedItem, TroveData } from "../types/models";
 import { migrateEmbeddedListItems } from "./listEntries";
 
-export type ItemChoiceOption = { label: string; detail: string; tone: string };
-
-// The trailing U+FE0E forces text (not emoji) presentation for the square glyph on iOS,
-// so it renders as a plain colored character instead of a fixed-size black emoji.
-const BULLET_GLYPHS = ["●", "○", "▪︎"];
-
-export const bulletGlyphForIndent = (indentLevel = 0): string => BULLET_GLYPHS[indentLevel % BULLET_GLYPHS.length];
-
 export const isMediaItemType = (type: ItemType): boolean => type === "media" || type === "image" || type === "video";
 
 export const normalizeItemType = (type: ItemType): ItemType => (isMediaItemType(type) ? "media" : type);
-
-export const getItemTypeLabel = (type: ItemType): string => {
-  switch (normalizeItemType(type)) {
-    case "text":
-      return "Note";
-    case "list":
-      return "List";
-    case "link":
-      return "Link";
-    case "media":
-      return "Media";
-    default:
-      return "Item";
-  }
-};
 
 export const normalizeSavedItem = (item: SavedItem): SavedItem => {
   const mediaItems =
@@ -54,20 +31,28 @@ export const normalizeFolder = (folder: Folder): Folder => ({
   parentFolderId: folder.parentFolderId || null,
 });
 
-export const normalizeListEntry = (entry: ListEntry): ListEntry => ({
-  ...entry,
-  kind: entry.kind === "bullet" ? "bullet" : "check",
-  text: entry.text ?? "",
-  checked: !!entry.checked,
-  indentLevel: entry.indentLevel ?? 0,
-  tagOptionIds: entry.tagOptionIds ?? [],
-});
+export const normalizeListEntry = (entry: ListEntry): ListEntry => {
+  const { bold, ...rest } = entry;
+  return {
+    ...rest,
+    kind: entry.kind === "bullet" || entry.kind === "text" ? entry.kind : "check",
+    text: entry.text ?? "",
+    checked: !!entry.checked,
+    indentLevel: entry.indentLevel ?? 0,
+    tagOptionIds: entry.tagOptionIds ?? [],
+    ...(bold ? { bold: true } : {}),
+  };
+};
+
+// Trove keeps lists only. It used to save notes, links and photos as well;
+// any of those still in stored or synced data are dropped as it is read.
+export const isListItem = (item: Pick<SavedItem, "type">): boolean => item.type === "list";
 
 // Data stored before list entries existed has no `listEntries` and keeps list
 // lines embedded on each item; those are migrated into entries here.
 export const normalizeTroveData = (data: TroveData): TroveData => {
   const { items, listEntries } = migrateEmbeddedListItems(
-    (data.items ?? []).map(normalizeSavedItem),
+    (data.items ?? []).map(normalizeSavedItem).filter(isListItem),
     (data.listEntries ?? []).map(normalizeListEntry),
   );
   const itemIds = new Set(items.map((item) => item.id));

@@ -1,386 +1,183 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { EmptyState } from "../../components/EmptyState";
-import { FolderCard } from "../../components/FolderCard";
-import { ItemCard } from "../../components/ItemCard";
-import { ScreenTopBar } from "../../components/ScreenTopBar";
-import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
+import { CircleX, Search } from "lucide-react-native";
+
+import { BulletMark, CheckMark } from "../../components/ListMarks";
+import { NavBar } from "../../components/NavBar";
+import { FolderStrip, ListRow, RowGroup, SectionHeader } from "../../components/Rows";
+import { backLabelFor } from "../../navigation/backLabel";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
-import { Folder, SavedItem, TagOption } from "../../types/models";
-import { getFolderPathLabel } from "../../utils/folderTree";
-import { searchFoldersAndItems } from "../../utils/itemFilters";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { folderLabel, getDescendantFolderIds } from "../../utils/folderTree";
+import { listActivityTimes, listDisplayTitle, sortListsByActivity } from "../../utils/listEntries";
+import { searchTrove, splitAtMatch } from "../../utils/search";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Search">;
 
-type SearchFilter = "all" | "folders" | "items" | "recent";
-type SearchSort = "updated" | "alphabetical" | "newest" | "oldest";
-type SearchResults = { folders: Folder[]; items: SavedItem[] };
+const RECENT_LIMIT = 8;
 
-const RECENT_FOLDER_LIMIT = 5;
-const RECENT_ITEM_LIMIT = 8;
-
-const filterOptions: Array<{ label: string; value: SearchFilter }> = [
-  { label: "All", value: "all" },
-  { label: "Folders", value: "folders" },
-  { label: "Items", value: "items" },
-  { label: "Recent", value: "recent" },
-];
-
-const sortOptions: Array<{ label: string; value: SearchSort }> = [
-  { label: "Recently Updated", value: "updated" },
-  { label: "Alphabetical", value: "alphabetical" },
-  { label: "Newest", value: "newest" },
-  { label: "Oldest", value: "oldest" },
-];
-
-const sortFolders = (folders: Folder[], sort: SearchSort): Folder[] =>
-  [...folders].sort((a, b) => {
-    switch (sort) {
-      case "alphabetical":
-        return a.name.localeCompare(b.name);
-      case "newest":
-        return b.createdAt.localeCompare(a.createdAt);
-      case "oldest":
-        return a.createdAt.localeCompare(b.createdAt);
-      case "updated":
-      default:
-        return b.updatedAt.localeCompare(a.updatedAt);
-    }
-  });
-
-const sortItems = (items: SavedItem[], sort: SearchSort): SavedItem[] =>
-  [...items].sort((a, b) => {
-    switch (sort) {
-      case "alphabetical":
-        return a.title.localeCompare(b.title);
-      case "newest":
-        return b.createdAt.localeCompare(a.createdAt);
-      case "oldest":
-        return a.createdAt.localeCompare(b.createdAt);
-      case "updated":
-      default:
-        return b.updatedAt.localeCompare(a.updatedAt);
-    }
-  });
-
-const getRecentResults = (results: SearchResults): SearchResults => ({
-  folders: sortFolders(results.folders, "updated").slice(0, RECENT_FOLDER_LIMIT),
-  items: sortItems(results.items, "updated").slice(0, RECENT_ITEM_LIMIT),
-});
-
-const SearchSkeleton = () => {
-  const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  return (
-  <ScreenSkeleton>
-    <SkeletonBlock height={38} radius={16} width="42%" />
-    <SkeletonBlock height={50} radius={25} />
-    <SkeletonBlock height={24} radius={12} width="36%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={4}
-      renderItem={() => (
-        <View style={styles.skeletonCard}>
-          <SkeletonBlock height={24} radius={12} width={56} />
-          <SkeletonText lineCount={2} lineWidths={["72%", "44%"]} style={styles.skeletonCardText} />
-        </View>
-      )}
-    />
-    <SkeletonBlock height={24} radius={12} width="28%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={5}
-      renderItem={() => (
-        <View style={styles.skeletonCard}>
-          <SkeletonText lineCount={3} lineWidths={["82%", "58%", "36%"]} />
-        </View>
-      )}
-    />
-  </ScreenSkeleton>
-  );
-};
-
-type SearchFolderRowProps = {
-  count: number;
-  folder: Folder;
-  onOpenFolder: (folderId: string) => void;
-};
-
-const SearchFolderRow = React.memo(function SearchFolderRow({ count, folder, onOpenFolder }: SearchFolderRowProps) {
-  const onPress = useCallback(() => {
-    onOpenFolder(folder.id);
-  }, [folder.id, onOpenFolder]);
-
-  return <FolderCard count={count} folder={folder} onPress={onPress} />;
-});
-
-type SearchItemRowProps = {
-  item: SavedItem;
-  folderPath: string;
-  tagOptions: TagOption[];
-  onOpenItemDetail: (itemId: string) => void;
-};
-
-const SearchItemRow = React.memo(function SearchItemRow({ item, folderPath, tagOptions, onOpenItemDetail }: SearchItemRowProps) {
-  const onPress = useCallback(() => {
-    onOpenItemDetail(item.id);
-  }, [item.id, onOpenItemDetail]);
-
-  return <ItemCard item={item} folderPath={folderPath} tagOptions={tagOptions} onPress={onPress} />;
-});
-
+// Finds folders, lists, and single lines. Before anything is typed it offers
+// the lists touched most recently.
 export const SearchScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, tagOptions } = useTrove();
+  const { folders, isReady, items, listEntries } = useTrove();
   const [query, setQuery] = useState(route.params?.query ?? "");
-  const [filter, setFilter] = useState<SearchFilter>("all");
-  const [sort, setSort] = useState<SearchSort>("updated");
-
   const hasQuery = query.trim().length > 0;
 
-  const matchedResults = useMemo<SearchResults>(
-    () => (hasQuery ? searchFoldersAndItems(query, folders, items, tagOptions) : { folders, items }),
-    [folders, hasQuery, items, query, tagOptions],
+  const activity = useMemo(() => listActivityTimes(items, listEntries ?? []), [items, listEntries]);
+  const recent = useMemo(() => sortListsByActivity(items, activity).slice(0, RECENT_LIMIT), [activity, items]);
+  // A line pulled into another list is found once, where it lives.
+  const borrowedLineIds = useMemo(
+    () => new Set((listEntries ?? []).filter((entry) => entry.refEntryId).map((entry) => entry.id)),
+    [listEntries],
+  );
+  const results = useMemo(() => {
+    const found = searchTrove(query, folders, items, borrowedLineIds);
+    return { ...found, lists: sortListsByActivity(found.lists, activity) };
+  }, [activity, borrowedLineIds, folders, items, query]);
+  const foundNothing = results.folders.length + results.lists.length + results.lines.length === 0;
+
+  const countForFolder = useCallback(
+    (folderId: string): number => {
+      const ids = new Set([folderId, ...getDescendantFolderIds(folders, folderId)]);
+      return items.reduce((count, item) => count + (ids.has(item.folderId) ? 1 : 0), 0);
+    },
+    [folders, items],
   );
 
-  const sortedResults = useMemo<SearchResults>(
-    () => ({
-      folders: sortFolders(matchedResults.folders, sort),
-      items: sortItems(matchedResults.items, sort),
-    }),
-    [matchedResults.folders, matchedResults.items, sort],
-  );
-
-  const recentResults = useMemo<SearchResults>(() => getRecentResults(matchedResults), [matchedResults]);
-  const sortedRecentResults = useMemo<SearchResults>(
-    () => ({
-      folders: sortFolders(recentResults.folders, sort),
-      items: sortItems(recentResults.items, sort),
-    }),
-    [recentResults.folders, recentResults.items, sort],
-  );
-
-  const results = useMemo<SearchResults>(() => {
-    const source = !hasQuery || filter === "recent" ? sortedRecentResults : sortedResults;
-
-    switch (filter) {
-      case "folders":
-        return { folders: source.folders, items: [] };
-      case "items":
-        return { folders: [], items: source.items };
-      case "recent":
-      case "all":
-      default:
-        return source;
-    }
-  }, [filter, hasQuery, sortedRecentResults, sortedResults]);
-
-  const folderItemCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    items.forEach((item) => counts.set(item.folderId, (counts.get(item.folderId) ?? 0) + 1));
-    return counts;
-  }, [items]);
-
-  const showFolders = filter !== "items";
-  const showItems = filter !== "folders";
-  const visibleFolderCount = results.folders.length;
-  const visibleItemCount = results.items.length;
-  const visibleResultCount = visibleFolderCount + visibleItemCount;
-  const hasAnyResult = visibleResultCount > 0;
-  const countSource = hasQuery ? sortedResults : recentResults;
-  const filterCounts: Record<SearchFilter, number> = {
-    all: (hasQuery ? countSource.folders.length : recentResults.folders.length) + (hasQuery ? countSource.items.length : recentResults.items.length),
-    folders: hasQuery ? countSource.folders.length : recentResults.folders.length,
-    items: hasQuery ? countSource.items.length : recentResults.items.length,
-    recent: recentResults.folders.length + recentResults.items.length,
-  };
-  const canResetSearchView = hasQuery || filter !== "all" || sort !== "updated";
-  const emptyTitle =
-    filter === "folders"
-      ? hasQuery
-        ? "No matching folders."
-        : "No recent folders yet."
-      : filter === "items"
-        ? hasQuery
-          ? "No matching items."
-          : "No recent items yet."
-        : filter === "recent"
-          ? hasQuery
-            ? "No recent matches."
-            : "No recent activity yet."
-          : hasQuery
-            ? "No matches found."
-            : "Nothing to show yet.";
-  const emptyMessage =
-    filter === "recent"
-      ? hasQuery
-        ? "Try All to include older matches."
-        : "Recent folders and items will appear here once you add or update them."
-      : hasQuery
-        ? "Try a different term or reset the search view."
-        : "Recent folders and items will appear here once you add or update them.";
-
-  const onOpenFolder = useCallback(
-    (folderId: string) => {
-      navigation.navigate("Folder", { folderId });
+  const openList = useCallback(
+    (listId: string) => {
+      navigation.navigate("List", { listId });
     },
     [navigation],
   );
 
-  const onOpenItemDetail = useCallback(
-    (itemId: string) => {
-      navigation.navigate("ItemDetail", { itemId });
-    },
-    [navigation],
-  );
-
-  const clearQuery = useCallback(() => {
-    setQuery("");
-  }, []);
-
-  const resetSearchView = useCallback(() => {
-    setFilter("all");
-    setSort("updated");
-    setQuery("");
-  }, []);
+  const goBack = useCallback(() => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("Home");
+  }, [navigation]);
 
   return (
     <View style={styles.screen}>
-      <ScreenTopBar navigation={navigation} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {!isReady ? (
-          <SearchSkeleton />
+      <NavBar backLabel={backLabelFor(navigation.getState(), route.key, folders)} onBack={goBack} />
+      <View style={styles.field}>
+        <Search size={17} color={colors.muted} />
+        <TextInput
+          accessibilityLabel="Search"
+          style={styles.input}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search lists and lines"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          returnKeyType="search"
+        />
+        {hasQuery && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={10} onPress={() => setQuery("")}>
+            <CircleX size={18} color={colors.muted} />
+          </Pressable>
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
+        {!isReady ? null : !hasQuery ? (
+          recent.length > 0 ? (
+            <>
+              <SectionHeader title="Recent" />
+              <RowGroup>
+                {recent.map((list) => (
+                  <ListRow
+                    key={list.id}
+                    list={list}
+                    activityAt={activity.get(list.id)}
+                    folderLabel={folderLabel(folders, list.folderId)}
+                    onPress={() => openList(list.id)}
+                  />
+                ))}
+              </RowGroup>
+            </>
+          ) : (
+            <Text style={styles.hint}>Your lists and their lines show up here as you type.</Text>
+          )
+        ) : foundNothing ? (
+          <Text style={styles.hint}>Nothing matches “{query.trim()}”.</Text>
         ) : (
           <>
-            <Text style={styles.title}>Search</Text>
-            <TextInput
-              accessibilityLabel="Search"
-              style={styles.input}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Folders, titles, tags, URLs..."
-              placeholderTextColor={colors.muted}
-              autoFocus
-            />
-            {hasQuery && (
-              <Pressable onPress={clearQuery} style={({ pressed }) => [styles.clearQuery, pressed && styles.controlPressed]}>
-                <Text style={styles.clearQueryText}>Clear search</Text>
-              </Pressable>
-            )}
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.controlScroller}
-              contentContainerStyle={styles.controlRow}
-            >
-              {filterOptions.map((option) => {
-                const selected = filter === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setFilter(option.value)}
-                    style={({ pressed }) => [
-                      styles.filterChip,
-                      selected && styles.filterChipSelected,
-                      pressed && styles.controlPressed,
-                    ]}
-                  >
-                    <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
-                      {option.label} {filterCounts[option.value]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <View style={styles.sortBlock}>
-              <Text style={styles.sortLabel}>Sort by</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-                {sortOptions.map((option) => {
-                  const selected = sort === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      onPress={() => setSort(option.value)}
-                      style={({ pressed }) => [
-                        styles.sortChip,
-                        selected && styles.sortChipSelected,
-                        pressed && styles.controlPressed,
-                      ]}
-                    >
-                      <Text style={[styles.sortChipText, selected && styles.sortChipTextSelected]}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {canResetSearchView && (
-              <View style={styles.resetRow}>
-                <Pressable onPress={resetSearchView} style={({ pressed }) => pressed && styles.controlPressed}>
-                  <Text style={styles.resetText}>Reset</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {!hasAnyResult && (
-              <EmptyState
-                title={emptyTitle}
-                message={emptyMessage}
-              />
-            )}
-
-            {showFolders && hasAnyResult && (
+            {results.folders.length > 0 && (
               <>
-                <Text style={styles.section}>Folders</Text>
-                {results.folders.length === 0 ? (
-                  <EmptyState
-                    title={hasQuery ? "No folders found." : "No recent folders yet."}
-                    message={hasQuery ? "Try another search term or filter." : "Created or updated folders will show here."}
-                  />
-                ) : (
-                  results.folders.map((folder) => (
-                    <SearchFolderRow
-                      key={folder.id}
-                      count={folderItemCounts.get(folder.id) ?? 0}
-                      folder={folder}
-                      onOpenFolder={onOpenFolder}
-                    />
-                  ))
-                )}
+                <SectionHeader title="Folders" />
+                <FolderStrip
+                  folders={results.folders}
+                  countFor={countForFolder}
+                  onOpen={(folderId) => navigation.navigate("Folder", { folderId })}
+                />
               </>
             )}
 
-            {showItems && hasAnyResult && (
+            {results.lists.length > 0 && (
               <>
-                <Text style={styles.section}>Items</Text>
-                {results.items.length === 0 ? (
-                  <EmptyState
-                    title={hasQuery ? "No items found." : "No recent items yet."}
-                    message={
-                      hasQuery
-                        ? "Search looks across titles, descriptions, tags, and URLs."
-                        : "Created or updated items will show here."
-                    }
-                  />
-                ) : (
-                  results.items.map((item) => (
-                    <SearchItemRow
-                      key={item.id}
-                      item={item}
-                      folderPath={getFolderPathLabel(folders, item.folderId)}
-                      tagOptions={tagOptions}
-                      onOpenItemDetail={onOpenItemDetail}
+                <SectionHeader title="Lists" />
+                <RowGroup>
+                  {results.lists.map((list) => (
+                    <ListRow
+                      key={list.id}
+                      list={list}
+                      activityAt={activity.get(list.id)}
+                      folderLabel={folderLabel(folders, list.folderId)}
+                      onPress={() => openList(list.id)}
                     />
-                  ))
-                )}
+                  ))}
+                </RowGroup>
+              </>
+            )}
+
+            {results.lines.length > 0 && (
+              <>
+                <SectionHeader title="Lines" />
+                <RowGroup>
+                  {results.lines.map(({ list, line }) => {
+                    const listTitle = listDisplayTitle(list, list.listItems);
+                    const parts = splitAtMatch(line.text, query);
+                    return (
+                      <Pressable
+                        key={`${list.id}:${line.id}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${line.text}, on ${listTitle}`}
+                        onPress={() => openList(list.id)}
+                        style={({ pressed }) => [styles.lineRow, pressed && styles.lineRowPressed]}
+                      >
+                        <View style={styles.lineMark}>
+                          {line.kind === "check" ? (
+                            <CheckMark checked={!!line.checked} colors={colors} size={18} />
+                          ) : line.kind === "bullet" ? (
+                            <BulletMark colors={colors} />
+                          ) : null}
+                        </View>
+                        <View style={styles.lineText}>
+                          <Text numberOfLines={2} style={[styles.lineTitle, line.checked && styles.lineTitleDone]}>
+                            {parts.before}
+                            <Text style={styles.lineMatch}>{parts.match}</Text>
+                            {parts.after}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.lineList}>
+                            {listTitle}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </RowGroup>
               </>
             )}
           </>

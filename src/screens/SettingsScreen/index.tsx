@@ -143,11 +143,11 @@ export const SettingsScreen = ({ navigation }: Props) => {
           <>
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.body}>
-          Trove works offline and stores folders and items locally on this device. Sign in to sync your
-          plans and collections to Supabase when configured.
+          Trove works offline and keeps your lists and folders on this device. Sign in to sync them to
+          Supabase when configured.
         </Text>
         <Text style={styles.stat}>{folders.length} folders</Text>
-        <Text style={styles.stat}>{items.length} saved items</Text>
+        <Text style={styles.stat}>{items.length} {items.length === 1 ? "list" : "lists"}</Text>
 
         <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.themeRow}>

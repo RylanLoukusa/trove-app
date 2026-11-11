@@ -1,538 +1,238 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useFocusEffect } from "@react-navigation/native";
-import { EllipsisVertical, Pencil, UserPlus } from "lucide-react-native";
-import { AppButton } from "../../components/AppButton";
-import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lucide-react-native";
+
+import { SkeletonBlock, SkeletonText } from "../../components";
 import { CommentThread } from "../../components/CommentThread";
-import { EmptyState } from "../../components/EmptyState";
-import { FolderCard } from "../../components/FolderCard";
-import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
-import { MediaImage } from "../../components/MediaImage";
-import { ScreenTopBar } from "../../components/ScreenTopBar";
-import { ScreenSkeleton, SkeletonBlock, SkeletonList, SkeletonText } from "../../components";
-import { SpotlightMessageCard, SpotlightOverlay, useSpotlightAnchor } from "../../components/SpotlightTour";
-import { VideoPreview } from "../../components/VideoPreview";
+import { MenuAction, MenuSheet } from "../../components/MenuSheet";
+import { NavBar, NavIconButton } from "../../components/NavBar";
+import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader } from "../../components/Rows";
+import { useListRowActions } from "../../components/useListRowActions";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { backLabelFor } from "../../navigation/backLabel";
 import { RootStackParamList } from "../../navigation/types";
-import { useOnboardingTour } from "../../onboarding/OnboardingTourContext";
 import { useTrove } from "../../storage/storage";
 import { useThemeColors } from "../../theme/ThemeContext";
-import { spacing } from "../../theme/theme";
-import { Folder, SavedItem, TagOption } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
-import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
-import { bulletGlyphForIndent } from "../../utils/itemTypes";
+import { canAddChildFolder, getChildFolders, getDescendantFolderIds, getFolderById } from "../../utils/folderTree";
+import { listActivityTimes, listDisplayTitle, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
 
-type ScreenStyles = ReturnType<typeof createStyles>;
-
-const FolderSkeleton = ({ styles }: { styles: ScreenStyles }) => (
-  <ScreenSkeleton>
-    <SkeletonBlock height={20} radius={10} width="58%" />
-    <View style={styles.titleRow}>
-      <SkeletonBlock height={38} radius={16} style={{ flex: 1 }} />
-      <SkeletonBlock height={42} radius={21} width={82} />
-    </View>
-    <SkeletonText lineCount={2} lineWidths={["86%", "64%"]} />
-    <View style={styles.actions}>
-      <SkeletonBlock height={52} radius={16} style={styles.action} />
-      <SkeletonBlock height={52} radius={16} style={styles.action} />
-    </View>
-    <SkeletonBlock height={24} radius={12} width="44%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={3}
-      renderItem={() => (
-        <View style={styles.skeletonCard}>
-          <SkeletonBlock height={24} radius={12} width={56} />
-          <SkeletonText lineCount={2} lineWidths={["70%", "36%"]} style={styles.skeletonCardText} />
-        </View>
-      )}
-    />
-    <SkeletonBlock height={24} radius={12} width="32%" style={styles.skeletonSection} />
-    <SkeletonList
-      count={5}
-      renderItem={() => (
-        <View style={styles.skeletonFullItemCard}>
-          <View style={styles.fullItemHeader}>
-            <SkeletonText lineCount={1} lineWidths={["60%"]} style={styles.fullItemTitle} />
-            <SkeletonBlock height={36} radius={18} width={36} />
-          </View>
-          <SkeletonBlock height={160} radius={14} style={styles.fullItemMedia} />
-          <SkeletonText lineCount={3} lineWidths={["88%", "72%", "42%"]} style={styles.skeletonCardText} />
-        </View>
-      )}
-    />
-  </ScreenSkeleton>
-);
-
-type SubfolderRowProps = {
-  child: Folder;
-  count: number;
-  onOpenFolder: (folderId: string) => void;
-};
-
-const SubfolderRow = React.memo(function SubfolderRow({ child, count, onOpenFolder }: SubfolderRowProps) {
-  const onPress = useCallback(() => {
-    onOpenFolder(child.id);
-  }, [child.id, onOpenFolder]);
-
-  return <FolderCard folder={child} count={count} onPress={onPress} />;
-});
-
-type FolderItemRowProps = {
-  item: SavedItem;
-  tagOptions: TagOption[];
-  onOpenItemDetail: (itemId: string) => void;
-  onToggleChecklistItem: (itemId: string, listItemId: string) => void;
-  styles: ScreenStyles;
-};
-
-const FolderItemRow = React.memo(function FolderItemRow({ item, tagOptions, onOpenItemDetail, onToggleChecklistItem, styles }: FolderItemRowProps) {
-  const assignedTags = item.tagOptionIds
-    .map((tagOptionId) => tagOptions.find((option) => option.id === tagOptionId))
-    .filter((option): option is TagOption => !!option);
-  const onPress = useCallback(() => {
-    onOpenItemDetail(item.id);
-  }, [item.id, onOpenItemDetail]);
-
-  const onPressOpenUrl = useCallback(() => {
-    if (item.url) void Linking.openURL(item.url);
-  }, [item.url]);
-  const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
-  const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
-
-  return (
-    <View style={styles.fullItemBlock}>
-      <View style={styles.fullItemCard}>
-        <View style={styles.fullItemHeader}>
-          <Text style={styles.fullItemTitle} numberOfLines={2}>{item.title}</Text>
-          <Pressable
-            accessibilityLabel="Open item"
-            accessibilityRole="button"
-            onPress={onPress}
-            style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}
-          >
-            <Text style={styles.openItemButtonIcon}>›</Text>
-          </Pressable>
-        </View>
-
-        {!!item.url && (
-          <Pressable onPress={onPressOpenUrl} style={({ pressed }) => [styles.fullItemLink, pressed && styles.fullItemLinkPressed]}>
-            <Text numberOfLines={2} style={styles.fullItemLinkText}>{item.url}</Text>
-          </Pressable>
-        )}
-
-        <MediaCollectionDisplay
-          media={item.media}
-          mediaItems={item.mediaItems}
-          itemHeight={300}
-          itemWidth={300}
-          mediaLabel={item.title}
-          style={styles.fullItemMedia}
-        />
-
-        {!!item.description && <Text style={styles.fullItemDescription}>{item.description}</Text>}
-
-        {item.type === "list" && !!item.listItems?.length && (
-          <View style={styles.fullItemList}>
-            {item.listItems.map((listItem) => (
-              <View
-                key={listItem.id}
-                style={[styles.fullItemListRow, { marginLeft: Math.min(listItem.indentLevel ?? 0, 3) * spacing.lg }]}
-              >
-                {listItem.kind === "check" ? (
-                  <Pressable
-                    accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: !!listItem.checked }}
-                    onPress={() => onToggleChecklistItem(item.id, listItem.id)}
-                    style={({ pressed }) => [styles.fullItemCheckbox, pressed && styles.fullItemCheckboxPressed]}
-                  >
-                    <Text style={styles.fullItemMarker}>{listItem.checked ? "☑" : "☐"}</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={[styles.fullItemMarker, styles.fullItemBullet]}>{bulletGlyphForIndent(listItem.indentLevel)}</Text>
-                )}
-                <Text style={[styles.fullItemListText, listItem.checked && styles.fullItemListTextDone]}>{listItem.text}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {shouldShowAttachments && (
-          <View style={styles.fullItemAttachments}>
-            {item.attachments?.map((attachment) =>
-              attachment.mediaType === "image" ? (
-                <MediaImage
-                  key={attachment.id}
-                  source={{ uri: attachment.uri }}
-                  style={styles.fullItemAttachmentImage}
-                  accessibilityLabel={attachment.caption || `Photo attached to ${item.title}`}
-                />
-              ) : (
-                <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.fullItemAttachmentVideo} />
-              ),
-            )}
-          </View>
-        )}
-
-        <View style={styles.fullItemFooter}>
-          {assignedTags.length > 0 && (
-            <View style={styles.fullItemPills}>
-              {assignedTags.map((tag) => (
-                <Text key={tag.id} style={[styles.fullItemPill, tag.color ? { color: tag.color } : undefined]}>
-                  {tag.name}
-                </Text>
-              ))}
-            </View>
-          )}
-          {assignedTags.length === 0 && <Text style={styles.fullItemTags}>No tags</Text>}
-        </View>
-      </View>
-    </View>
-  );
-});
-
+// One folder: its subfolders and the lists kept in it.
 export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const {
-    folders,
-    isReady,
-    items,
-    tagOptions,
-    createItem,
-    updateListEntry,
-    deleteFolder,
-    canManageFolder,
-    canEditFolderContent,
-    canEditItem,
-  } = useTrove();
-  const [showAllSubfolders, setShowAllSubfolders] = useState(false);
+  const { folders, isReady, items, listEntries, createItem, deleteFolder, canManageFolder, canEditFolderContent } = useTrove();
+  const { openListActions, overlays } = useListRowActions();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const folder = getFolderById(folders, route.params.folderId);
-  const subfolders = useMemo(() => (folder ? getChildFolders(folders, folder.id) : []), [folder, folders]);
-  const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
-  const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
-  const folderItems = useMemo(() => (folder ? getItemsInFolder(items, folder.id) : []), [folder, items]);
+  const folderId = folder?.id;
+  const subfolders = useMemo(() => (folderId ? getChildFolders(folders, folderId) : []), [folderId, folders]);
+  const activity = useMemo(() => listActivityTimes(items, listEntries ?? []), [items, listEntries]);
+  const lists = useMemo(
+    () => (folderId ? sortListsByActivity(items.filter((item) => item.folderId === folderId), activity) : []),
+    [activity, folderId, items],
+  );
+  const canManage = folder ? canManageFolder(folder.id) : false;
+  const canEditContent = folder ? canEditFolderContent(folder.id) : false;
   const canNestMore = folder ? canAddChildFolder(folders, folder.id) : false;
-  const canManageCurrentFolder = folder ? canManageFolder(folder.id) : false;
-  const canEditCurrentFolderContent = folder ? canEditFolderContent(folder.id) : false;
-  const { isShared: isFolderSharedByOwner } = useFolderShareStatus(folder?.id);
-  const showComments = isSharedAccess(folder) || isFolderSharedByOwner;
+  const { isShared: isSharedByOwner } = useFolderShareStatus(folderId);
+  const showComments = isSharedAccess(folder) || isSharedByOwner;
 
-  const onBreadcrumbHome = useCallback(() => {
-    navigation.navigate("Home");
+  const backLabel = backLabelFor(navigation.getState(), route.key, folders);
+  const goBack = useCallback(() => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("Home");
   }, [navigation]);
 
-  const onBreadcrumbFolder = useCallback(
-    (folderId: string) => {
-      navigation.navigate("Folder", { folderId });
+  const countForFolder = useCallback(
+    (id: string): number => {
+      const ids = new Set([id, ...getDescendantFolderIds(folders, id)]);
+      return items.reduce((count, item) => count + (ids.has(item.folderId) ? 1 : 0), 0);
     },
-    [navigation],
+    [folders, items],
   );
 
-  const onOpenFolder = useCallback(
-    (folderId: string) => {
-      navigation.navigate("Folder", { folderId });
-    },
-    [navigation],
-  );
+  // One tap starts a list in this folder: it opens with the cursor in its title.
+  const onNewList = useCallback(() => {
+    if (!folderId) return;
+    const list = createItem({ folderId, title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
+    if (list) navigation.navigate("List", { listId: list.id, isNew: true });
+  }, [createItem, folderId, navigation]);
 
-  const onOpenItemDetail = useCallback(
-    (itemId: string) => {
-      navigation.navigate("ItemDetail", { itemId });
-    },
-    [navigation],
-  );
-
-  const onToggleChecklistItem = useCallback(
-    (itemId: string, listItemId: string): void => {
-      const listItem = items.find((candidate) => candidate.id === itemId)?.listItems?.find((entry) => entry.id === listItemId);
-      if (!listItem || listItem.kind !== "check") return;
-      if (!canEditItem(itemId)) {
-        Alert.alert("Cannot edit item", "You do not have permission to edit this item.");
-        return;
-      }
-
-      updateListEntry(listItemId, { checked: !listItem.checked });
-    },
-    [canEditItem, items, updateListEntry],
-  );
-
-  const onPressEditFolder = useCallback(() => {
-    if (!folder || !canManageCurrentFolder) return;
-    navigation.navigate("AddEditFolder", { folderId: folder.id });
-  }, [canManageCurrentFolder, folder, navigation]);
-
-  const onPressAddItem = useCallback(() => {
+  const shareAsText = useCallback(async (): Promise<void> => {
     if (!folder) return;
-    if (!canEditCurrentFolderContent) {
-      Alert.alert("Cannot add item", "You only have view access to this folder.");
-      return;
-    }
-    navigation.navigate("AddEditItem", { folderId: folder.id });
-  }, [canEditCurrentFolderContent, folder, navigation]);
-
-  // Skips the Add item form: makes an empty checklist and opens it with the
-  // cursor in its title.
-  const onPressNewList = useCallback(() => {
-    if (!folder || !canEditCurrentFolderContent) return;
-    const list = createItem({ folderId: folder.id, title: "Untitled list", type: "list", tagOptionIds: [] });
-    if (list) navigation.navigate("ItemDetail", { itemId: list.id, newList: true });
-  }, [canEditCurrentFolderContent, createItem, folder, navigation]);
-
-  const onPressAddSubfolder = useCallback(() => {
-    if (!folder || !canNestMore || !canManageCurrentFolder) return;
-    navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
-  }, [canManageCurrentFolder, canNestMore, folder, navigation]);
-
-  const onPressManageAccess = useCallback(() => {
-    if (!folder) return;
-    navigation.navigate("ShareFolder", { folderId: folder.id });
-  }, [folder, navigation]);
-
-  const onPressShare = useCallback(async (): Promise<void> => {
-    if (!folder) return;
-    const itemLines = folderItems.map((item) => `- ${item.title}`);
-    const subfolderLines = subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`);
     const sections = [
       `${folder.icon ?? "📁"} ${folder.name}`,
       folder.purpose ?? "",
-      subfolderLines.length ? `Subfolders:\n${subfolderLines.join("\n")}` : "",
-      itemLines.length ? `Items:\n${itemLines.join("\n")}` : "",
+      subfolders.length ? `Folders:\n${subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`).join("\n")}` : "",
+      lists.length ? `Lists:\n${lists.map((list) => `- ${listDisplayTitle(list, list.listItems)}`).join("\n")}` : "",
     ].filter(Boolean);
 
     await Share.share({ message: sections.join("\n\n") });
-  }, [folder, folderItems, subfolders]);
+  }, [folder, lists, subfolders]);
 
   const confirmDelete = useCallback((): void => {
-    if (!folder || !canManageCurrentFolder) return;
-    Alert.alert(
-      "Delete folder?",
-      "This recursively deletes nested subfolders and saved items inside this folder.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void (async () => {
-              const result = await deleteFolder(folder.id);
-              if (!result.ok) {
-                Alert.alert("Could not delete folder", result.error ?? "Unable to delete uploaded media.");
-                return;
-              }
-              navigation.navigate("Home");
-            })();
-          },
-        },
-      ],
-    );
-  }, [canManageCurrentFolder, deleteFolder, folder, navigation]);
-
-  const onOpenMenu = useCallback((): void => {
     if (!folder) return;
-    Alert.alert("Folder actions", folder.name, [
-      { text: "Share summary", onPress: () => void onPressShare() },
-      ...(canManageCurrentFolder ? [{ text: "Get shareable link", onPress: onPressManageAccess }] : []),
-      ...(canManageCurrentFolder
-        ? [{ text: "Delete folder", style: "destructive" as const, onPress: confirmDelete }]
-        : []),
+    Alert.alert("Delete this folder?", "Its subfolders and every list inside them are deleted too.", [
       { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            const result = await deleteFolder(folder.id);
+            if (!result.ok) {
+              Alert.alert("Could not delete folder", result.error ?? "Try again in a moment.");
+              return;
+            }
+            goBack();
+          })();
+        },
+      },
     ]);
-  }, [canManageCurrentFolder, confirmDelete, folder, onPressManageAccess, onPressShare]);
+  }, [deleteFolder, folder, goBack]);
 
-  const { currentStep, stepNumber, totalSteps, stepTargetFolderId, next, skip, reportFocus } = useOnboardingTour();
-  const isTourStepHere = currentStep?.screen === "Folder" && !!folder && folder.id === stepTargetFolderId;
-  const isSpotlightStepHere = isTourStepHere && currentStep?.mode !== "message";
-  const isMessageStepHere = isTourStepHere && currentStep?.mode === "message";
-  const { scrollRef, onScroll, registerAnchor, rect } = useSpotlightAnchor(
-    isSpotlightStepHere ? currentStep?.anchorKey : undefined,
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      reportFocus({ screen: "Folder", folderId: folder?.id ?? null, parentFolderId: folder?.parentFolderId ?? null });
-    }, [folder, reportFocus]),
-  );
-
-  if (!isReady) {
+  if (!isReady || !folder) {
     return (
       <View style={styles.screen}>
-        <ScreenTopBar navigation={navigation} />
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <FolderSkeleton styles={styles} />
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (!folder) {
-    return (
-      <View style={styles.screen}>
-        <ScreenTopBar navigation={navigation} />
-        <View style={styles.notFoundBody}>
-          <EmptyState title="Folder not found" message="This folder may have been deleted." />
+        <NavBar backLabel={backLabel} onBack={goBack} />
+        <View style={styles.content}>
+          {!isReady ? (
+            <>
+              <SkeletonBlock height={34} radius={10} width="56%" />
+              <SkeletonBlock height={62} radius={14} style={styles.skeletonRow} />
+              <SkeletonText lineCount={3} lineWidths={["82%", "64%", "74%"]} style={styles.skeletonRow} />
+            </>
+          ) : (
+            <Text style={styles.missing}>This folder isn't here any more.</Text>
+          )}
         </View>
       </View>
     );
   }
+
+  const menuActions: MenuAction[] = [
+    ...(canManage && canNestMore
+      ? [
+          {
+            key: "subfolder",
+            label: "New subfolder",
+            icon: <FolderPlus size={20} color={colors.accentDark} />,
+            onPress: () => navigation.navigate("AddEditFolder", { parentFolderId: folder.id }),
+          },
+        ]
+      : []),
+    ...(canManage
+      ? [
+          {
+            key: "edit",
+            label: "Edit folder",
+            icon: <Pencil size={20} color={colors.accentDark} />,
+            onPress: () => navigation.navigate("AddEditFolder", { folderId: folder.id }),
+          },
+        ]
+      : []),
+    {
+      key: "access",
+      label: canManage ? "Share folder" : "See who has access",
+      icon: <Users size={20} color={colors.accentDark} />,
+      onPress: () => navigation.navigate("ShareFolder", { folderId: folder.id }),
+    },
+    {
+      key: "text",
+      label: "Send as text",
+      icon: <Share2 size={20} color={colors.accentDark} />,
+      onPress: () => void shareAsText(),
+    },
+    ...(canManage
+      ? [
+          {
+            key: "delete",
+            label: "Delete folder",
+            icon: <Trash2 size={20} color={colors.danger} />,
+            destructive: true,
+            separated: true,
+            onPress: confirmDelete,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <View style={styles.screen}>
-      <ScreenTopBar navigation={navigation} />
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView
-        ref={scrollRef}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-      >
-        <Breadcrumbs
-          path={getFolderPath(folders, folder.id)}
-          onHome={onBreadcrumbHome}
-          onFolder={onBreadcrumbFolder}
-        />
+      <NavBar
+        backLabel={backLabel}
+        onBack={goBack}
+        right={
+          <NavIconButton label="Folder options" onPress={() => setMenuOpen(true)}>
+            <Ellipsis size={24} color={colors.accentDark} />
+          </NavIconButton>
+        }
+      />
+      <KeyboardAvoidingView style={styles.scroll} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.titleRow}>
+            <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
+              <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
+            </View>
+            <Text accessibilityRole="header" style={styles.title}>
+              {folder.name}
+            </Text>
+          </View>
+          {(!!folder.purpose || isSharedAccess(folder) || !canEditContent) && (
+            <Text style={styles.caption}>
+              {[
+                folder.purpose ?? "",
+                isSharedAccess(folder) ? `Shared · ${accessRoleLabel(folder.accessRole)}` : "",
+                !canEditContent ? "View only" : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+          )}
 
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>
-            {folder.icon} {folder.name}
-          </Text>
-          <View style={styles.headerActions}>
-            {canManageCurrentFolder && (
-              <Pressable
-                accessibilityLabel="Edit folder"
-                accessibilityRole="button"
-                onPress={onPressEditFolder}
-                hitSlop={8}
-                style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
-              >
-                <Pencil color={colors.accentDark} size={18} strokeWidth={2.4} />
-              </Pressable>
-            )}
-            <Pressable
-              accessibilityLabel={canManageCurrentFolder ? "Manage access" : "View access"}
-              accessibilityRole="button"
-              onPress={onPressManageAccess}
-              style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
-            >
-              <UserPlus color={colors.accentDark} size={18} strokeWidth={2.4} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="More folder actions"
-              accessibilityRole="button"
-              onPress={onOpenMenu}
-              style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
-            >
-              <EllipsisVertical color={colors.muted} size={18} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-        </View>
-        {isSharedAccess(folder) && (
-          <View style={styles.accessBadge}>
-            <Text style={styles.accessBadgeText}>Shared · {accessRoleLabel(folder.accessRole)}</Text>
-          </View>
-        )}
-        {!!folder.purpose && <Text style={styles.purpose}>{folder.purpose}</Text>}
+          {subfolders.length > 0 && (
+            <>
+              <SectionHeader title="Folders" />
+              <FolderStrip folders={subfolders} countFor={countForFolder} onOpen={(id) => navigation.push("Folder", { folderId: id })} />
+            </>
+          )}
 
-        <View style={styles.actions}>
-          <View style={styles.action} ref={registerAnchor("add-item")}>
-            <AppButton
-              label={canEditCurrentFolderContent ? "Add item" : "View only"}
-              onPress={onPressAddItem}
-              disabled={!canEditCurrentFolderContent}
-            />
-          </View>
-          {canEditCurrentFolderContent && (
-            <View style={styles.action}>
-              <AppButton label="New list" variant="secondary" onPress={onPressNewList} />
+          <SectionHeader title="Lists" />
+          {lists.length > 0 ? (
+            <RowGroup>
+              {lists.map((list) => (
+                <ListRow
+                  key={list.id}
+                  list={list}
+                  activityAt={activity.get(list.id)}
+                  onPress={() => navigation.navigate("List", { listId: list.id })}
+                  onLongPress={() => openListActions(list.id)}
+                />
+              ))}
+            </RowGroup>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No lists here yet</Text>
+              <Text style={styles.emptyText}>
+                {canEditContent ? "Tap the pencil to start one." : "Lists added to this folder show up here."}
+              </Text>
             </View>
           )}
-          <View style={styles.action} ref={registerAnchor("add-subfolder")}>
-            <AppButton
-              label={!canManageCurrentFolder ? "Owner only" : canNestMore ? "Add subfolder" : "Max depth reached"}
-              variant="secondary"
-              onPress={onPressAddSubfolder}
-              disabled={!canNestMore || !canManageCurrentFolder}
-            />
-          </View>
-        </View>
 
-        <View ref={registerAnchor("subfolders", spacing.lg, spacing.xs)}>
-        <Text style={styles.section}>Subfolders</Text>
-        {subfolders.length === 0 ? (
-          <EmptyState
-            title="No subfolders yet."
-            message={canManageCurrentFolder ? "Create a subfolder to organize this list." : "No shared subfolders are visible here."}
-          />
-        ) : (
-          <>
-            {visibleSubfolders.map((child) => (
-              <SubfolderRow
-                key={child.id}
-                child={child}
-                count={items.filter((item) => item.folderId === child.id).length}
-                onOpenFolder={onOpenFolder}
-              />
-            ))}
-            {subfolders.length > 3 && (
-              <Pressable
-                onPress={() => setShowAllSubfolders((current) => !current)}
-                style={({ pressed }) => [styles.showAllSubfolders, pressed && styles.showAllSubfoldersPressed]}
-              >
-                <Text style={styles.showAllSubfoldersText}>
-                  {showAllSubfolders ? "Show fewer subfolders" : `Show all subfolders (${hiddenSubfolderCount} more)`}
-                </Text>
-              </Pressable>
-            )}
-          </>
-        )}
-        </View>
-
-        <Text style={styles.section}>Items</Text>
-        {folderItems.length === 0 ? (
-          <EmptyState
-            title="No items here yet."
-            message="Add a note, list, link, or media item to this folder."
-          />
-        ) : (
-          folderItems.map((item) => (
-            <FolderItemRow
-              key={item.id}
-              item={item}
-              tagOptions={tagOptions}
-              onOpenItemDetail={onOpenItemDetail}
-              onToggleChecklistItem={onToggleChecklistItem}
-              styles={styles}
-            />
-          ))
-        )}
-
-        {showComments && <CommentThread targetType="folder" targetId={folder.id} />}
-      </ScrollView>
+          {showComments && <CommentThread targetType="folder" targetId={folder.id} style={styles.comments} />}
+        </ScrollView>
       </KeyboardAvoidingView>
-      {isSpotlightStepHere && currentStep && rect ? (
-        <SpotlightOverlay
-          rect={rect}
-          title={currentStep.title}
-          body={currentStep.body}
-          stepNumber={stepNumber}
-          totalSteps={totalSteps}
-          mode={currentStep.mode === "info" ? "info" : "action"}
-          placement={currentStep.preferredPlacement}
-          onNext={next}
-          onSkip={skip}
-        />
-      ) : null}
-      {isMessageStepHere && currentStep ? (
-        <SpotlightMessageCard title={currentStep.title} body={currentStep.body} primaryLabel="Next" onPrimary={next} onSkip={skip} />
-      ) : null}
+
+      {canEditContent && <ComposeButton onPress={onNewList} />}
+
+      <MenuSheet visible={menuOpen} title={folder.name} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      {overlays}
     </View>
   );
 };
