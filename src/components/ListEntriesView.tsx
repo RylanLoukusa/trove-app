@@ -143,8 +143,8 @@ type Props = {
 };
 
 // Index the dragged row should land on, given how far it has moved and the
-// measured height of every row.
-const targetIndexFor = (startIndex: number, translationY: number, heights: number[]): number => {
+// measured height of every row. Exported for its tests.
+export const targetIndexFor = (startIndex: number, translationY: number, heights: number[]): number => {
   let index = startIndex;
   let remaining = translationY;
   if (remaining > 0) {

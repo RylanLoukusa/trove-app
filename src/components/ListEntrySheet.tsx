@@ -177,6 +177,8 @@ export const ListEntrySheet = ({
                 <Chip
                   key={list.id}
                   label={list.title}
+                  // A list can share its name with a chip above, such as Today.
+                  accessibilityLabel={`Take off ${list.title}`}
                   selected
                   disabled={!canEdit}
                   onPress={() => onRemoveFromList?.(list.id)}
@@ -204,6 +206,7 @@ export const ListEntrySheet = ({
 
 const Chip = ({
   label,
+  accessibilityLabel,
   selected,
   disabled,
   tone,
@@ -211,6 +214,7 @@ const Chip = ({
   styles,
 }: {
   label: string;
+  accessibilityLabel?: string;
   selected: boolean;
   disabled: boolean;
   tone?: string;
@@ -219,6 +223,7 @@ const Chip = ({
 }) => (
   <Pressable
     accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel ?? label}
     accessibilityState={{ selected, disabled }}
     disabled={disabled}
     onPress={onPress}
