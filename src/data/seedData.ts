@@ -31,7 +31,7 @@ const welcomeLines: SeedLine[] = [
   { kind: "text", text: "Make it yours", bold: true },
   { kind: "bullet", text: "The bar above the keyboard switches a line between a checkbox, a bullet and plain text" },
   { kind: "bullet", text: "It also makes a line bold or indents it", indentLevel: 1 },
-  { kind: "bullet", text: "The pencil button starts a new list, here or inside a folder" },
+  { kind: "bullet", text: "The pencil button starts a new list, from the home screen or from inside a folder" },
 ];
 
 const welcomePositions = generatePositionsBetween(null, null, welcomeLines.length);

@@ -30,10 +30,15 @@ export const SearchScreen = ({ navigation, route }: Props) => {
 
   const activity = useMemo(() => listActivityTimes(items, listEntries ?? []), [items, listEntries]);
   const recent = useMemo(() => sortListsByActivity(items, activity).slice(0, RECENT_LIMIT), [activity, items]);
+  // A line pulled into another list is found once, where it lives.
+  const borrowedLineIds = useMemo(
+    () => new Set((listEntries ?? []).filter((entry) => entry.refEntryId).map((entry) => entry.id)),
+    [listEntries],
+  );
   const results = useMemo(() => {
-    const found = searchTrove(query, folders, items);
+    const found = searchTrove(query, folders, items, borrowedLineIds);
     return { ...found, lists: sortListsByActivity(found.lists, activity) };
-  }, [activity, folders, items, query]);
+  }, [activity, borrowedLineIds, folders, items, query]);
   const foundNothing = results.folders.length + results.lists.length + results.lines.length === 0;
 
   const countForFolder = useCallback(

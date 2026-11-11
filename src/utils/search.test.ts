@@ -80,6 +80,23 @@ describe("searchTrove", () => {
     expect(lines.map((match) => `${match.list.id}:${match.line.id}`)).toEqual(["groceries:g2", "chores:c2"]);
   });
 
+  it("finds a line that also shows on another list once, on its own list", () => {
+    const today = list("today", "Today", [line("today>c1", "Mow the lawn"), line("t1", "Mow the verge")]);
+
+    const { lines } = searchTrove("mow", folders, [today, ...lists], new Set(["today>c1"]));
+
+    expect(lines.map((match) => `${match.list.id}:${match.line.id}`)).toEqual(["today:t1", "chores:c1"]);
+  });
+
+  it("still shows an unnamed list by a line it has pulled in", () => {
+    const later = list("later", UNTITLED_LIST_TITLE, [line("later>c1", "Mow the lawn")]);
+
+    const results = searchTrove("mow", folders, [later, ...lists], new Set(["later>c1"]));
+
+    expect(ids(results.lists)).toEqual(["later"]);
+    expect(results.lines.map((match) => `${match.list.id}:${match.line.id}`)).toEqual(["chores:c1"]);
+  });
+
   it("finds a list by its title and by its lines at once", () => {
     const results = searchTrove("chores", folders, lists);
     expect(ids(results.lists)).toEqual(["chores"]);

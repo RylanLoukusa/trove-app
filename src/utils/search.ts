@@ -14,7 +14,14 @@ export const MAX_LINE_MATCHES = 60;
 
 // Finds folders by name or purpose, lists by title, and single lines by their
 // text. `lists` are read through useTrove(), so each carries its lines.
-export const searchTrove = (query: string, folders: Folder[], lists: SavedItem[]): SearchResults => {
+// `borrowedLineIds` are the lines a list only shows from another list: each
+// of those is found once, on the list it belongs to.
+export const searchTrove = (
+  query: string,
+  folders: Folder[],
+  lists: SavedItem[],
+  borrowedLineIds?: ReadonlySet<string>,
+): SearchResults => {
   const needle = query.trim().toLowerCase();
   if (!needle) return { folders: [], lists: [], lines: [] };
   const matches = (value?: string): boolean => !!value && value.toLowerCase().includes(needle);
@@ -26,7 +33,8 @@ export const searchTrove = (query: string, folders: Folder[], lists: SavedItem[]
     const titleLine = isUntitledList(list) ? (list.listItems ?? []).find((line) => line.text.trim()) : undefined;
     for (const line of list.listItems ?? []) {
       if (lines.length >= MAX_LINE_MATCHES) break;
-      if (line !== titleLine && matches(line.text)) lines.push({ list, line });
+      if (line === titleLine || borrowedLineIds?.has(line.id)) continue;
+      if (matches(line.text)) lines.push({ list, line });
     }
   }
 

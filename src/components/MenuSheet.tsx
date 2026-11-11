@@ -69,36 +69,40 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
         )}
         <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
           {actions.map((action, index) => (
-            <Pressable
-              key={action.key}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              onPress={() => {
-                onClose();
-                action.onPress();
-              }}
-              style={({ pressed }) => [
-                styles.row,
-                index > 0 && (action.separated ? styles.rowSeparated : styles.rowDivided),
-                pressed && styles.rowPressed,
-              ]}
-            >
-              {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-              <Text numberOfLines={1} style={[styles.label, action.destructive && styles.labelDestructive]}>
-                {action.label}
-              </Text>
-              {!!action.detail && (
-                <Text numberOfLines={1} style={styles.detail}>
-                  {action.detail}
-                </Text>
+            <React.Fragment key={action.key}>
+              {index > 0 && (
+                <View
+                  style={[styles.divider, action.separated ? styles.dividerGroup : !!action.icon && styles.dividerInset]}
+                />
               )}
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                onPress={() => {
+                  onClose();
+                  action.onPress();
+                }}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              >
+                {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
+                <Text numberOfLines={1} style={[styles.label, action.destructive && styles.labelDestructive]}>
+                  {action.label}
+                </Text>
+                {!!action.detail && (
+                  <Text numberOfLines={1} style={styles.detail}>
+                    {action.detail}
+                  </Text>
+                )}
+              </Pressable>
+            </React.Fragment>
           ))}
         </ScrollView>
       </Animated.View>
     </View>
   );
 };
+
+const ICON_WIDTH = 26;
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -146,21 +150,27 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: 50,
       paddingHorizontal: spacing.sm,
     },
-    rowDivided: {
-      borderTopColor: withAlpha(colors.border, 0.9),
-      borderTopWidth: StyleSheet.hairlineWidth,
+    // The line between two actions. It is its own view rather than a border
+    // on the row, whose rounded corners would bend its ends.
+    divider: {
+      backgroundColor: withAlpha(colors.border, 0.9),
+      height: StyleSheet.hairlineWidth,
+      marginHorizontal: spacing.sm,
     },
-    rowSeparated: {
-      borderTopColor: withAlpha(colors.border, 0.9),
-      borderTopWidth: StyleSheet.hairlineWidth,
-      marginTop: spacing.xs,
+    // Within a group the line starts under the labels, past the icons.
+    dividerInset: {
+      marginLeft: spacing.sm + ICON_WIDTH + spacing.sm,
+    },
+    // A full line with room around it starts a new group.
+    dividerGroup: {
+      marginVertical: 4,
     },
     rowPressed: {
       backgroundColor: colors.background,
     },
     icon: {
       alignItems: "center",
-      width: 26,
+      width: ICON_WIDTH,
     },
     label: {
       color: colors.ink,

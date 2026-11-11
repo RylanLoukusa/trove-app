@@ -226,6 +226,33 @@ describe("SearchScreen", () => {
       expect(screen.queryByText("Lines")).toBeNull();
     });
 
+    it("finds a line that also shows on another list once, on its own list", async () => {
+      const today = makeList({
+        id: "today",
+        title: "Today",
+        listMode: "focus",
+        listItems: [line("today>g3", "Bread"), line("t1", "Breadcrumbs")],
+      });
+      const pulledBread = {
+        id: "today>g3",
+        listId: "today",
+        kind: "check",
+        text: "",
+        checked: false,
+        indentLevel: 0,
+        position: "V",
+        tagOptionIds: [],
+        refEntryId: "g3",
+        createdAt: "2026-03-01T10:00:00.000Z",
+        updatedAt: "2026-03-01T10:00:00.000Z",
+      } satisfies ListEntry;
+      await renderSearchScreen({ items: [today, ...lists], listEntries: [pulledBread] });
+
+      await search("bread");
+
+      expect(rowLabels()).toEqual(["Breadcrumbs, on Today", "Bread, on Groceries"]);
+    });
+
     it("says so when nothing matches", async () => {
       await renderSearchScreen();
 
