@@ -77,11 +77,25 @@ const ruleOptions: Array<{ value: RuleChoice; label: string; detail?: string }> 
 ];
 
 const sortOptions = (Object.keys(listSortLabels) as ListSortMode[]).map((value) => ({ value, label: listSortLabels[value] }));
+// Said under the title while the lines are in an order other than the person's own.
+const sortCaptions: Record<ListSortMode, string> = {
+  manual: "",
+  due: "Sorted by due date",
+  priority: "Sorted by priority",
+  alpha: "Sorted A to Z",
+  newest: "Newest first",
+};
+// Said under the title of a list that adds lines by itself.
+const ruleCaptions: Record<FocusRule, string> = {
+  due_today: "Adds lines due today or overdue",
+  due_week: "Adds lines due in the next 7 days",
+  due_weekend: "Adds lines due this weekend",
+  high_priority: "Adds highest priority lines",
+};
 const completedOptions = (Object.keys(completedModeLabels) as CompletedMode[]).map((value) => ({
   value,
   label: completedModeLabels[value],
 }));
-
 
 // One list: its title and its lines on a single page. A line pulled in from
 // another list is edited in place but stays in its own list.
@@ -555,7 +569,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   // --- Page ----------------------------------------------------------------
   const caption = [
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
-    settings.sortMode !== "manual" ? `Sorted by ${listSortLabels[settings.sortMode].toLowerCase()}` : "",
+    rule ? ruleCaptions[rule] : "",
+    sortCaptions[settings.sortMode],
     isSharedAccess(item) ? `Shared · ${accessRoleLabel(item.accessRole)}` : "",
     !canEdit ? "View only" : "",
   ]
@@ -569,7 +584,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           accessibilityLabel="List title"
           value={titleDraft}
           onChangeText={(next) => {
-            setTitleDraft(next.replace(/[\r\n]+/g, " "));
+            // A title is one line: a break pasted into it becomes a space.
+            setTitleDraft(next.replace(/[\r\n]+$/, "").replace(/[\r\n]+/g, " "));
             // Where Return types a line break instead of submitting, a break
             // at the end of the title still moves on to the first line.
             if (/[\r\n]$/.test(next)) {
