@@ -36,6 +36,7 @@ import {
 } from "../sync/syncStatus";
 import { seedData, seedFolders, seedItems, seedListEntries } from "../data/seedData";
 import { isBaseDataSeeded, markBaseDataSeeded } from "./baseDataSeed";
+import { keepOwnDataFromDevice } from "./keepOwnData";
 import { isPinnedDefaultsDone, markPinnedDefaultsDone, planPinnedDefaults } from "./pinnedDefaults";
 import {
   isTagBackfillDone,
@@ -186,7 +187,7 @@ export const saveTroveData = async (data: TroveData, userId?: string | null): Pr
 
 const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
-  const { isPro } = useEntitlement();
+  const { isPro, isLoading: isEntitlementLoading } = useEntitlement();
   const [data, setDataState] = useState<TroveData>(seedData);
   // Every local change goes through here so that removing a line also removes
   // it from any focus list that shows it.
@@ -221,6 +222,13 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const remoteRowExistsRef = useRef(false);
   const pendingRemotePushRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  // Without Pro a person's own folders and lists never go up to the server, so
+  // a pull must not swap them for the server's out-of-date copy. Until it is
+  // known whether they have Pro, nothing is pulled.
+  const ownDataStaysOnDeviceRef = useRef(requiresProForSync(isPro));
+  ownDataStaysOnDeviceRef.current = requiresProForSync(isPro);
+  const entitlementKnownRef = useRef(!isEntitlementLoading);
+  entitlementKnownRef.current = !isEntitlementLoading;
   const lastForegroundRefreshAtRef = useRef(0);
 
   const setAndPersistSyncSnapshot = useCallback(
@@ -333,6 +341,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       setInitialPullSettledFor("anonymous");
       return;
     }
+    if (isEntitlementLoading) return;
 
     const supabase = getSupabase();
     if (!supabase) {
@@ -361,7 +370,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
           skipNextRemotePushRef.current = true;
-          setData(result.data);
+          setData(
+            ownDataStaysOnDeviceRef.current
+              ? (current) => keepOwnDataFromDevice(current, result.data, userId)
+              : result.data,
+          );
         } else if (result.kind === "noop_up_to_date") {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
@@ -432,7 +445,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [activeUserId, isReady, isAuthReady]);
+  }, [activeUserId, isEntitlementLoading, isReady, isAuthReady]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady) return;
@@ -1210,6 +1223,8 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     if (!supabase) {
       return { ok: false, error: "Supabase not configured." };
     }
+    // Pulled once it's known whose copy of their own lists counts.
+    if (!entitlementKnownRef.current) return { ok: true };
 
     try {
       if (options?.force) {
@@ -1221,7 +1236,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       if (result.kind === "applied") {
         skipNextRemotePushRef.current = true;
         skipRemotePushRef.current = false;
-        setData(result.data);
+        setData(
+          ownDataStaysOnDeviceRef.current
+            ? (current) => keepOwnDataFromDevice(current, result.data, userId)
+            : result.data,
+        );
         remoteRowExistsRef.current = true;
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
         return { ok: true };
