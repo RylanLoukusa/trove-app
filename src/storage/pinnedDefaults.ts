@@ -12,7 +12,9 @@ export const PINNED_DEFAULTS: ReadonlyArray<{ title: string; focusRule: FocusRul
   { title: "Today", focusRule: "due_today" },
 ];
 
-const doneKey = (userKey: string) => `trove:pinnedDefaultsDone:${userKey}`;
+// v2: the first version's lists could be lost to a pull from the server (see
+// keepOwnData), so everyone gets one more go.
+const doneKey = (userKey: string) => `trove:pinnedDefaultsDone:v2:${userKey}`;
 
 export const isPinnedDefaultsDone = async (userKey: string): Promise<boolean> => {
   try {

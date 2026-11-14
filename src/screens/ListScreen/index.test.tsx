@@ -316,7 +316,7 @@ describe("ListScreen", () => {
     // Skip the one-time tag seeding so it doesn't add groups to the fixture.
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
     // Leave out the Today and This week lists every new setup gets.
-    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:v2:anonymous", "true");
     await save(household());
     alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
     dismissKeyboard = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
