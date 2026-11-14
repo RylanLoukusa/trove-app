@@ -2,8 +2,10 @@ import React, { createRef, forwardRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Keyboard, StyleSheet, Text } from "react-native";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react-native";
+import { State } from "react-native-gesture-handler";
+import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 
-import { ListEntriesView, ListEntriesViewHandle, targetIndexFor } from "./ListEntriesView";
+import { blockHeights, ListEntriesView, ListEntriesViewHandle, targetIndexFor } from "./ListEntriesView";
 import { pickLineImages } from "../media/lineImages";
 import { renderScreen } from "../test-utils/renderScreen";
 import type { LineImage, ListEntry, TagOption } from "../types/models";
@@ -76,7 +78,7 @@ const entry = (id: string, overrides: Partial<ListEntry> = {}): ListEntry => ({
 const handlers = {
   onToggleEntry: jest.fn(),
   onUpdateEntry: jest.fn(),
-  onMoveEntry: jest.fn(),
+  onReorderEntries: jest.fn(),
   onInsertEntries: jest.fn((_after: string | null, lines: unknown[]) => lines.map((_, index) => `new-${index}`)),
   onDeleteEntry: jest.fn(),
 };
@@ -614,6 +616,77 @@ describe("ListEntriesView", () => {
     });
   });
 
+  describe("dragging lines", () => {
+    // Rows are 38pt tall until they are laid out.
+    const ROW = 38;
+    const drag = async (id: string, translationY: number) => {
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId(`drag-${id}`), [
+          { state: State.BEGAN, translationY: 0 },
+          { state: State.ACTIVE, translationY: 0 },
+          { state: State.ACTIVE, translationY },
+          { state: State.END, translationY },
+        ]);
+      });
+    };
+    const party = () => [
+      entry("Food"),
+      entry("Chips", { indentLevel: 1 }),
+      entry("Salsa", { indentLevel: 2 }),
+      entry("Dip", { indentLevel: 1 }),
+      entry("Invites"),
+      entry("Music"),
+    ];
+
+    it("takes the lines indented under a line along with it", async () => {
+      await renderList(party());
+
+      await drag("Food", ROW);
+
+      expect(handlers.onReorderEntries).toHaveBeenCalledWith(["Food", "Chips", "Salsa", "Dip"], "Invites", "Music");
+    });
+
+    it("moves a line past another only once dragged over half of it", async () => {
+      await renderList(party());
+
+      await drag("Invites", -ROW / 2 + 1);
+      expect(handlers.onReorderEntries).not.toHaveBeenCalled();
+
+      await drag("Invites", -ROW);
+      expect(handlers.onReorderEntries).toHaveBeenLastCalledWith(["Invites"], "Salsa", "Dip");
+      await drag("Invites", -ROW * 4);
+      expect(handlers.onReorderEntries).toHaveBeenLastCalledWith(["Invites"], null, "Food");
+    });
+
+    it("moves a group past a line by the height of that line", async () => {
+      await renderList([...party(), entry("Games")]);
+
+      // Food and its three lines are four rows tall, but pass Invites at half of Invites.
+      await drag("Food", ROW / 2 + 1);
+      expect(handlers.onReorderEntries).toHaveBeenLastCalledWith(["Food", "Chips", "Salsa", "Dip"], "Invites", "Music");
+      await drag("Food", ROW * 2);
+      expect(handlers.onReorderEntries).toHaveBeenLastCalledWith(["Food", "Chips", "Salsa", "Dip"], "Music", "Games");
+    });
+
+    it("moves an indented line with only the lines under it", async () => {
+      await renderList(party());
+
+      await drag("Chips", ROW);
+
+      expect(handlers.onReorderEntries).toHaveBeenCalledWith(["Chips", "Salsa"], "Dip", "Invites");
+    });
+
+    it("moves a single line when the list is sorted another way, then keeps your order", async () => {
+      await renderList(party(), { settings: { sortMode: "alpha" } });
+      expect(visibleTexts()).toEqual(["Chips", "Dip", "Food", "Invites", "Music", "Salsa"]);
+
+      await drag("Chips", ROW);
+
+      expect(handlers.onReorderEntries).toHaveBeenCalledWith(["Chips"], "Dip", "Food");
+      expect(onChangeSettings).toHaveBeenCalledWith({ sortMode: "manual" });
+    });
+  });
+
   describe("photos on a line", () => {
     const photo: LineImage = { id: "img-1", width: 400, height: 300, path: "me/line-images/img-1.jpg" };
     const other: LineImage = { id: "img-2", width: 300, height: 600 };
@@ -706,28 +779,49 @@ describe("ListEntriesView", () => {
       expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { text: "" });
     });
 
-    it("starts as a thumbnail the height of the text, grows with each tap, then shrinks back", async () => {
-      await renderList([entry("Cake", { images: [photo] })]);
-      // The photo knows how wide the line is once it has been laid out.
-      await fireEvent(screen.getByLabelText("Cake"), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
+    // The photo knows how wide the line is once it has been laid out.
+    const layOut = (label: string) =>
+      fireEvent(screen.getByLabelText(label), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
 
-      expect(sizeOf()).toEqual({ width: 24, height: 24 });
-      await fireEvent.press(screen.getByLabelText("Photo"));
-      expect(sizeOf()).toEqual({ width: 200, height: 150 });
-      await fireEvent.press(screen.getByLabelText("Photo"));
-      expect(sizeOf()).toEqual({ width: 330, height: 248 });
-      expect(screen.getByLabelText("Photo").props.accessibilityHint).toMatch(/^Tap to make it small again/);
-      await fireEvent.press(screen.getByLabelText("Photo"));
-      expect(sizeOf()).toEqual({ width: 24, height: 24 });
+    it("shows each photo at the size it was last left", async () => {
+      await renderList([
+        entry("Cake", { images: [photo] }),
+        entry("Plate", { images: [{ ...photo, id: "img-3", size: "medium" }] }),
+        entry("Table", { images: [{ ...photo, id: "img-4", size: "large" }] }),
+      ]);
+      await layOut("Cake");
+      await layOut("Plate");
+      await layOut("Table");
+
+      expect(sizeOf(0)).toEqual({ width: 24, height: 24 });
+      expect(sizeOf(1)).toEqual({ width: 200, height: 150 });
+      expect(sizeOf(2)).toEqual({ width: 330, height: 248 });
+      expect(screen.getAllByLabelText("Photo")[2].props.accessibilityHint).toMatch(/^Tap to make it small again/);
     });
 
-    it("grows each photo on a line by itself", async () => {
-      await renderList([entry("Cake", { images: [photo, other] })]);
-      await fireEvent(screen.getByLabelText("Cake"), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
+    it("saves the next size on the line with each tap, back to a thumbnail after the biggest", async () => {
+      const at = (size: LineImage["size"]): LineImage => (size ? { ...photo, size } : photo);
+      const steps: Array<[LineImage["size"], LineImage["size"]]> = [
+        [undefined, "medium"],
+        ["medium", "large"],
+        ["large", undefined],
+      ];
+      for (const [from, to] of steps) {
+        const view = await renderList([entry("Cake", { images: [at(from), other] })]);
+        // A thumbnail sits beside the text, ahead of any bigger photo.
+        await fireEvent.press(screen.getAllByLabelText("Photo")[from ? 1 : 0]);
 
-      await fireEvent.press(screen.getAllByLabelText("Photo")[1]);
+        expect(handlers.onUpdateEntry).toHaveBeenLastCalledWith("Cake", { images: [at(to), other] });
+        await view.unmount();
+      }
+      expect((handlers.onUpdateEntry.mock.lastCall![1] as { images: LineImage[] }).images[0]).not.toHaveProperty("size");
+    });
 
-      // The bigger one moves under the text; the other stays beside it.
+    it("moves a bigger photo under the text and leaves the others beside it", async () => {
+      await renderList([entry("Cake", { images: [photo, { ...other, size: "medium" }] })]);
+      await layOut("Cake");
+
+      // Thumbnails come first, beside the text; the bigger photo is under it.
       expect(sizeOf(0)).toEqual({ width: 24, height: 24 });
       expect(sizeOf(1)).toEqual({ width: 75, height: 150 });
     });
@@ -755,12 +849,19 @@ describe("ListEntriesView", () => {
       expect(onRestoreEntries).toHaveBeenCalledWith([plate]);
     });
 
-    it("shows photos on a list that can only be viewed, without removing them", async () => {
+    it("lets photos on a list that can only be viewed grow, without saving or removing them", async () => {
       await renderList([entry("Cake", { images: [photo] })], { canEdit: false });
+      // The line's text can't be pressed here, so the photo stands in for it.
+      await layOut("Photo");
 
       expect(screen.getByLabelText("Photo").props.accessibilityHint).toBe("Tap to make it bigger");
       await fireEvent.press(screen.getByLabelText("Photo"));
-      expect(screen.getByLabelText("Photo").props.accessibilityHint).toBe("Tap to make it bigger");
+      expect(sizeOf()).toEqual({ width: 200, height: 150 });
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(sizeOf()).toEqual({ width: 330, height: 248 });
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(sizeOf()).toEqual({ width: 24, height: 24 });
+      expect(handlers.onUpdateEntry).not.toHaveBeenCalled();
     });
   });
 
@@ -1209,6 +1310,20 @@ describe("ListEntriesView", () => {
       expect(undo).toHaveBeenCalledTimes(1);
       expect(screen.queryByText("Cleared 3 checked lines")).toBeNull();
     });
+  });
+});
+
+describe("blockHeights", () => {
+  it("counts the lines dragged together as one row", () => {
+    expect(blockHeights([38, 38, 76, 38, 38], { start: 1, end: 3 })).toEqual([38, 114, 38, 38]);
+    expect(blockHeights([38, 38], { start: 1, end: 2 })).toEqual([38, 38]);
+  });
+
+  it("lets a block pass a line once dragged over half of that line", () => {
+    const heights = blockHeights([38, 38, 38, 38, 38], { start: 0, end: 3 });
+    expect(targetIndexFor(0, 18, heights)).toBe(0);
+    expect(targetIndexFor(0, 20, heights)).toBe(1);
+    expect(targetIndexFor(2, -60, heights)).toBe(1);
   });
 });
 

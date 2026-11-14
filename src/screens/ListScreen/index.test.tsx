@@ -570,6 +570,19 @@ describe("ListScreen", () => {
       await fireEvent.press(screen.getAllByRole("checkbox")[1]);
       expect(checked()).toEqual(["Dip"]);
     });
+
+    it("move together when the line they're under is dragged", async () => {
+      await save(party());
+      await openList("party");
+
+      const reorder = mockEditorProps.current!.onReorderEntries as (ids: string[], after: string | null, before: string | null) => void;
+      await act(async () => {
+        reorder(["Food", "Chips", "Dip"], "Invites", null);
+      });
+
+      expect(ownLines("party")).toEqual(["Invites", "Food", "Chips", "Dip"]);
+      expect(shownLines()).toEqual(["Invites", "Food", "Chips", "Dip"]);
+    });
   });
 
   describe("the menu", () => {
@@ -954,9 +967,9 @@ describe("ListScreen", () => {
       await save(wedding());
       await openList("today");
 
-      const onMoveEntry = mockEditorProps.current!.onMoveEntry as (id: string, after: string | null, before: string | null) => void;
+      const reorder = mockEditorProps.current!.onReorderEntries as (ids: string[], after: string | null, before: string | null) => void;
       await act(async () => {
-        onMoveEntry("today>Venue today", null, "today>Pinned");
+        reorder(["today>Venue today"], null, "today>Pinned");
       });
 
       expect(pulledInto("today")).toEqual(["Venue today", "Pinned"]);
@@ -968,9 +981,9 @@ describe("ListScreen", () => {
       await openList("today");
       expect(shownLines().slice(0, 2)).toEqual(["Pinned", "Cake next month"]);
 
-      const onMoveEntry = mockEditorProps.current!.onMoveEntry as (id: string, after: string | null, before: string | null) => void;
+      const reorder = mockEditorProps.current!.onReorderEntries as (ids: string[], after: string | null, before: string | null) => void;
       await act(async () => {
-        onMoveEntry("today>Cake next month", null, "today>Pinned");
+        reorder(["today>Cake next month"], null, "today>Pinned");
       });
 
       expect(pulledInto("today")).toEqual(["Cake next month", "Pinned"]);

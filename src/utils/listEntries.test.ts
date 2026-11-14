@@ -15,6 +15,8 @@ import {
   listActivityTimes,
   listDisplayTitle,
   checkWithGroup,
+  lineGroupEnd,
+  withLineImageSize,
   decodeListTags,
   encodeListTags,
   listIdsLendingLines,
@@ -504,6 +506,21 @@ describe("plain and bold lines", () => {
     expect(encodeEntryFormat({ kind: "check", tagOptionIds: encoded.tags, images: [] }).tags).toEqual(["tag-high"]);
   });
 
+  it("syncs the size a photo was left at, and nothing for a thumbnail", () => {
+    const photo = { id: "img-1", width: 1200, height: 900, path: "me/line-images/img-1.jpg" };
+    const sized = [withLineImageSize(photo, "large"), withLineImageSize({ id: "img-2", width: 640, height: 1136 }, "medium")];
+    const encoded = encodeEntryFormat({ kind: "check", tagOptionIds: [], images: sized });
+
+    expect(encoded.tags).toEqual(["fmt:img:img-1:1200x900@large:me/line-images/img-1.jpg", "fmt:img:img-2:640x1136@medium:"]);
+    // Read back exactly as it is kept on the phone, so sync sees no change.
+    expect(JSON.stringify(decodeEntryFormat(encoded.kind, encoded.tags).images)).toBe(JSON.stringify(sized));
+
+    expect(withLineImageSize(sized[0], "thumb")).toEqual(photo);
+    expect(encodeEntryFormat({ kind: "check", tagOptionIds: [], images: [withLineImageSize(sized[0], "thumb")] }).tags).toEqual([
+      "fmt:img:img-1:1200x900:me/line-images/img-1.jpg",
+    ]);
+  });
+
   it("never treats a format tag as one of the person's tags", () => {
     expect(decodeEntryFormat("check", ["fmt:text", "fmt:bold", "tag-high"])).toEqual({
       kind: "check",
@@ -680,6 +697,17 @@ describe("list activity", () => {
 
   it("keeps a steady order for lists changed at the same moment and falls back to the list's own time", () => {
     expect(sortListsByActivity([newer, same, older], new Map()).map((list) => list.id)).toEqual(["also-newer", "newer", "older"]);
+  });
+});
+
+describe("lineGroupEnd", () => {
+  const rows = [0, 1, 2, 1, 0, 1].map((indentLevel) => ({ indentLevel }));
+
+  it("runs to the last line indented further than the line", () => {
+    expect(lineGroupEnd(rows, 0)).toBe(4);
+    expect(lineGroupEnd(rows, 1)).toBe(3);
+    expect(lineGroupEnd(rows, 2)).toBe(3);
+    expect(lineGroupEnd(rows, 4)).toBe(6);
   });
 });
 
