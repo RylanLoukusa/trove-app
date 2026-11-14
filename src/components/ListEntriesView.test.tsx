@@ -826,6 +826,35 @@ describe("ListEntriesView", () => {
       expect(sizeOf(1)).toEqual({ width: 75, height: 150 });
     });
 
+    it("first shows a bigger photo at about its size, not as a speck, before the line is measured", async () => {
+      await renderList([entry("Cake", { images: [{ ...photo, size: "large" }] })]);
+
+      expect(sizeOf().width).toBeGreaterThan(300);
+    });
+
+    it("loads a photo again when it grows, so it isn't a stretched small copy", async () => {
+      await renderList([entry("Cake", { images: [{ ...photo, size: "medium" }] })], { canEdit: false });
+      await layOut("Photo");
+      const loadedMedium = screen.getByTestId("line-photo");
+
+      await fireEvent.press(screen.getByLabelText("Photo"));
+
+      expect(sizeOf()).toEqual({ width: 330, height: 248 });
+      expect(screen.getByTestId("line-photo")).not.toBe(loadedMedium);
+    });
+
+    it("keeps the loaded photo when it only gets smaller", async () => {
+      await renderList([entry("Cake", { images: [{ ...photo, size: "large" }] })], { canEdit: false });
+      await layOut("Photo");
+      const loaded = screen.getByTestId("line-photo");
+
+      // The line narrows a little, as when its details button shows.
+      await fireEvent(screen.getByLabelText("Photo"), "layout", { nativeEvent: { layout: { width: 296, height: 24 } } });
+      await fireEvent(screen.getByLabelText("Photo"), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
+
+      expect(screen.getByTestId("line-photo")).toBe(loaded);
+    });
+
     it("takes a photo off when it's held, with an undo", async () => {
       await renderList([entry("Cake", { images: [photo, other] })]);
 
