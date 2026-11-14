@@ -8,9 +8,9 @@ import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-han
 import { blockHeights, ListEntriesView, ListEntriesViewHandle, targetIndexFor } from "./ListEntriesView";
 import { pickLineImages } from "../media/lineImages";
 import { renderScreen } from "../test-utils/renderScreen";
-import type { LineImage, ListEntry, TagOption } from "../types/models";
+import type { LineImage, ListEntry, TagGroup, TagOption } from "../types/models";
 import { MAX_ENTRY_INDENT } from "../utils/listEntries";
-import { defaultListViewSettings, ListViewSettings } from "../utils/listView";
+import { defaultListViewSettings, ListViewSettings, TagSection } from "../utils/listView";
 
 // Stand-in for the swipe gesture: a button that "completes" the swipe to the
 // right, and the left-swipe buttons always showing.
@@ -926,6 +926,55 @@ describe("ListEntriesView", () => {
         dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         tagOptionIds: ["high"],
         notes: "Chocolate",
+      });
+    });
+
+    describe("with tags of the person's own", () => {
+      const group = (id: string, name: string, selectionMode: TagGroup["selectionMode"]): TagGroup => ({
+        id,
+        name,
+        selectionMode,
+        allowInlineCreate: true,
+        isSystem: false,
+        sortOrder: 1,
+        createdAt: "",
+        updatedAt: "",
+      });
+      const tag = (id: string, groupId: string, name: string): TagOption => ({ ...low, id, groupId, name, color: undefined });
+      const sections: TagSection[] = [
+        { group: group("priority", "Priority", "single"), options: [high, low] },
+        { group: group("errands", "Errands", "multi"), options: [tag("store", "errands", "Store"), tag("pharmacy", "errands", "Pharmacy")] },
+        { group: group("where", "Where", "single"), options: [tag("home", "where", "Home"), tag("work", "where", "Work")] },
+      ];
+
+      it("offers every tag group, taking several or one as each group allows", async () => {
+        await renderList([entry("Cake", { tagOptionIds: ["high", "home"] })], { tagSections: sections });
+
+        await openDetails("Cake");
+        expect(screen.getByText("Errands")).toBeTruthy();
+        expect(screen.getByLabelText("Where: Home").props.accessibilityState.selected).toBe(true);
+        await fireEvent.press(screen.getByLabelText("Errands: Store"));
+        await fireEvent.press(screen.getByLabelText("Errands: Pharmacy"));
+        await fireEvent.press(screen.getByLabelText("Where: Work"));
+        await fireEvent.press(screen.getByText("Done"));
+
+        expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { tagOptionIds: ["high", "store", "pharmacy", "work"] });
+      });
+
+      it("saves nothing when the tags are left as they were", async () => {
+        await renderList([entry("Cake", { tagOptionIds: ["home", "high"] })], { tagSections: sections });
+
+        await openDetails("Cake");
+        await fireEvent.press(screen.getByText("Done"));
+
+        expect(handlers.onUpdateEntry).not.toHaveBeenCalled();
+      });
+
+      it("shows a line's tags under it", async () => {
+        await renderList([entry("Cake", { tagOptionIds: ["store", "high"] })], { tagSections: sections });
+
+        expect(within(screen.getByLabelText("Details for Cake")).getByText("High")).toBeTruthy();
+        expect(within(screen.getByLabelText("Details for Cake")).getByText("Store")).toBeTruthy();
       });
     });
 

@@ -131,6 +131,8 @@ export type SavedItem = {
   // a list can be moved to other lists but not pulled into them.
   listMode?: "focus";
   focusRule?: FocusRule;
+  // Instead of a focus rule: adds the lines that have this tag option.
+  ruleTagId?: string;
   // Shown in the Pinned section at the top of Home.
   pinned?: boolean;
   richText?: string;

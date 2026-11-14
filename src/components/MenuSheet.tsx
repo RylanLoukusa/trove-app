@@ -5,7 +5,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 
-export type MenuChoice = { value: string; label: string };
+// `group` names a run of choices, shown as a small heading above them.
+export type MenuChoice = { value: string; label: string; group?: string };
+
+// Splits choices into runs that share a group, keeping their order.
+const choiceRuns = (choices: MenuChoice[]): Array<{ group?: string; choices: MenuChoice[] }> =>
+  choices.reduce<Array<{ group?: string; choices: MenuChoice[] }>>((runs, choice) => {
+    const last = runs[runs.length - 1];
+    if (last && last.group === choice.group) last.choices.push(choice);
+    else runs.push({ group: choice.group, choices: [choice] });
+    return runs;
+  }, []);
 
 export type MenuAction = {
   key: string;
@@ -104,24 +114,29 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                       {action.label}
                     </Text>
                   </View>
-                  <View style={[styles.choices, !!action.icon && styles.choicesInset]}>
-                    {action.choices.map((choice) => {
-                      const selected = choice.value === action.selectedValue;
-                      return (
-                        <Pressable
-                          key={choice.value}
-                          accessibilityRole="radio"
-                          accessibilityLabel={`${action.label}: ${choice.label}`}
-                          accessibilityState={{ selected, checked: selected }}
-                          hitSlop={4}
-                          onPress={() => action.onChoose?.(choice.value)}
-                          style={({ pressed }) => [styles.choice, selected && styles.choiceSelected, pressed && styles.choicePressed]}
-                        >
-                          <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                  {choiceRuns(action.choices).map((run, runIndex) => (
+                    <View key={runIndex} style={!!action.icon && styles.choicesInset}>
+                      {!!run.group && <Text style={styles.choiceGroup}>{run.group}</Text>}
+                      <View style={styles.choices}>
+                        {run.choices.map((choice) => {
+                          const selected = choice.value === action.selectedValue;
+                          return (
+                            <Pressable
+                              key={choice.value}
+                              accessibilityRole="radio"
+                              accessibilityLabel={`${action.label}: ${choice.group ? `${choice.group} ` : ""}${choice.label}`}
+                              accessibilityState={{ selected, checked: selected }}
+                              hitSlop={4}
+                              onPress={() => action.onChoose?.(choice.value)}
+                              style={({ pressed }) => [styles.choice, selected && styles.choiceSelected, pressed && styles.choicePressed]}
+                            >
+                              <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
                 </View>
               ) : (
                 <Pressable
@@ -257,6 +272,13 @@ const createStyles = (colors: ThemeColors) =>
     },
     choicesInset: {
       paddingLeft: ICON_WIDTH + spacing.sm,
+    },
+    choiceGroup: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: "600",
+      marginBottom: 6,
+      marginTop: spacing.sm,
     },
     choice: {
       borderColor: colors.border,

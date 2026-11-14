@@ -44,6 +44,26 @@ export const priorityOptionsFor = (tagGroups: TagGroup[], tagOptions: TagOption[
   return tagOptions.filter((option) => option.groupId === group.id).sort((a, b) => a.sortOrder - b.sortOrder);
 };
 
+// Every tag group that has tags, Priority first and then in the person's
+// order, with its tags (highest priority first).
+export type TagSection = { group: TagGroup; options: TagOption[] };
+
+export const tagSectionsFor = (tagGroups: TagGroup[], tagOptions: TagOption[]): TagSection[] => {
+  const priorityGroup = findPriorityGroup(tagGroups);
+  return [...tagGroups]
+    .sort(
+      (a, b) =>
+        Number(b.id === priorityGroup?.id) - Number(a.id === priorityGroup?.id) ||
+        a.sortOrder - b.sortOrder ||
+        a.name.localeCompare(b.name),
+    )
+    .map((group) => {
+      const options = tagOptions.filter((option) => option.groupId === group.id).sort((a, b) => a.sortOrder - b.sortOrder);
+      return { group, options: group.id === priorityGroup?.id ? options.reverse() : options };
+    })
+    .filter((section) => section.options.length > 0);
+};
+
 export const entryPriority = (entry: Pick<ListEntry, "tagOptionIds">, priorityOptions: TagOption[]): TagOption | undefined =>
   priorityOptions.find((option) => entry.tagOptionIds.includes(option.id));
 
@@ -183,6 +203,10 @@ export const focusRuleLabels: Record<FocusRule, string> = {
   high_priority: "Highest priority",
 };
 
+// Whether a line belongs in a list that adds lines with this tag.
+export const matchesTagRule = (entry: ListEntry, tagId: string, today: Date = new Date()): boolean =>
+  ruleCanPick(entry, today) && entry.tagOptionIds.includes(tagId);
+
 // The Saturday and Sunday of "this weekend" (the coming one, or the current
 // one if today is already Saturday or Sunday).
 const weekendKeys = (today: Date): [string, string] => {
@@ -191,17 +215,21 @@ const weekendKeys = (today: Date): [string, string] => {
   return [toDateKey(saturday), toDateKey(addDays(saturday, 1))];
 };
 
+// A checklist line a rule can pick: open, or done today, so today's progress
+// shows and tomorrow starts clean.
+const ruleCanPick = (entry: ListEntry, today: Date): boolean =>
+  entry.kind === "check" &&
+  (!entry.checked || (!!entry.completedAt && toDateKey(new Date(entry.completedAt)) === toDateKey(today)));
+
 // Whether a line belongs in a focus list with this rule. Open lines match on
-// their due date or priority; done lines stay only on the day they were done,
-// so today's progress shows and tomorrow starts clean.
+// their due date or priority; done lines stay only on the day they were done.
 export const matchesFocusRule = (
   entry: ListEntry,
   rule: FocusRule,
   priorityOptions: TagOption[],
   today: Date = new Date(),
 ): boolean => {
-  if (entry.kind !== "check") return false;
-  if (entry.checked && (!entry.completedAt || toDateKey(new Date(entry.completedAt)) !== toDateKey(today))) return false;
+  if (!ruleCanPick(entry, today)) return false;
 
   const todayKey = toDateKey(today);
   switch (rule) {

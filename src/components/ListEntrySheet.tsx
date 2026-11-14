@@ -4,11 +4,13 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry, TagOption } from "../types/models";
-import { describeDueDate, entryPriority, parseDateKey, quickDueDates, withPriority } from "../utils/listView";
+import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, withPriority } from "../utils/listView";
 
 type Props = {
   entry: ListEntry | null;
   priorityOptions: TagOption[];
+  // Every tag group with its tags; Priority is shown on its own above.
+  tagSections?: TagSection[];
   canEdit: boolean;
   // Set when this line is shown here but belongs to another list.
   sourceListTitle?: string;
@@ -22,10 +24,11 @@ type Props = {
   onClose: () => void;
 };
 
-// Details for one list line: due date, priority and notes.
+// Details for one list line: due date, priority, other tags and notes.
 export const ListEntrySheet = ({
   entry,
   priorityOptions,
+  tagSections = [],
   canEdit,
   sourceListTitle,
   fromRule = false,
@@ -41,6 +44,16 @@ export const ListEntrySheet = ({
   const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [dueDraft, setDueDraft] = useState("");
   const [priorityId, setPriorityId] = useState<string | null>(null);
+  // The line's tags outside Priority.
+  const otherSections = useMemo(() => {
+    const priorityIds = new Set(priorityOptions.map((option) => option.id));
+    return tagSections.filter((section) => !section.options.some((option) => priorityIds.has(option.id)));
+  }, [priorityOptions, tagSections]);
+  const otherTagIds = useMemo(
+    () => new Set(otherSections.flatMap((section) => section.options.map((option) => option.id))),
+    [otherSections],
+  );
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -49,6 +62,7 @@ export const ListEntrySheet = ({
     setDueDate(entry.dueDate);
     setDueDraft(entry.dueDate ?? "");
     setPriorityId(entryPriority(entry, priorityOptions)?.id ?? null);
+    setTagIds(entry.tagOptionIds.filter((id) => otherTagIds.has(id)));
     setNotes(entry.notes ?? "");
     // Only reset when a different entry opens, not on every background sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,12 +80,25 @@ export const ListEntrySheet = ({
       if (dueDate !== entry.dueDate) updates.dueDate = dueDate;
       const nextNotes = notes.trim() || undefined;
       if (nextNotes !== entry.notes) updates.notes = nextNotes;
-      const nextTags = withPriority(entry.tagOptionIds, priorityOptions, priorityId);
-      if (JSON.stringify(nextTags) !== JSON.stringify(entry.tagOptionIds)) updates.tagOptionIds = nextTags;
+      const nextTags = [
+        ...withPriority(entry.tagOptionIds, priorityOptions, priorityId).filter((id) => !otherTagIds.has(id)),
+        ...tagIds,
+      ];
+      const sameTags = (a: string[], b: string[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+      if (!sameTags(nextTags, entry.tagOptionIds)) updates.tagOptionIds = nextTags;
       if (Object.keys(updates).length > 0) onSave(updates);
     }
     onClose();
   };
+
+  // A group that takes one tag swaps it; one that takes several adds it.
+  const toggleTag = ({ group, options }: TagSection, optionId: string) =>
+    setTagIds((current) => {
+      if (current.includes(optionId)) return current.filter((id) => id !== optionId);
+      if (group.selectionMode !== "single") return [...current, optionId];
+      const inGroup = new Set(options.map((option) => option.id));
+      return [...current.filter((id) => !inGroup.has(id)), optionId];
+    });
 
   const setDue = (value: string | undefined) => {
     setDueDate(value);
@@ -156,6 +183,26 @@ export const ListEntrySheet = ({
             </View>
           </>
         )}
+
+        {otherSections.map((section) => (
+          <React.Fragment key={section.group.id}>
+            <Text style={styles.label}>{section.group.name}</Text>
+            <View style={styles.chipRow}>
+              {section.options.map((option) => (
+                <Chip
+                  key={option.id}
+                  label={option.name}
+                  accessibilityLabel={`${section.group.name}: ${option.name}`}
+                  tone={option.color}
+                  selected={tagIds.includes(option.id)}
+                  disabled={!canEdit}
+                  onPress={() => toggleTag(section, option.id)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </React.Fragment>
+        ))}
 
         <Text style={styles.label}>Notes</Text>
         <TextInput

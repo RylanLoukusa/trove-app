@@ -55,7 +55,9 @@ import {
   ListSortMode,
   listSortLabels,
   matchesFocusRule,
+  matchesTagRule,
   priorityOptionsFor,
+  tagSectionsFor,
 } from "../../utils/listView";
 
 type Props = {
@@ -69,7 +71,9 @@ type Props = {
 
 // The settings in the list's menu. Picking one leaves the menu open, so
 // several can be changed in one go.
+// A rule is "none", a focus rule, or `tag:<tag option id>`.
 type RuleChoice = FocusRule | "none";
+const TAG_RULE_PREFIX = "tag:";
 const ruleChoices: Array<{ value: RuleChoice; label: string }> = [
   { value: "none", label: "Off" },
   { value: "due_today", label: "Due today" },
@@ -125,6 +129,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const isFocus = isFocusList(item);
   const canEdit = canEditItem(item.id);
   const rule = isFocus ? item.focusRule : undefined;
+  // A list adds lines by date and priority, or else by a tag.
+  const ruleTagId = isFocus && !rule ? item.ruleTagId : undefined;
   const viewRef = useRef<ListEntriesViewHandle>(null);
   const [settings, updateSettings] = useListViewSettings(item.id);
   const [selecting, setSelecting] = useState(false);
@@ -155,6 +161,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   entriesByIdRef.current = entriesById;
   const itemsById = useMemo(() => new Map(items.map((candidate) => [candidate.id, candidate])), [items]);
   const priorityOptions = useMemo(() => priorityOptionsFor(tagGroups, tagOptions), [tagGroups, tagOptions]);
+  const tagSections = useMemo(() => tagSectionsFor(tagGroups, tagOptions), [tagGroups, tagOptions]);
+  const ruleTag = ruleTagId ? tagOptions.find((option) => option.id === ruleTagId) : undefined;
   const titleOf = useCallback((list: SavedItem) => listDisplayTitle(list, list.listItems), []);
 
   // This list's own records (lines from other lists not yet resolved), in order.
@@ -186,13 +194,18 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   // list's own lines, soonest due first, and aren't stored: drag one to pin
   // it in place.
   const autoEntries = useMemo<ListEntry[]>(() => {
-    if (!rule) return [];
+    const matchesRule = rule
+      ? (entry: ListEntry) => matchesFocusRule(entry, rule, priorityOptions)
+      : ruleTagId
+        ? (entry: ListEntry) => matchesTagRule(entry, ruleTagId)
+        : null;
+    if (!matchesRule) return [];
     const pinned = new Set(rawEntries.map((entry) => entry.refEntryId).filter(Boolean));
     const matches = sortEntries(
       allEntries.filter((entry) => {
         if (entry.refEntryId || pinned.has(entry.id)) return false;
         const list = itemsById.get(entry.listId);
-        return !!list && list.type === "list" && !isFocusList(list) && matchesFocusRule(entry, rule, priorityOptions);
+        return !!list && list.type === "list" && !isFocusList(list) && matchesRule(entry);
       }),
     ).sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
     const lastPosition = rawEntries[rawEntries.length - 1]?.position ?? null;
@@ -205,7 +218,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       indentLevel: 0,
       refEntryId: source.id,
     }));
-  }, [allEntries, item.id, itemsById, priorityOptions, rawEntries, rule]);
+  }, [allEntries, item.id, itemsById, priorityOptions, rawEntries, rule, ruleTagId]);
 
   const autoIds = useMemo(() => new Set(autoEntries.map((entry) => entry.id)), [autoEntries]);
   const entries = useMemo(() => [...pinnedEntries, ...autoEntries], [autoEntries, pinnedEntries]);
@@ -572,11 +585,26 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             key: "rule",
             label: "Add lines automatically",
             icon: <Sparkles size={20} color={iconTone} />,
-            choices: ruleChoices,
-            selectedValue: rule ?? "none",
+            // The date rules, then every tag under its group's name.
+            choices: [
+              ...ruleChoices,
+              ...tagSections.flatMap(({ group, options }) =>
+                options.map((option) => ({ value: `${TAG_RULE_PREFIX}${option.id}`, label: option.name, group: group.name })),
+              ),
+            ],
+            selectedValue: rule ?? (ruleTagId ? `${TAG_RULE_PREFIX}${ruleTagId}` : "none"),
             onChoose: (value: string) => {
+              if (value.startsWith(TAG_RULE_PREFIX)) {
+                updateItem(item.id, { listMode: "focus", focusRule: undefined, ruleTagId: value.slice(TAG_RULE_PREFIX.length) });
+                return;
+              }
               const next = value as RuleChoice;
-              updateItem(item.id, next === "none" ? { focusRule: undefined } : { listMode: "focus", focusRule: next });
+              updateItem(
+                item.id,
+                next === "none"
+                  ? { focusRule: undefined, ruleTagId: undefined }
+                  : { listMode: "focus", focusRule: next, ruleTagId: undefined },
+              );
             },
           },
         ]
@@ -617,7 +645,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   // --- Page ----------------------------------------------------------------
   const caption = [
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
-    rule ? ruleCaptions[rule] : "",
+    rule ? ruleCaptions[rule] : ruleTag ? `Adds lines tagged ${ruleTag.name}` : "",
     sortCaptions[settings.sortMode],
     isSharedAccess(item) ? `Shared · ${accessRoleLabel(item.accessRole)}` : "",
     !canEdit ? "View only" : "",
@@ -699,6 +727,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           ref={viewRef}
           entries={entries}
           priorityOptions={priorityOptions}
+          tagSections={tagSections}
           canEdit={canEdit}
           settings={settings}
           onChangeSettings={updateSettings}
@@ -725,7 +754,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           footer={
             showComments ? <CommentThread targetType="item" targetId={item.id} style={styles.comments} /> : undefined
           }
-          emptyText={rule ? "Nothing matches this list's rule right now." : "Nothing on this list yet."}
+          emptyText={rule || ruleTagId ? "Nothing matches this list's rule right now." : "Nothing on this list yet."}
           focusAddSignal={focusAddSignal}
         />
       </KeyboardAvoidingView>

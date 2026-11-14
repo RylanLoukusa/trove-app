@@ -169,16 +169,26 @@ export const encodeEntryFormat = (
 
 // A pinned list is synced the same way, as a tag on the list.
 const PINNED_LIST_TAG = `${FORMAT_TAG_PREFIX}pinned`;
+// So is a list that adds lines by tag, as `fmt:ruletag:<tag option id>`: the
+// server's focus rule only takes the date and priority rules.
+const RULE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}ruletag:`;
 
-export const encodeListTags = (list: Pick<SavedItem, "pinned" | "tagOptionIds">): string[] => [
+export const encodeListTags = (list: Pick<SavedItem, "pinned" | "ruleTagId" | "tagOptionIds">): string[] => [
   ...(list.tagOptionIds ?? []).filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
   ...(list.pinned ? [PINNED_LIST_TAG] : []),
+  ...(list.ruleTagId ? [`${RULE_TAG_PREFIX}${list.ruleTagId}`] : []),
 ];
 
-export const decodeListTags = (tags: string[]): Pick<SavedItem, "tagOptionIds"> & { pinned?: true } => ({
-  tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
-  ...(tags.includes(PINNED_LIST_TAG) ? { pinned: true as const } : {}),
-});
+export const decodeListTags = (
+  tags: string[],
+): Pick<SavedItem, "tagOptionIds"> & { pinned?: true; ruleTagId?: string } => {
+  const ruleTagId = tags.find((tag) => tag.startsWith(RULE_TAG_PREFIX))?.slice(RULE_TAG_PREFIX.length);
+  return {
+    tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+    ...(tags.includes(PINNED_LIST_TAG) ? { pinned: true as const } : {}),
+    ...(ruleTagId ? { ruleTagId } : {}),
+  };
+};
 
 export const decodeEntryFormat = (
   kind: unknown,
