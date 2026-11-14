@@ -454,10 +454,10 @@ describe("HomeScreen", () => {
       expect(screen.queryByText("Saved")).toBeNull();
     });
 
-    it("does not show for non-Pro users", async () => {
+    it("shows for every signed-in account, Pro or not", async () => {
       await renderHomeScreen({ isPro: false });
 
-      expect(screen.queryByText("Saved")).toBeNull();
+      expect(screen.getByText("Saved")).toBeTruthy();
     });
 
     it("shows quietly when everything is saved", async () => {

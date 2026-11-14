@@ -3,18 +3,17 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import React, { ReactNode } from "react";
 
 import { TroveProvider, useTrove } from "./storage";
-import { pullTroveDataForUser } from "../sync/troveSync";
+import { saveSyncBaseline } from "../sync/syncBaseline";
+import { pullTroveDataForUser, pushTroveDataForUser } from "../sync/troveSync";
 import type { ListEntry, SavedItem, TroveData } from "../types/models";
 
-const mockAuth = { session: { user: { id: "me" } }, isAuthReady: true };
-const mockEntitlement = { isPro: false, isLoading: false };
-
 jest.mock("../auth/AuthContext", () => ({
-  useAuth: () => mockAuth,
+  useAuth: () => ({ session: { user: { id: "me" } }, isAuthReady: true }),
 }));
 
+// Sync doesn't depend on Pro.
 jest.mock("../entitlements/EntitlementContext", () => ({
-  useEntitlement: () => mockEntitlement,
+  useEntitlement: () => ({ isPro: false, isLoading: false }),
 }));
 
 jest.mock("../lib/supabase", () => ({
@@ -30,11 +29,12 @@ jest.mock("../sync/troveSync", () => ({
   clearStoredRemoteUpdatedAt: jest.fn(() => Promise.resolve()),
   ensureRemoteRowForUser: jest.fn(() => Promise.resolve({ created: true })),
   pullTroveDataForUser: jest.fn(),
-  pushTroveDataForUser: jest.fn(() => Promise.resolve({ ok: true })),
+  pushTroveDataForUser: jest.fn(),
   subscribeTroveRealtimeForUser: jest.fn(() => ({ unsubscribe: jest.fn() })),
 }));
 
 const mockPull = pullTroveDataForUser as jest.Mock;
+const mockPush = pushTroveDataForUser as jest.Mock;
 
 const stamp = "2026-03-01T00:00:00.000Z";
 const list = (id: string, ownerId: string, extra: Partial<SavedItem> = {}): SavedItem => ({
@@ -69,34 +69,67 @@ const data = (items: SavedItem[], listEntries: ListEntry[] = []): TroveData => (
   tagOptions: [],
 });
 
-// On the phone: a list made since the last time this account synced.
+// On the phone: a list made while this account's lists stayed on the phone.
 const onDevice = data([list("mine", "me")], [line("milk", "mine")]);
-// On the server: an old list of theirs, and one a friend shares with them.
-const onServer = data([list("old", "me"), list("party", "friend")], [line("balloons", "party")]);
+// On the server: a list another phone made, one this phone deleted after it
+// last saw it there, and one a friend shares with them.
+const onServer = data(
+  [list("other-phone", "me"), list("deleted-here", "me"), list("party", "friend")],
+  [line("balloons", "party")],
+);
 
 const wrapper = ({ children }: { children: ReactNode }) => <TroveProvider>{children}</TroveProvider>;
-
 const titles = (items: SavedItem[]) => items.map((item) => item.title).sort();
+const pushedTitles = (call: number) => titles((mockPush.mock.calls[call][2] as TroveData).items);
 
-describe("TroveProvider pulling from the server", () => {
+describe("TroveProvider syncing every account", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockEntitlement.isPro = false;
-    mockEntitlement.isLoading = false;
     await AsyncStorage.clear();
     await AsyncStorage.setItem("trove:tagBackfillDone:me", "true");
     await AsyncStorage.setItem("trove:data:v1:user:me", JSON.stringify(onDevice));
+    await saveSyncBaseline("me", {
+      folders: {},
+      items: { "deleted-here": stamp },
+      listEntries: {},
+      tagGroups: {},
+      tagOptions: {},
+    });
     mockPull.mockResolvedValue({ kind: "applied", data: onServer, remoteUpdatedAt: "2026-03-02T00:00:00.000Z" });
+    mockPush.mockResolvedValue({ ok: true });
   });
 
-  it("keeps what someone without Pro made on their phone, and adds what was shared with them", async () => {
+  it("uploads what's on the phone the first time, with what only the server had", async () => {
     const { result } = await renderHook(() => useTrove(), { wrapper });
 
-    await waitFor(() => expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "party"]));
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(pushedTitles(0)).toEqual(["mine", "other-phone", "party"]);
+    await waitFor(() =>
+      expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "other-phone", "party"]),
+    );
     expect(result.current.listEntries.map((entry) => entry.id).sort()).toEqual(["balloons", "milk"]);
+    expect(await AsyncStorage.getItem("trove:ownDataUploaded:v1:me")).toBe("true");
   });
 
-  it("keeps the pinned Today and This week through a later pull", async () => {
+  it("sends up the pinned Today and This week right after", async () => {
+    await renderHook(() => useTrove(), { wrapper });
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(2), { timeout: 4000 });
+    expect(pushedTitles(1)).toEqual(["This week", "Today", "mine", "other-phone", "party"]);
+  });
+
+  it("takes the server's copy once the phone's lists are up there", async () => {
+    await AsyncStorage.setItem("trove:ownDataUploaded:v1:me", "true");
+
+    const { result } = await renderHook(() => useTrove(), { wrapper });
+
+    await waitFor(() =>
+      expect(titles(result.current.items)).toEqual(["This week", "Today", "deleted-here", "other-phone", "party"]),
+    );
+  });
+
+  it("keeps the phone's lists through a later pull if the upload didn't go through", async () => {
+    mockPush.mockResolvedValue({ ok: false, error: "Offline" });
     const { result } = await renderHook(() => useTrove(), { wrapper });
     await waitFor(() => expect(titles(result.current.items)).toContain("Today"));
 
@@ -104,36 +137,7 @@ describe("TroveProvider pulling from the server", () => {
       await result.current.refreshFromRemote({ force: true });
     });
 
-    expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "party"]);
-    expect(result.current.items.filter((item) => item.pinned).map((item) => item.title).sort()).toEqual([
-      "This week",
-      "Today",
-    ]);
-  });
-
-  it("takes the server's copy for an account whose lists sync", async () => {
-    mockEntitlement.isPro = true;
-
-    const { result } = await renderHook(() => useTrove(), { wrapper });
-
-    await waitFor(() => expect(titles(result.current.items)).toEqual(["This week", "Today", "old", "party"]));
-  });
-
-  it("doesn't pull until it's known whether the account has Pro", async () => {
-    mockEntitlement.isLoading = true;
-    const { result, rerender } = await renderHook(() => useTrove(), { wrapper });
-    await waitFor(() => expect(result.current.isReady).toBe(true));
-
-    await act(async () => {
-      await result.current.refreshFromRemote({ force: true });
-    });
-    expect(mockPull).not.toHaveBeenCalled();
-    expect(titles(result.current.items)).toEqual(["mine"]);
-
-    mockEntitlement.isLoading = false;
-    await rerender({});
-
-    await waitFor(() => expect(mockPull).toHaveBeenCalled());
-    await waitFor(() => expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "party"]));
+    expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "other-phone", "party"]);
+    expect(await AsyncStorage.getItem("trove:ownDataUploaded:v1:me")).toBeNull();
   });
 });
