@@ -4,7 +4,7 @@ import React, { ReactNode } from "react";
 
 import { TroveProvider, useTrove } from "./storage";
 import { saveSyncBaseline } from "../sync/syncBaseline";
-import { pullTroveDataForUser, pushTroveDataForUser } from "../sync/troveSync";
+import { pullTroveDataForUser, pushTroveDataForUser, subscribeTroveRealtimeForUser } from "../sync/troveSync";
 import type { ListEntry, SavedItem, TroveData } from "../types/models";
 
 jest.mock("../auth/AuthContext", () => ({
@@ -35,6 +35,16 @@ jest.mock("../sync/troveSync", () => ({
 
 const mockPull = pullTroveDataForUser as jest.Mock;
 const mockPush = pushTroveDataForUser as jest.Mock;
+const mockSubscribe = subscribeTroveRealtimeForUser as jest.Mock;
+
+// A promise the test settles when it wants to.
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
 
 const stamp = "2026-03-01T00:00:00.000Z";
 const list = (id: string, ownerId: string, extra: Partial<SavedItem> = {}): SavedItem => ({
@@ -139,5 +149,82 @@ describe("TroveProvider syncing every account", () => {
 
     expect(titles(result.current.items)).toEqual(["This week", "Today", "mine", "other-phone", "party"]);
     expect(await AsyncStorage.getItem("trove:ownDataUploaded:v1:me")).toBeNull();
+  });
+});
+
+describe("TroveProvider pulling while this phone sends changes up", () => {
+  const created = async (result: { current: ReturnType<typeof useTrove> }, title: string) => {
+    let id = "";
+    await act(async () => {
+      id = result.current.createItem({ folderId: "", title, type: "list", tagOptionIds: [] })!.id;
+    });
+    return id;
+  };
+  // What the server says something changed: one of this phone's own pushes
+  // does that at every step.
+  const serverChanged = async () => {
+    await act(async () => {
+      (mockSubscribe.mock.calls[0][2] as () => void)();
+    });
+  };
+
+  let server: TroveData;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("trove:tagBackfillDone:me", "true");
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:v2:me", "true");
+    await AsyncStorage.setItem("trove:ownDataUploaded:v1:me", "true");
+    server = onServer;
+    mockPull.mockImplementation(async () => ({ kind: "applied", data: server, remoteUpdatedAt: "2026-03-02T00:00:00.000Z" }));
+    mockPush.mockResolvedValue({ ok: true });
+  });
+
+  const renderSynced = async () => {
+    const hook = await renderHook(() => useTrove(), { wrapper });
+    await waitFor(() => expect(titles(hook.result.current.items)).toEqual(["deleted-here", "other-phone", "party"]));
+    return hook;
+  };
+
+  it("waits for its own push before pulling, so a new list doesn't vanish", async () => {
+    const { result } = await renderSynced();
+    const push = deferred<{ ok: boolean }>();
+    mockPush.mockReturnValueOnce(push.promise);
+
+    const id = await created(result, "Weekend");
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await serverChanged();
+
+    expect(mockPull).toHaveBeenCalledTimes(1);
+    expect(titles(result.current.items)).toContain("Weekend");
+
+    server = { ...onServer, items: [...onServer.items, result.current.items.find((item) => item.id === id)!] };
+    await act(async () => {
+      push.resolve({ ok: true });
+    });
+
+    await waitFor(() => expect(mockPull).toHaveBeenCalledTimes(2));
+    expect(titles(result.current.items)).toEqual(["Weekend", "deleted-here", "other-phone", "party"]);
+  });
+
+  it("keeps a list made while a pull was under way, and pulls again once it's up", async () => {
+    const { result } = await renderSynced();
+    const pull = deferred<unknown>();
+    mockPull.mockReturnValueOnce(pull.promise);
+
+    await serverChanged();
+    await waitFor(() => expect(mockPull).toHaveBeenCalledTimes(2));
+    const id = await created(result, "Typed meanwhile");
+    await act(async () => {
+      pull.resolve({ kind: "applied", data: onServer, remoteUpdatedAt: "2026-03-03T00:00:00.000Z" });
+    });
+
+    expect(titles(result.current.items)).toContain("Typed meanwhile");
+
+    server = { ...onServer, items: [...onServer.items, result.current.items.find((item) => item.id === id)!] };
+    await waitFor(() => expect(mockPush).toHaveBeenCalled(), { timeout: 4000 });
+    await waitFor(() => expect(mockPull).toHaveBeenCalledTimes(3));
+    expect(titles(result.current.items)).toEqual(["Typed meanwhile", "deleted-here", "other-phone", "party"]);
   });
 });

@@ -75,11 +75,14 @@ const hasTroveData = (data: TroveData): boolean =>
   data.folders.length > 0 || data.items.length > 0 || data.tagGroups.length > 0 || data.tagOptions.length > 0;
 
 const hasPendingSync = (snapshot: SyncSnapshot): boolean =>
+  hasUnsentChanges(snapshot) || snapshot.status === "conflicted";
+
+// Changes made on this device that haven't reached the server yet.
+const hasUnsentChanges = (snapshot: SyncSnapshot): boolean =>
   snapshot.status === "queued" ||
   snapshot.status === "saving" ||
   snapshot.status === "retrying" ||
-  snapshot.status === "failed" ||
-  snapshot.status === "conflicted";
+  snapshot.status === "failed";
 
 type RefreshFromRemoteOptions = {
   force?: boolean;
@@ -220,9 +223,14 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const pendingRemotePushRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const lastForegroundRefreshAtRef = useRef(0);
+  // A pull from the server that had to wait for this device's own changes to
+  // go up first (see refreshWhenIdle), run once they have.
+  const refreshAfterPushRef = useRef(false);
+  const refreshWhenIdleRef = useRef<() => void>(() => {});
 
   const setAndPersistSyncSnapshot = useCallback(
     (nextSnapshot: SyncSnapshot) => {
+      syncSnapshotRef.current = nextSnapshot;
       setSyncSnapshot(nextSnapshot);
       if (activeUserId) {
         void saveSyncSnapshot(activeUserId, nextSnapshot);
@@ -245,6 +253,8 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       if (result.ok) {
         remoteRowExistsRef.current = true;
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
+        // After the push that called this has finished tidying up.
+        if (refreshAfterPushRef.current) setTimeout(() => refreshWhenIdleRef.current(), 0);
         return { ok: true };
       }
 
@@ -1225,14 +1235,30 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, error: "Supabase not configured." };
     }
     try {
+      const baselineBefore = await loadSyncBaseline(userId);
       // Until this device's own lists are on the server, its copy of them
       // wins (see the first pull after loading).
-      const seenBefore = (await isOwnDataUploaded(userId)) ? null : await loadSyncBaseline(userId);
+      const seenBefore = (await isOwnDataUploaded(userId)) ? null : baselineBefore;
+      const dataBefore = dataRef.current;
       if (options?.force) {
         await clearStoredRemoteUpdatedAt(userId);
       }
 
       const result = await pullTroveDataForUser(supabase, userId);
+
+      // Something changed here while the pull was under way, or changes made
+      // here haven't gone up yet: the server's copy doesn't have them, so
+      // putting it in place would lose them. Keep this device's copy, forget
+      // the pull so the next one brings the same things, and pull again once
+      // the changes are up.
+      const changesNotOnServer =
+        dataRef.current !== dataBefore || pendingRemotePushRef.current || hasUnsentChanges(syncSnapshotRef.current);
+      if ((result.kind === "applied" || result.kind === "no_row") && changesNotOnServer) {
+        await saveSyncBaseline(userId, baselineBefore);
+        await clearStoredRemoteUpdatedAt(userId);
+        refreshAfterPushRef.current = true;
+        return { ok: true };
+      }
 
       if (result.kind === "applied") {
         // A merge is sent back up; the server's own copy needs no push.
@@ -1278,6 +1304,21 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       };
     }
   }, [activeUserId, setAndPersistSyncSnapshot]);
+
+  // For pulls nobody asked for: a change on the server, or coming back to the
+  // app. While this device is still sending its own changes up, every step of
+  // that push looks like a change on the server, and a pull between steps
+  // would put back the server's copy from before them: a list or line just
+  // added would vanish until the next pull. So it waits until they're up.
+  const refreshWhenIdle = useCallback(() => {
+    if (pendingRemotePushRef.current || hasPendingSync(syncSnapshotRef.current)) {
+      refreshAfterPushRef.current = true;
+      return;
+    }
+    refreshAfterPushRef.current = false;
+    void refreshFromRemote({ force: true });
+  }, [refreshFromRemote]);
+  refreshWhenIdleRef.current = refreshWhenIdle;
 
   const syncToRemote = useCallback<TroveContextValue["syncToRemote"]>(async () => {
     const userId = activeUserId;
@@ -1396,13 +1437,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       }
 
       lastForegroundRefreshAtRef.current = now;
-      void refreshFromRemote({
-        force: !pendingRemotePushRef.current && !hasPendingSync(syncSnapshotRef.current),
-      });
+      refreshWhenIdle();
     });
 
     return () => subscription.remove();
-  }, [activeUserId, isAuthReady, isReady, refreshFromRemote]);
+  }, [activeUserId, isAuthReady, isReady, refreshWhenIdle]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady || !activeUserId) return;
@@ -1410,14 +1449,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const supabase = getSupabase();
     if (!supabase) return;
 
-    const subscription = subscribeTroveRealtimeForUser(supabase, activeUserId, () => {
-      void refreshFromRemote({
-        force: !pendingRemotePushRef.current && !hasPendingSync(syncSnapshotRef.current),
-      });
-    });
+    const subscription = subscribeTroveRealtimeForUser(supabase, activeUserId, refreshWhenIdle);
 
     return () => subscription.unsubscribe();
-  }, [activeUserId, isAuthReady, isReady, refreshFromRemote]);
+  }, [activeUserId, isAuthReady, isReady, refreshWhenIdle]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady) return;
