@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { Image, Pressable, StyleSheet } from "react-native";
 
 import { LINE_HEIGHT } from "./ListMarks";
@@ -42,9 +42,21 @@ type Props = {
   onLongPress?: () => void;
 };
 
+// How much wider a photo can get than the size it was loaded for before it
+// is loaded again.
+const RELOAD_GROWTH = 1.1;
+
 export const LineImageView = ({ image, size, maxWidth, colors, onPress, onLongPress }: Props) => {
   const uri = useLineImageUri(image);
   const frame = lineImageFrame(image, size, maxWidth);
+  // iOS decodes a photo for the size it first shows at, and keeps that decode
+  // when the photo grows (a new load only starts when the address changes).
+  // So a photo that grows past what it was loaded for is loaded again, or it
+  // would be a blurry stretch of a small copy.
+  const loaded = useRef({ width: frame.width, version: 0 });
+  if (frame.width > loaded.current.width * RELOAD_GROWTH) {
+    loaded.current = { width: frame.width, version: loaded.current.version + 1 };
+  }
   return (
     <Pressable
       accessibilityRole="imagebutton"
@@ -63,7 +75,15 @@ export const LineImageView = ({ image, size, maxWidth, colors, onPress, onLongPr
         pressed && styles.pressed,
       ]}
     >
-      {!!uri && <Image source={{ uri }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
+      {!!uri && (
+        <Image
+          key={loaded.current.version}
+          testID="line-photo"
+          source={{ uri }}
+          resizeMode="cover"
+          style={StyleSheet.absoluteFill}
+        />
+      )}
     </Pressable>
   );
 };

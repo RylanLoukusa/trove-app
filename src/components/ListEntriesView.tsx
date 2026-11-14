@@ -18,6 +18,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -1281,6 +1282,10 @@ const EntryRow = ({
   const images = entry.images ?? [];
   const [viewedSizes, setViewedSizes] = useState<Record<string, LineImageSize>>({});
   const [blockWidth, setBlockWidth] = useState(0);
+  // Until the line is measured, a bigger photo is sized from the screen, so it
+  // first loads at about the size it will show at, not as a speck.
+  const { width: windowWidth } = useWindowDimensions();
+  const photoWidth = blockWidth || windowWidth - leadingWidth(entry.kind, entry.indentLevel, showIndent) - GUTTER;
   const sizeOf = (image: LineImage): LineImageSize =>
     (onResizeImage ? undefined : viewedSizes[image.id]) ?? image.size ?? "thumb";
   const resize = (image: LineImage) => {
@@ -1295,7 +1300,7 @@ const EntryRow = ({
       key={image.id}
       image={image}
       size={sizeOf(image)}
-      maxWidth={blockWidth}
+      maxWidth={photoWidth}
       colors={colors}
       onPress={() => resize(image)}
       onLongPress={onRemoveImage ? () => onRemoveImage(image.id) : undefined}
