@@ -18,7 +18,9 @@ import {
 } from "../utils/itemTypes";
 import {
   decodeEntryFormat,
+  decodeListTags,
   encodeEntryFormat,
+  encodeListTags,
   entryToSnapshotItem,
   groupResolvedEntriesByList,
   isFocusList,
@@ -443,7 +445,7 @@ const itemRowToSavedItem = (
     connections: Array.isArray(row.connections)
       ? (row.connections as SavedItem["connections"])
       : undefined,
-    tagOptionIds: stringArray(row.tags),
+    ...decodeListTags(stringArray(row.tags)),
     ownerId: row.owner_id,
     createdBy: row.created_by ?? undefined,
     accessRole: row.owner_id === userId ? "owner" : row.folder_id ? folderAccessById.get(row.folder_id) ?? "viewer" : "viewer",
@@ -504,7 +506,7 @@ const savedItemToRow = (
         : optionalArray(normalizedItem.listItems),
     rich_text: optional(normalizedItem.richText),
     connections: optionalArray(normalizedItem.connections),
-    tags: normalizedItem.tagOptionIds ?? [],
+    tags: encodeListTags(normalizedItem),
     notes: optional(normalizedItem.notes),
     list_mode: isFocusList(normalizedItem) ? "focus" : null,
     // "none" clears a rule; null (sent by older apps) would keep it.
@@ -1191,6 +1193,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "notes",
     "listMode",
     "focusRule",
+    "pinned",
   ]);
 
 const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>

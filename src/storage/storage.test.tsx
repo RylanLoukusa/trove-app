@@ -69,6 +69,8 @@ describe("TroveProvider list entries", () => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
     // Skip the one-time tag seeding so it doesn't add groups to the fixture.
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
   });
 
   it("migrates embedded list lines into entries and still exposes them as listItems", async () => {
@@ -174,6 +176,8 @@ describe("TroveProvider list entry actions", () => {
     await AsyncStorage.clear();
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
   });
 
   it("adds a line to the end of a list", async () => {
@@ -278,6 +282,8 @@ describe("TroveProvider focus lists", () => {
     await AsyncStorage.clear();
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
   });
 
   const createToday = async (result: { current: ReturnType<typeof useTrove> }) => {
@@ -523,6 +529,8 @@ describe("TroveProvider line formatting", () => {
     await AsyncStorage.clear();
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
   });
 
   const entryById = (result: { current: ReturnType<typeof useTrove> }, id: string) =>
@@ -616,10 +624,86 @@ describe("TroveProvider line formatting", () => {
   });
 });
 
+describe("TroveProvider pinned lists", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  const pinned = (items: Array<{ title: string; pinned?: boolean }>) =>
+    items.filter((item) => item.pinned).map((item) => item.title).sort();
+
+  it("starts everyone with Today and This week pinned, each picking up lines by due date", async () => {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+
+    const { result } = await renderTrove();
+
+    await waitFor(() => expect(pinned(result.current.items)).toEqual(["This week", "Today"]));
+    expect(result.current.items.find((item) => item.title === "Today")).toMatchObject({
+      folderId: "",
+      type: "list",
+      listMode: "focus",
+      focusRule: "due_today",
+      pinned: true,
+    });
+    expect(result.current.items.find((item) => item.title === "This week")).toMatchObject({
+      folderId: "",
+      listMode: "focus",
+      focusRule: "due_week",
+      pinned: true,
+    });
+    await waitFor(async () => expect(pinned((await storedData()).items)).toEqual(["This week", "Today"]));
+    expect(await AsyncStorage.getItem("trove:pinnedDefaultsDone:anonymous")).toBe("true");
+  });
+
+  it("pins a list already called Today instead of making a second one", async () => {
+    const stamp = "2026-01-01T00:00:00.000Z";
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...legacyData,
+        items: [
+          ...legacyData.items,
+          { id: "mine", folderId: "folder-1", title: " today ", type: "list", tagOptionIds: [], createdAt: stamp, updatedAt: stamp },
+        ],
+      }),
+    );
+
+    const { result } = await renderTrove();
+
+    await waitFor(() => expect(pinned(result.current.items)).toEqual([" today ", "This week"]));
+    expect(result.current.items.filter((item) => item.title.trim().toLowerCase() === "today")).toHaveLength(1);
+    // It stays the list it was: nothing is pulled into it by itself.
+    expect(result.current.items.find((item) => item.id === "mine")).toMatchObject({ folderId: "folder-1", pinned: true });
+    expect(result.current.items.find((item) => item.id === "mine")?.focusRule).toBeUndefined();
+  });
+
+  it("sets them up only once, so a list someone unpins stays unpinned", async () => {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+    const first = await renderTrove();
+    await waitFor(() => expect(pinned(first.result.current.items)).toEqual(["This week", "Today"]));
+    await waitFor(async () => expect(await AsyncStorage.getItem("trove:pinnedDefaultsDone:anonymous")).toBe("true"));
+
+    const today = first.result.current.items.find((item) => item.title === "Today")!;
+    await act(async () => {
+      first.result.current.updateItem(today.id, { pinned: false });
+    });
+    await waitFor(async () => expect(pinned((await storedData()).items)).toEqual(["This week"]));
+    await first.unmount();
+
+    const second = await renderTrove();
+
+    expect(pinned(second.result.current.items)).toEqual(["This week"]);
+    expect(second.result.current.items.filter((item) => item.title === "Today")).toHaveLength(1);
+  });
+});
+
 describe("TroveProvider keeps lists only", () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
   });
 
   it("drops saved links, notes and media when it loads, and keeps lists and folders", async () => {

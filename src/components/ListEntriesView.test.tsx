@@ -566,14 +566,28 @@ describe("ListEntriesView", () => {
       expect(barState("Bold").disabled).toBe(false);
     });
 
+    it("shows for a line that is already on the list, and goes when no line has the cursor", async () => {
+      await renderList([entry("Cake"), entry("Venue")]);
+      expect(screen.queryByLabelText("Bold")).toBeNull();
+
+      await focus("Venue");
+      expect(screen.getByLabelText("Bold")).toBeTruthy();
+      expect(barState("Move line up").disabled).toBe(false);
+
+      await fireEvent(screen.getByLabelText("Venue"), "blur");
+      expect(screen.queryByLabelText("Bold")).toBeNull();
+    });
+
     it("sets how the next line will look when the cursor is in the bottom line", async () => {
       await renderList([entry("Cake")]);
 
       await focus(ADD_LINE);
       expect(barState("Checklist").selected).toBe(true);
-      ["Move line up", "Move line down", "Send to another list", "Line details"].forEach((label) => {
+      ["Move line up", "Move line down", "Send to another list"].forEach((label) => {
         expect(barState(label).disabled).toBe(true);
       });
+      // The bottom line isn't a line yet, so it has no details to open.
+      expect(screen.queryByLabelText("Line details")).toBeNull();
 
       await fireEvent.press(screen.getByLabelText("Bullets"));
       await fireEvent.press(screen.getByLabelText("Bold"));
@@ -612,6 +626,23 @@ describe("ListEntriesView", () => {
   });
 
   describe("line details", () => {
+    it("are a tap away on the line that has the cursor, and only that line", async () => {
+      await renderList([entry("Cake"), entry("Venue")]);
+      expect(screen.queryByLabelText("Line details")).toBeNull();
+
+      await focus("Venue");
+      expect(screen.getAllByLabelText("Line details")).toHaveLength(1);
+      await fireEvent.press(screen.getByLabelText("Line details"));
+
+      expect(dismissKeyboard).toHaveBeenCalled();
+      expect(screen.getByText("Line details")).toBeTruthy();
+      // The sheet shows the line it was opened from.
+      expect(screen.getAllByDisplayValue("Venue")).toHaveLength(2);
+      expect(screen.queryByDisplayValue("Cake", { exact: true })).toBeTruthy();
+      expect(screen.getAllByDisplayValue("Cake")).toHaveLength(1);
+    });
+
+
     it("sets a due date, priority and notes", async () => {
       await renderList([entry("Cake")]);
 

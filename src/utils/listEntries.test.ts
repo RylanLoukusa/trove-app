@@ -14,9 +14,10 @@ import {
   isUntitledList,
   listActivityTimes,
   listDisplayTitle,
+  decodeListTags,
+  encodeListTags,
   listIdsLendingLines,
   listItemKindFromSnapshot,
-  listPreviewText,
   MAX_ENTRY_INDENT,
   pruneReferencesToRemoved,
   resolveReference,
@@ -603,17 +604,24 @@ describe("list titles and previews", () => {
     expect(listDisplayTitle({ title: "" }, [{ text: " " }])).toBe("New list");
     expect(listDisplayTitle({ title: UNTITLED_LIST_TITLE })).toBe("New list");
   });
+});
 
-  it("previews the first few lines, skipping blank ones", () => {
-    expect(listPreviewText({ title: "Groceries" }, lines)).toBe("Milk, Eggs, Bread, Jam");
-    expect(listPreviewText({ title: "Groceries" }, lines, 2)).toBe("Milk, Eggs");
-    expect(listPreviewText({ title: "Groceries" }, [])).toBe("");
-    expect(listPreviewText({ title: "Groceries" })).toBe("");
+describe("pinned lists", () => {
+  it("keeps the pin with the list's tags, so it syncs", () => {
+    const tags = encodeListTags({ pinned: true, tagOptionIds: ["tag-a"] });
+    expect(tags).toEqual(["tag-a", "fmt:pinned"]);
+    expect(decodeListTags(tags)).toEqual({ tagOptionIds: ["tag-a"], pinned: true });
   });
 
-  it("doesn't repeat the line an unnamed list is already titled with", () => {
-    expect(listPreviewText({ title: UNTITLED_LIST_TITLE }, lines)).toBe("Eggs, Bread, Jam, Tea");
-    expect(listPreviewText({ title: UNTITLED_LIST_TITLE }, [{ text: "Milk" }])).toBe("");
+  it("leaves an unpinned list's tags as they are", () => {
+    expect(encodeListTags({ tagOptionIds: ["tag-a"] })).toEqual(["tag-a"]);
+    expect(encodeListTags({ pinned: false, tagOptionIds: [] })).toEqual([]);
+    expect(decodeListTags(["tag-a"])).toEqual({ tagOptionIds: ["tag-a"] });
+  });
+
+  it("never shows the pin as a tag, or doubles it", () => {
+    expect(encodeListTags({ pinned: true, tagOptionIds: ["fmt:pinned"] })).toEqual(["fmt:pinned"]);
+    expect(encodeListTags({ pinned: false, tagOptionIds: ["fmt:pinned"] })).toEqual([]);
   });
 });
 
