@@ -4,12 +4,12 @@ import { Image, Pressable, StyleSheet } from "react-native";
 import { LINE_HEIGHT } from "./ListMarks";
 import { useLineImageUri } from "../media/lineImages";
 import { ThemeColors, withAlpha } from "../theme/theme";
-import type { LineImage } from "../types/models";
+import type { LineImage, LineImageSize } from "../types/models";
+
+export type { LineImageSize };
 
 // A photo on a line starts as a thumbnail the height of the text. A tap makes
 // it bigger, another makes it as wide as the line, and a third shrinks it back.
-export type LineImageSize = "thumb" | "medium" | "large";
-
 export const nextLineImageSize = (size: LineImageSize): LineImageSize =>
   size === "thumb" ? "medium" : size === "medium" ? "large" : "thumb";
 

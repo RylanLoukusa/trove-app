@@ -37,7 +37,6 @@ import { getFolderPathLabel } from "../../utils/folderTree";
 import {
   canListBorrowLines,
   focusReferenceId,
-  generatePositionBetween,
   generatePositionsBetween,
   isFocusList,
   isUntitledList,
@@ -117,7 +116,6 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     insertListEntries,
     relocateListEntries,
     restoreListEntries,
-    moveListEntry,
     deleteListEntry,
     addToFocusList,
     positionListEntry,
@@ -340,16 +338,21 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
 
   // With a rule, moves are worked out from what's on screen, since lines the
   // rule pulled in have no stored position until they're pinned.
-  const onMoveRuleEntry = useCallback(
-    (entryId: string, afterId: string | null, beforeId: string | null) => {
+  // Puts dragged lines, in order, between two lines. A line a rule added is
+  // saved on the list where it is put, so it stays there.
+  const onReorderEntries = useCallback(
+    (entryIds: string[], afterId: string | null, beforeId: string | null) => {
+      if (entryIds.length === 0) return;
       const byId = new Map(entries.map((entry) => [entry.id, entry]));
       const lower = afterId ? byId.get(afterId)?.position ?? null : null;
       let upper = beforeId ? byId.get(beforeId)?.position ?? null : null;
       if (lower !== null && upper !== null && lower >= upper) upper = null;
-      const position = generatePositionBetween(lower, upper);
-      const sourceId = targetIds.get(entryId);
-      if (autoIds.has(entryId) && sourceId) addToFocusList(item.id, [sourceId], position);
-      else positionListEntry(entryId, position);
+      const positions = generatePositionsBetween(lower, upper, entryIds.length);
+      entryIds.forEach((entryId, index) => {
+        const sourceId = targetIds.get(entryId);
+        if (autoIds.has(entryId) && sourceId) addToFocusList(item.id, [sourceId], positions[index]);
+        else positionListEntry(entryId, positions[index]);
+      });
     },
     [addToFocusList, autoIds, entries, item.id, positionListEntry, targetIds],
   );
@@ -704,7 +707,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           onToggleEntry={onToggleEntry}
           onSetChecked={onSetChecked}
           onUpdateEntry={onUpdateEntry}
-          onMoveEntry={rule ? onMoveRuleEntry : moveListEntry}
+          onReorderEntries={onReorderEntries}
           onInsertEntries={onInsertEntries}
           onDeleteEntry={onDeleteEntry}
           captions={captions}

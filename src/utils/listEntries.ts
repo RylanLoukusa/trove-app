@@ -1,4 +1,4 @@
-import type { LineImage, ListEntry, SavedItem, SavedListItem } from "../types/models";
+import type { LineImage, LineImageSize, ListEntry, SavedItem, SavedListItem } from "../types/models";
 
 // ---------------------------------------------------------------------------
 // Position keys (fractional indexing)
@@ -126,17 +126,33 @@ export const listItemKindFromSnapshot = (listItem: { kind?: unknown; plain?: unk
 const FORMAT_TAG_PREFIX = "fmt:";
 const PLAIN_LINE_TAG = `${FORMAT_TAG_PREFIX}text`;
 const BOLD_LINE_TAG = `${FORMAT_TAG_PREFIX}bold`;
-// A photo travels as `fmt:img:<id>:<width>x<height>:<storage path>`.
+// A photo travels as `fmt:img:<id>:<width>x<height>[@<size>]:<storage path>`,
+// with the size left out while it is a thumbnail.
 const IMAGE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}img:`;
 
-const encodeLineImage = (image: LineImage): string =>
-  `${IMAGE_TAG_PREFIX}${image.id}:${Math.round(image.width)}x${Math.round(image.height)}:${image.path ?? ""}`;
+const encodeLineImage = (image: LineImage): string => {
+  const size = image.size && image.size !== "thumb" ? `@${image.size}` : "";
+  return `${IMAGE_TAG_PREFIX}${image.id}:${Math.round(image.width)}x${Math.round(image.height)}${size}:${image.path ?? ""}`;
+};
 
 const decodeLineImage = (tag: string): LineImage | null => {
-  const match = /^([^:]+):(\d+)x(\d+):(.*)$/.exec(tag.slice(IMAGE_TAG_PREFIX.length));
+  const match = /^([^:]+):(\d+)x(\d+)(?:@(medium|large))?:(.*)$/.exec(tag.slice(IMAGE_TAG_PREFIX.length));
   if (!match) return null;
-  const [, id, width, height, path] = match;
-  return { id, width: Number(width), height: Number(height), ...(path ? { path } : {}) };
+  const [, id, width, height, size, path] = match;
+  return {
+    id,
+    width: Number(width),
+    height: Number(height),
+    ...(path ? { path } : {}),
+    ...(size ? { size: size as LineImageSize } : {}),
+  };
+};
+
+// The same photo shown at another size; a thumbnail keeps no size.
+export const withLineImageSize = (image: LineImage, size: LineImageSize): LineImage => {
+  const next: LineImage = { ...image, size };
+  if (size === "thumb") delete next.size;
+  return next;
 };
 
 export const encodeEntryFormat = (
@@ -511,6 +527,14 @@ export const listDisplayTitle = (item: Pick<SavedItem, "title">, lines?: LineTex
 
 type CheckRow = Pick<ListEntry, "id" | "kind" | "checked" | "indentLevel">;
 
+// Where the group a line starts ends: the index just past the last line after
+// it that is indented further than it is.
+export const lineGroupEnd = (rows: Array<Pick<ListEntry, "indentLevel">>, index: number): number => {
+  let end = index + 1;
+  while (end < rows.length && rows[end].indentLevel > rows[index].indentLevel) end += 1;
+  return end;
+};
+
 // An indented line belongs to the nearest line above it with less indent, so
 // lines form groups. Checking or unchecking a line does the same to every
 // checkbox in its group, and a checkbox with checkboxes in its group is
@@ -519,11 +543,7 @@ type CheckRow = Pick<ListEntry, "id" | "kind" | "checked" | "indentLevel">;
 export const checkWithGroup = (rows: CheckRow[], ids: string[], checked: boolean): Map<string, boolean> => {
   const state = new Map(rows.filter((row) => row.kind === "check").map((row) => [row.id, row.checked]));
   const indexById = new Map(rows.map((row, index) => [row.id, index]));
-  const groupEnd = (index: number) => {
-    let end = index + 1;
-    while (end < rows.length && rows[end].indentLevel > rows[index].indentLevel) end += 1;
-    return end;
-  };
+  const groupEnd = (index: number) => lineGroupEnd(rows, index);
 
   const changedAt: number[] = [];
   ids.forEach((id) => {

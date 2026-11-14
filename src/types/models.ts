@@ -50,13 +50,19 @@ export type SavedListItem = {
 // A list line stored as its own record (trove_list_entries), so it can be
 // sorted, edited and synced individually and referenced from focus lists.
 // `listId` is the SavedItem (type "list") that owns the entry.
+// How big a photo on a line shows: a thumbnail the height of the text, bigger,
+// or as wide as the line.
+export type LineImageSize = "thumb" | "medium" | "large";
+
 // A photo on a line. `path` is where it is kept in storage, set once the
 // person is signed in; the photo itself also stays on the device that added it.
+// `size` is how big it was last left, when it isn't a thumbnail.
 export type LineImage = {
   id: string;
   width: number;
   height: number;
   path?: string;
+  size?: LineImageSize;
 };
 
 export type ListEntry = {

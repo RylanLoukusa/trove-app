@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReanimatedSwipeable, { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { runOnJS, SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Bold,
@@ -44,7 +44,7 @@ import {
   Undo2,
 } from "lucide-react-native";
 
-import { LineImageSize, LineImageView, nextLineImageSize } from "./LineImages";
+import { LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
 import {
   BulletMark,
@@ -60,8 +60,8 @@ import { ListTarget, SendMode, SendToListSheet, useRecentListTargets } from "./S
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { pickLineImages } from "../media/lineImages";
 import { useThemeColors } from "../theme/ThemeContext";
-import type { LineImage, ListEntry, ListItemKind, TagOption } from "../types/models";
-import { MAX_ENTRY_INDENT, PastedLine, splitEnteredText } from "../utils/listEntries";
+import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
+import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
   DueTone,
@@ -108,7 +108,8 @@ type Props = {
   onToggleEntry: (entry: ListEntry) => void;
   onSetChecked?: (entryIds: string[], checked: boolean) => void;
   onUpdateEntry: (entryId: string, updates: EntryUpdates) => void;
-  onMoveEntry: (entryId: string, afterEntryId: string | null, beforeEntryId: string | null) => void;
+  // Puts lines, in the order given, between two lines (null: the start or end).
+  onReorderEntries: (entryIds: string[], afterEntryId: string | null, beforeEntryId: string | null) => void;
   // Adds lines right after a line (null: at the end) and returns their ids.
   onInsertEntries: (afterEntryId: string | null, lines: NewLine[]) => string[];
   onDeleteEntry: (entryId: string) => void;
@@ -162,6 +163,17 @@ export const targetIndexFor = (startIndex: number, translationY: number, heights
   return index;
 };
 
+// The lines being dragged together, from `start` up to (not including) `end`.
+type DragBlock = { start: number; end: number };
+
+// Row heights with the dragged lines counted as one row, so they move past
+// other lines as a block. Exported for its tests.
+export const blockHeights = (heights: number[], block: DragBlock): number[] => [
+  ...heights.slice(0, block.start),
+  heights.slice(block.start, block.end).reduce((total, height) => total + height, 0),
+  ...heights.slice(block.end),
+];
+
 // A bold line with no marker reads as a heading.
 const isHeading = (entry: Pick<ListEntry, "kind" | "bold">): boolean => entry.kind === "text" && !!entry.bold;
 
@@ -192,7 +204,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     onToggleEntry,
     onSetChecked,
     onUpdateEntry,
-    onMoveEntry,
+    onReorderEntries,
     onInsertEntries,
     onDeleteEntry,
     captions,
@@ -241,8 +253,16 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   }, [selecting]);
 
   // --- Dragging a line to a new place --------------------------------------
+  // In your own order a line takes the lines indented under it along; they
+  // move as one block, `start` to `end` (exclusive) in the lines shown.
   const heightsRef = useRef<Record<string, number>>({});
-  const [dragging, setDragging] = useState<{ id: string; startIndex: number } | null>(null);
+  const dragY = useSharedValue(0);
+  const [dragging, setDraggingState] = useState<DragBlock | null>(null);
+  const draggingRef = useRef<DragBlock | null>(null);
+  const setDragging = useCallback((next: DragBlock | null) => {
+    draggingRef.current = next;
+    setDraggingState(next);
+  }, []);
   const [overIndex, setOverIndexState] = useState(0);
   const overIndexRef = useRef(0);
 
@@ -251,20 +271,27 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     setOverIndexState((current) => (current === next ? current : next));
   }, []);
 
+  const rowHeights = useCallback(
+    () => visibleEntries.map((entry) => heightsRef.current[entry.id] ?? LINE_ROW_HEIGHT),
+    [visibleEntries],
+  );
+
   const startDrag = useCallback(
-    (id: string, startIndex: number) => {
+    (startIndex: number) => {
+      const end = manualOrder ? lineGroupEnd(visibleEntries, startIndex) : startIndex + 1;
       setOverIndex(startIndex);
-      setDragging({ id, startIndex });
+      setDragging({ start: startIndex, end });
     },
-    [setOverIndex],
+    [manualOrder, setDragging, setOverIndex, visibleEntries],
   );
 
   const updateDrag = useCallback(
-    (startIndex: number, translationY: number) => {
-      const heights = visibleEntries.map((entry) => heightsRef.current[entry.id] ?? LINE_ROW_HEIGHT);
-      setOverIndex(targetIndexFor(startIndex, translationY, heights));
+    (translationY: number) => {
+      const block = draggingRef.current;
+      if (!block) return;
+      setOverIndex(targetIndexFor(block.start, translationY, blockHeights(rowHeights(), block)));
     },
-    [setOverIndex, visibleEntries],
+    [rowHeights, setOverIndex],
   );
 
   const showToastRef = useRef<((message: string, undo?: () => void) => void) | null>(null);
@@ -276,25 +303,31 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     showToastRef.current?.(`Now sorted by ${listSortLabels.manual}`);
   }, [onChangeSettings, settings.sortMode]);
 
-  const endDrag = useCallback(
-    (id: string, startIndex: number) => {
-      const targetIndex = overIndexRef.current;
-      setDragging(null);
-      if (targetIndex === startIndex) return;
-      const others = visibleEntries.filter((entry) => entry.id !== id);
-      const after = others[targetIndex - 1] ?? null;
-      const before = others[targetIndex] ?? null;
-      onMoveEntry(id, after?.id ?? null, before?.id ?? null);
-      switchToManualOrder();
-    },
-    [onMoveEntry, switchToManualOrder, visibleEntries],
-  );
+  const endDrag = useCallback(() => {
+    const block = draggingRef.current;
+    const targetIndex = overIndexRef.current;
+    setDragging(null);
+    if (!block || targetIndex === block.start) return;
+    const moving = visibleEntries.slice(block.start, block.end);
+    const others = [...visibleEntries.slice(0, block.start), ...visibleEntries.slice(block.end)];
+    const after = others[targetIndex - 1] ?? null;
+    const before = others[targetIndex] ?? null;
+    onReorderEntries(
+      moving.map((entry) => entry.id),
+      after?.id ?? null,
+      before?.id ?? null,
+    );
+    switchToManualOrder();
+  }, [onReorderEntries, setDragging, switchToManualOrder, visibleEntries]);
 
-  const draggingHeight = dragging ? heightsRef.current[dragging.id] ?? LINE_ROW_HEIGHT : 0;
+  const blockHeight = dragging ? blockHeights(rowHeights(), dragging)[dragging.start] : 0;
+  const isCarried = (index: number) => !!dragging && index >= dragging.start && index < dragging.end;
+  // How far a line slides to make room for the block being dragged.
   const shiftFor = (index: number): number => {
-    if (!dragging || index === dragging.startIndex) return 0;
-    if (dragging.startIndex < overIndex && index > dragging.startIndex && index <= overIndex) return -draggingHeight;
-    if (dragging.startIndex > overIndex && index >= overIndex && index < dragging.startIndex) return draggingHeight;
+    if (!dragging || isCarried(index)) return 0;
+    const at = index < dragging.start ? index : index - (dragging.end - dragging.start) + 1;
+    if (dragging.start < overIndex && at > dragging.start && at <= overIndex) return -blockHeight;
+    if (dragging.start > overIndex && at >= overIndex && at < dragging.start) return blockHeight;
     return 0;
   };
 
@@ -620,6 +653,15 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     setAddOverride(null);
   };
 
+  // A photo stays the size it was last left at, on every device.
+  const resizeImage = (entryId: string, imageId: string, size: LineImageSize) => {
+    const entry = entriesRef.current.find((candidate) => candidate.id === entryId);
+    if (!entry?.images?.some((image) => image.id === imageId)) return;
+    onUpdateEntry(entry.id, {
+      images: entry.images.map((image) => (image.id === imageId ? withLineImageSize(image, size) : image)),
+    });
+  };
+
   // Holding a photo takes it off its line, with an undo. A line that was only
   // that photo goes too.
   const removeImage = (entryId: string, imageId: string) => {
@@ -818,7 +860,9 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               spaceAbove={index > 0 && isHeading(entry) && entry.indentLevel === 0}
               canEdit={canEdit}
               canReorder={canReorder}
-              isDragging={dragging?.id === entry.id}
+              dragActive={!!dragging}
+              carried={isCarried(index)}
+              dragY={dragY}
               shift={shiftFor(index)}
               onLayoutHeight={(height) => {
                 heightsRef.current[entry.id] = height;
@@ -842,6 +886,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
                 if (!isBorrowed(entry.id) && pickingForRef.current !== entry.id) onDeleteEntry(entry.id);
               }}
               onRemoveImage={canEdit ? (imageId) => removeImage(entry.id, imageId) : undefined}
+              onResizeImage={canEdit ? (imageId, size) => resizeImage(entry.id, imageId, size) : undefined}
               onBlurLine={() => setFocusedId((current) => (current === entry.id ? null : current))}
               selecting={selecting}
               selected={selectedIds.has(entry.id)}
@@ -849,9 +894,9 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onSwipeLink={linkable(entry.id) ? () => startSend([entry.id], "add") : undefined}
               onSwipeMove={canMove ? () => startSend([entry.id], "move") : undefined}
               onSwipeDelete={ruleEntryIds?.has(entry.id) ? undefined : () => deleteLines([entry.id])}
-              onDragStart={() => startDrag(entry.id, index)}
-              onDragUpdate={(translationY) => updateDrag(index, translationY)}
-              onDragEnd={() => endDrag(entry.id, index)}
+              onDragStart={() => startDrag(index)}
+              onDragUpdate={updateDrag}
+              onDragEnd={endDrag}
             />
           ))}
 
@@ -1057,7 +1102,11 @@ type EntryRowProps = {
   spaceAbove: boolean;
   canEdit: boolean;
   canReorder: boolean;
-  isDragging: boolean;
+  // A line is being dragged; this one moves with it (it or a line under it).
+  dragActive: boolean;
+  carried: boolean;
+  // How far the dragged lines have moved, and how far this one slides aside.
+  dragY: SharedValue<number>;
   shift: number;
   onLayoutHeight: (height: number) => void;
   onToggle: () => void;
@@ -1076,8 +1125,10 @@ type EntryRowProps = {
   onFocusLine: () => void;
   onBlurLine: () => void;
   onBlurEmpty: () => void;
-  // Holding a photo on the line; left out when the line can't be changed.
+  // Holding a photo on the line, and tapping it to a new size; left out when
+  // the line can't be changed.
   onRemoveImage?: (imageId: string) => void;
+  onResizeImage?: (imageId: string, size: LineImageSize) => void;
   // The text wrapped onto another row while being typed.
   onGrow: () => void;
   selecting: boolean;
@@ -1102,7 +1153,9 @@ const EntryRow = ({
   spaceAbove,
   canEdit,
   canReorder,
-  isDragging,
+  dragActive,
+  carried,
+  dragY,
   shift,
   onLayoutHeight,
   onToggle,
@@ -1120,6 +1173,7 @@ const EntryRow = ({
   onBlurLine,
   onBlurEmpty,
   onRemoveImage,
+  onResizeImage,
   onGrow,
   selecting,
   selected,
@@ -1128,7 +1182,6 @@ const EntryRow = ({
   onSwipeMove,
   onSwipeDelete,
 }: EntryRowProps) => {
-  const dragY = useSharedValue(0);
   const [draft, setDraftState] = useState(entry.text);
   const draftRef = useRef(entry.text);
   const setDraft = (next: string) => {
@@ -1192,6 +1245,7 @@ const EntryRow = ({
   const holdGesture = useMemo(
     () =>
       Gesture.Pan()
+        .withTestId(`drag-${entry.id}`)
         .enabled(canReorder)
         .activateAfterLongPress(250)
         .onStart(() => {
@@ -1202,53 +1256,54 @@ const EntryRow = ({
           dragY.value = event.translationY;
           runOnJS(onDragUpdate)(event.translationY);
         })
+        // The lines stay where they were let go until the list shows them in
+        // their new place.
         .onEnd(() => {
-          dragY.value = 0;
           runOnJS(markDrag)();
           runOnJS(onDragEnd)();
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canReorder, dragY, onDragEnd, onDragStart, onDragUpdate, markDrag],
+    [canReorder, dragY, entry.id, onDragEnd, onDragStart, onDragUpdate, markDrag],
   );
 
   const animatedStyle = useAnimatedStyle(() => {
-    if (isDragging) return { transform: [{ translateY: dragY.value }], zIndex: 10 };
+    if (carried) return { transform: [{ translateY: dragY.value }], zIndex: 10 };
+    if (!dragActive) return { transform: [{ translateY: 0 }], zIndex: 0 };
     return { transform: [{ translateY: withTiming(shift, { duration: 140 }) }], zIndex: 0 };
-  }, [isDragging, shift]);
+  }, [carried, dragActive, shift]);
 
   const hasMeta = !!due || !!priority || !!entry.notes;
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
   // Photos start as thumbnails beside the text; a bigger one shows under it.
+  // The size is saved on the line; on a list that can only be viewed it is
+  // kept here for as long as the list is open.
   const images = entry.images ?? [];
-  const [imageSizes, setImageSizes] = useState<Record<string, LineImageSize>>({});
+  const [viewedSizes, setViewedSizes] = useState<Record<string, LineImageSize>>({});
   const [blockWidth, setBlockWidth] = useState(0);
-  const sizeOf = (id: string): LineImageSize => imageSizes[id] ?? "thumb";
-  const thumbs = images.filter((image) => sizeOf(image.id) === "thumb");
-  const expanded = images.filter((image) => sizeOf(image.id) !== "thumb");
+  const sizeOf = (image: LineImage): LineImageSize =>
+    (onResizeImage ? undefined : viewedSizes[image.id]) ?? image.size ?? "thumb";
+  const resize = (image: LineImage) => {
+    const next = nextLineImageSize(sizeOf(image));
+    if (onResizeImage) onResizeImage(image.id, next);
+    else setViewedSizes((current) => ({ ...current, [image.id]: next }));
+  };
+  const thumbs = images.filter((image) => sizeOf(image) === "thumb");
+  const expanded = images.filter((image) => sizeOf(image) !== "thumb");
   const imageView = (image: LineImage) => (
     <LineImageView
       key={image.id}
       image={image}
-      size={sizeOf(image.id)}
+      size={sizeOf(image)}
       maxWidth={blockWidth}
       colors={colors}
-      onPress={() => setImageSizes((current) => ({ ...current, [image.id]: nextLineImageSize(current[image.id] ?? "thumb") }))}
+      onPress={() => resize(image)}
       onLongPress={onRemoveImage ? () => onRemoveImage(image.id) : undefined}
     />
   );
 
   const row = (
-    <Animated.View
-      style={[
-        styles.row,
-        spaceAbove && styles.rowSpaced,
-        selected && styles.rowSelected,
-        isDragging && styles.rowDragging,
-        animatedStyle,
-      ]}
-      onLayout={(event) => onLayoutHeight(event.nativeEvent.layout.height)}
-    >
+    <View style={[styles.row, spaceAbove && styles.rowSpaced, selected && styles.rowSelected]}>
       <GestureDetector gesture={holdGesture}>
         <View
           accessibilityHint={canReorder ? "Hold to drag the line" : undefined}
@@ -1400,90 +1455,97 @@ const EntryRow = ({
           )}
         </Pressable>
       )}
-    </Animated.View>
+    </View>
   );
 
-  if (!canEdit) return row;
+  const swipeable = (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      enabled={!dragActive && !selecting && (canSwipeRight || hasSwipeActions)}
+      // Leaves the screen's left edge to the swipe that goes back.
+      hitSlop={{ left: -GUTTER }}
+      friction={1.6}
+      leftThreshold={64}
+      rightThreshold={40}
+      overshootLeft={false}
+      overshootRight={false}
+      renderLeftActions={
+        canSwipeRight
+          ? () => (
+              <View style={[styles.swipeCheck, entry.checked && styles.swipeCheckUndo]}>
+                {entry.checked ? <Undo2 size={20} color={colors.onAccent} /> : <Check size={20} color={colors.onAccent} />}
+                <Text style={styles.swipeCheckText}>{entry.checked ? "Uncheck" : "Check off"}</Text>
+              </View>
+            )
+          : undefined
+      }
+      renderRightActions={
+        hasSwipeActions
+          ? () => (
+              <View style={styles.swipeButtons}>
+                {!!onSwipeLink && (
+                  <SwipeButton
+                    label="Add to"
+                    accessibilityLabel={`Add ${entry.text} to another list`}
+                    icon={<ListPlus size={20} color={colors.onAccent} />}
+                    tone={colors.buttonPrimaryBg}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeLink();
+                    }}
+                    styles={styles}
+                  />
+                )}
+                {!!onSwipeMove && (
+                  <SwipeButton
+                    label="Move"
+                    accessibilityLabel={`Move ${entry.text} to another list`}
+                    icon={<FolderInput size={20} color={colors.onAccent} />}
+                    tone={colors.blue}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeMove();
+                    }}
+                    styles={styles}
+                  />
+                )}
+                {!!onSwipeDelete && (
+                  <SwipeButton
+                    label={borrowed ? "Remove" : "Delete"}
+                    accessibilityLabel={borrowed ? `Remove ${entry.text} from this list` : `Delete ${entry.text}`}
+                    icon={<Trash2 size={20} color={colors.onAccent} />}
+                    tone={colors.buttonDangerBg}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      onSwipeDelete();
+                    }}
+                    styles={styles}
+                  />
+                )}
+              </View>
+            )
+          : undefined
+      }
+      onSwipeableOpen={(direction) => {
+        // "right": the row moved right, showing the check-off action.
+        if (direction !== "right") return;
+        onToggle();
+        swipeRef.current?.close();
+      }}
+    >
+      {row}
+    </ReanimatedSwipeable>
+  );
 
+  // Dragging slides this wrapper, not the row: the swipe container clips what
+  // moves outside it, which left the lines being moved blank.
   return (
-    <>
-      <ReanimatedSwipeable
-        ref={swipeRef}
-        enabled={!isDragging && !selecting && (canSwipeRight || hasSwipeActions)}
-        // Leaves the screen's left edge to the swipe that goes back.
-        hitSlop={{ left: -GUTTER }}
-        friction={1.6}
-        leftThreshold={64}
-        rightThreshold={40}
-        overshootLeft={false}
-        overshootRight={false}
-        renderLeftActions={
-          canSwipeRight
-            ? () => (
-                <View style={[styles.swipeCheck, entry.checked && styles.swipeCheckUndo]}>
-                  {entry.checked ? <Undo2 size={20} color={colors.onAccent} /> : <Check size={20} color={colors.onAccent} />}
-                  <Text style={styles.swipeCheckText}>{entry.checked ? "Uncheck" : "Check off"}</Text>
-                </View>
-              )
-            : undefined
-        }
-        renderRightActions={
-          hasSwipeActions
-            ? () => (
-                <View style={styles.swipeButtons}>
-                  {!!onSwipeLink && (
-                    <SwipeButton
-                      label="Add to"
-                      accessibilityLabel={`Add ${entry.text} to another list`}
-                      icon={<ListPlus size={20} color={colors.onAccent} />}
-                      tone={colors.buttonPrimaryBg}
-                      onPress={() => {
-                        swipeRef.current?.close();
-                        onSwipeLink();
-                      }}
-                      styles={styles}
-                    />
-                  )}
-                  {!!onSwipeMove && (
-                    <SwipeButton
-                      label="Move"
-                      accessibilityLabel={`Move ${entry.text} to another list`}
-                      icon={<FolderInput size={20} color={colors.onAccent} />}
-                      tone={colors.blue}
-                      onPress={() => {
-                        swipeRef.current?.close();
-                        onSwipeMove();
-                      }}
-                      styles={styles}
-                    />
-                  )}
-                  {!!onSwipeDelete && (
-                    <SwipeButton
-                      label={borrowed ? "Remove" : "Delete"}
-                      accessibilityLabel={borrowed ? `Remove ${entry.text} from this list` : `Delete ${entry.text}`}
-                      icon={<Trash2 size={20} color={colors.onAccent} />}
-                      tone={colors.buttonDangerBg}
-                      onPress={() => {
-                        swipeRef.current?.close();
-                        onSwipeDelete();
-                      }}
-                      styles={styles}
-                    />
-                  )}
-                </View>
-              )
-            : undefined
-        }
-        onSwipeableOpen={(direction) => {
-          // "right": the row moved right, showing the check-off action.
-          if (direction !== "right") return;
-          onToggle();
-          swipeRef.current?.close();
-        }}
-      >
-        {row}
-      </ReanimatedSwipeable>
-    </>
+    <Animated.View
+      style={[carried && styles.rowCarried, animatedStyle]}
+      onLayout={(event) => onLayoutHeight(event.nativeEvent.layout.height)}
+    >
+      {canEdit ? swipeable : row}
+    </Animated.View>
   );
 };
 
@@ -1605,7 +1667,8 @@ const createStyles = (colors: ThemeColors) =>
     rowSelected: {
       backgroundColor: withAlpha(colors.accent, 0.14),
     },
-    rowDragging: {
+    rowCarried: {
+      backgroundColor: colors.surface,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.14,
