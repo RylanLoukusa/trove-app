@@ -9,7 +9,7 @@ import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import type { RootStackParamList } from "../../navigation/types";
 import { TroveProvider, useTrove } from "../../storage/storage";
 import { renderScreen } from "../../test-utils/renderScreen";
-import type { Folder, ListEntry, SavedItem, TroveData } from "../../types/models";
+import type { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../../types/models";
 import { legacyEntryPosition, sortEntries, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { toDateKey } from "../../utils/listView";
 
@@ -1036,6 +1036,64 @@ describe("ListScreen", () => {
       await openList("today");
 
       expect(shownLines()).toEqual(["Pinned"]);
+    });
+
+    describe("by tag", () => {
+      const errands: TagGroup = {
+        id: "errands",
+        name: "Errands",
+        selectionMode: "multi",
+        allowInlineCreate: true,
+        isSystem: false,
+        sortOrder: 5,
+        createdAt: at,
+        updatedAt: at,
+      };
+      const store: TagOption = { id: "store", groupId: "errands", name: "Store", sortOrder: 0, createdAt: at, updatedAt: at };
+      const tagged = (todayOverrides: Partial<SavedItem> = {}): Partial<TroveData> => {
+        const data = wedding(todayOverrides);
+        return {
+          ...data,
+          tagGroups: [errands],
+          tagOptions: [store],
+          listEntries: data.listEntries!.map((entry) =>
+            entry.id === "Cake next month" || entry.id === "Done yesterday" ? { ...entry, tagOptionIds: ["store"] } : entry,
+          ),
+        };
+      };
+
+      it("adds the open lines with a tag the person made", async () => {
+        await save(tagged());
+        await openList("today");
+
+        await openMenu();
+        expect(screen.getByText("Errands")).toBeTruthy();
+        await pick("Add lines automatically", "Errands Store");
+        expect(pickedIn("Add lines automatically")).toEqual(["Errands Store"]);
+        await closeMenu();
+
+        expect(savedList("today")).toMatchObject({ listMode: "focus", ruleTagId: "store" });
+        expect(savedList("today")!.focusRule).toBeUndefined();
+        expect(shownLines()).toEqual(["Pinned", "Cake next month"]);
+        expect(caption("0 of 2 done · Adds lines tagged Store")).toBeTruthy();
+      });
+
+      it("goes back to dates, or to nothing, without the tag", async () => {
+        await save(tagged({ focusRule: undefined, ruleTagId: "store" }));
+        await openList("today");
+        expect(shownLines()).toEqual(["Pinned", "Cake next month"]);
+
+        await openMenu();
+        await pick("Add lines automatically", "Due today");
+        expect(savedList("today")).toMatchObject({ focusRule: "due_today" });
+        expect(savedList("today")!.ruleTagId).toBeUndefined();
+
+        await pick("Add lines automatically", "Errands Store");
+        await pick("Add lines automatically", "Off");
+        await closeMenu();
+        expect(savedList("today")!.ruleTagId).toBeUndefined();
+        expect(shownLines()).toEqual(["Pinned"]);
+      });
     });
 
     it("still has room to type when its rule finds nothing", async () => {

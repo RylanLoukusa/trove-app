@@ -1193,6 +1193,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "notes",
     "listMode",
     "focusRule",
+    "ruleTagId",
     "pinned",
   ]);
 

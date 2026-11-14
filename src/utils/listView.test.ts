@@ -4,10 +4,12 @@ import {
   describeDueDate,
   formatListDate,
   matchesFocusRule,
+  matchesTagRule,
   orderEntriesForView,
   parseDateKey,
   priorityOptionsFor,
   quickDueDates,
+  tagSectionsFor,
   withPriority,
 } from "./listView";
 
@@ -92,6 +94,29 @@ describe("priority helpers", () => {
     ];
     expect(ids(priorityOptionsFor(groups, [high, low, medium]) as never)).toEqual(["low", "medium", "high"]);
     expect(priorityOptionsFor([], [high])).toEqual([]);
+  });
+
+  it("lists every tag group with tags, Priority first and highest first", () => {
+    const group = (id: string, name: string, sortOrder: number): TagGroup => ({
+      id,
+      name,
+      selectionMode: "single",
+      allowInlineCreate: true,
+      isSystem: false,
+      sortOrder,
+      createdAt: "",
+      updatedAt: "",
+    });
+    const groups = [group("errands", "Errands", 2), group("empty", "Empty", 0), group("priority", "Priority", 5), group("status", "Status", 1)];
+    const store: TagOption = { ...low, id: "store", groupId: "errands", name: "Store", sortOrder: 1 };
+    const bank: TagOption = { ...low, id: "bank", groupId: "errands", name: "Bank", sortOrder: 0 };
+    const waiting: TagOption = { ...low, id: "waiting", groupId: "status", name: "Waiting" };
+
+    const sections = tagSectionsFor(groups, [store, low, high, waiting, medium, bank]);
+
+    expect(sections.map((section) => section.group.id)).toEqual(["priority", "status", "errands"]);
+    expect(ids(sections[0].options as never)).toEqual(["high", "medium", "low"]);
+    expect(ids(sections[2].options as never)).toEqual(["bank", "store"]);
   });
 
   it("replaces only the priority tag", () => {
@@ -202,6 +227,14 @@ describe("matchesFocusRule", () => {
     expect(matchesFocusRule(entry("a", { tagOptionIds: ["high"] }), "high_priority", priorityOptions, wednesday)).toBe(true);
     expect(matchesFocusRule(entry("a", { tagOptionIds: ["medium"] }), "high_priority", priorityOptions, wednesday)).toBe(false);
     expect(matchesFocusRule(entry("a", { tagOptionIds: ["high"] }), "high_priority", [], wednesday)).toBe(false);
+  });
+
+  it("matches lines with a tag, on the same terms", () => {
+    const doneBefore = { checked: true, completedAt: new Date(2026, 10, 10, 9).toISOString() };
+    expect(matchesTagRule(entry("a", { tagOptionIds: ["store", "high"] }), "store", wednesday)).toBe(true);
+    expect(matchesTagRule(entry("a", { tagOptionIds: ["high"] }), "store", wednesday)).toBe(false);
+    expect(matchesTagRule(entry("a", { tagOptionIds: ["store"], ...doneBefore }), "store", wednesday)).toBe(false);
+    expect(matchesTagRule(entry("a", { tagOptionIds: ["store"], kind: "bullet" }), "store", wednesday)).toBe(false);
   });
 
   it("keeps done lines only on the day they were done", () => {

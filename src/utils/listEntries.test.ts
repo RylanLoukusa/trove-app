@@ -521,6 +521,20 @@ describe("plain and bold lines", () => {
     ]);
   });
 
+  it("syncs the tag a list adds lines by with the list's tags", () => {
+    expect(encodeListTags({ tagOptionIds: ["tag-a"], pinned: true, ruleTagId: "errand" })).toEqual([
+      "tag-a",
+      "fmt:pinned",
+      "fmt:ruletag:errand",
+    ]);
+    expect(decodeListTags(["tag-a", "fmt:pinned", "fmt:ruletag:errand"])).toEqual({
+      tagOptionIds: ["tag-a"],
+      pinned: true,
+      ruleTagId: "errand",
+    });
+    expect(decodeListTags(["tag-a"])).toEqual({ tagOptionIds: ["tag-a"] });
+  });
+
   it("never treats a format tag as one of the person's tags", () => {
     expect(decodeEntryFormat("check", ["fmt:text", "fmt:bold", "tag-high"])).toEqual({
       kind: "check",

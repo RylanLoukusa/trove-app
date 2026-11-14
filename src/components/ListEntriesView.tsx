@@ -70,6 +70,7 @@ import {
   listSortLabels,
   ListViewSettings,
   orderEntriesForView,
+  TagSection,
 } from "../utils/listView";
 
 export type EntryUpdates = Partial<
@@ -99,6 +100,8 @@ const KEYBOARD_BAR_HEIGHT = 46;
 type Props = {
   entries: ListEntry[];
   priorityOptions: TagOption[];
+  // Every tag group with its tags, for line details and what shows under a line.
+  tagSections?: TagSection[];
   canEdit: boolean;
   // How the list is sorted and where finished lines go.
   settings: ListViewSettings;
@@ -197,6 +200,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   {
     entries,
     priorityOptions,
+    tagSections,
     canEdit,
     settings,
     onChangeSettings,
@@ -240,6 +244,12 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     [entries, priorityOptions, settings],
   );
   const hiddenCount = entries.length - visibleEntries.length;
+  // Tags other than priority, which shows on its own.
+  const otherTags = useMemo(() => {
+    const priorityIds = new Set(priorityOptions.map((option) => option.id));
+    const options = (tagSections ?? []).flatMap((section) => section.options).filter((option) => !priorityIds.has(option.id));
+    return new Map(options.map((option) => [option.id, option]));
+  }, [priorityOptions, tagSections]);
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const manualOrder = settings.sortMode === "manual";
@@ -855,6 +865,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               styles={styles}
               colors={colors}
               priority={entryPriority(entry, priorityOptions)}
+              tags={entry.tagOptionIds.map((id) => otherTags.get(id)).filter((option): option is TagOption => !!option)}
               caption={captions?.[entry.id]}
               borrowed={!!referenceSources?.[entry.id]}
               showIndent={manualOrder}
@@ -1065,6 +1076,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       <ListEntrySheet
         entry={openEntry}
         priorityOptions={priorityOptions}
+        tagSections={tagSections}
         canEdit={canEdit}
         sourceListTitle={openEntry ? referenceSources?.[openEntry.id] : undefined}
         fromRule={!!openEntry && !!ruleEntryIds?.has(openEntry.id)}
@@ -1095,6 +1107,8 @@ type EntryRowProps = {
   styles: ReturnType<typeof createStyles>;
   colors: ThemeColors;
   priority?: TagOption;
+  // The line's other tags.
+  tags: TagOption[];
   caption?: string;
   // The line lives on another list and is only shown here.
   borrowed: boolean;
@@ -1148,6 +1162,7 @@ const EntryRow = ({
   styles,
   colors,
   priority,
+  tags,
   caption,
   borrowed,
   showIndent,
@@ -1273,7 +1288,7 @@ const EntryRow = ({
     return { transform: [{ translateY: withTiming(shift, { duration: 140 }) }], zIndex: 0 };
   }, [carried, dragActive, shift]);
 
-  const hasMeta = !!due || !!priority || !!entry.notes;
+  const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes;
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
   // Photos start as thumbnails beside the text; a bigger one shows under it.
@@ -1392,7 +1407,7 @@ const EntryRow = ({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={entry.text}
-                accessibilityHint={hasMeta ? "Shows due date, priority and notes" : undefined}
+                accessibilityHint={hasMeta ? "Shows due date, tags and notes" : undefined}
                 disabled={!hasMeta}
                 onPress={onOpen}
               >
@@ -1425,12 +1440,12 @@ const EntryRow = ({
                 <Text style={[styles.metaText, { color: dueToneColor(due.tone, colors) }]}>{due.label}</Text>
               </View>
             )}
-            {!!priority && (
-              <View style={styles.metaItem}>
-                <View style={[styles.priorityDot, { backgroundColor: priority.color ?? colors.muted }]} />
-                <Text style={styles.metaText}>{priority.name}</Text>
+            {[...(priority ? [priority] : []), ...tags].map((tag) => (
+              <View key={tag.id} style={styles.metaItem}>
+                <View style={[styles.priorityDot, { backgroundColor: tag.color ?? colors.muted }]} />
+                <Text style={styles.metaText}>{tag.name}</Text>
               </View>
-            )}
+            ))}
             {!!entry.notes && (
               <Text numberOfLines={1} style={[styles.metaText, styles.notes]}>
                 {entry.notes}
@@ -1443,7 +1458,7 @@ const EntryRow = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Line details"
-          accessibilityHint="Due date, priority and notes"
+          accessibilityHint="Due date, tags and notes"
           hitSlop={{ top: 6, bottom: 6, left: 8, right: 12 }}
           onPress={onOpenDetails}
           style={({ pressed }) => [styles.detailsButton, pressed && styles.markerPressed]}
