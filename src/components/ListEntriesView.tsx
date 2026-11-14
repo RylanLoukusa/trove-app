@@ -25,8 +25,6 @@ import ReanimatedSwipeable, { SwipeableMethods } from "react-native-gesture-hand
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  ArrowDown,
-  ArrowUp,
   Bold,
   CalendarDays,
   Check,
@@ -35,6 +33,7 @@ import {
   CircleCheck,
   CornerUpRight,
   FolderInput,
+  ImagePlus,
   Info,
   Link2,
   List,
@@ -45,6 +44,7 @@ import {
   Undo2,
 } from "lucide-react-native";
 
+import { LineImageSize, LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
 import {
   BulletMark,
@@ -58,8 +58,9 @@ import {
 } from "./ListMarks";
 import { ListTarget, SendMode, SendToListSheet, useRecentListTargets } from "./SendToListSheet";
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
+import { pickLineImages } from "../media/lineImages";
 import { useThemeColors } from "../theme/ThemeContext";
-import type { ListEntry, ListItemKind, TagOption } from "../types/models";
+import type { LineImage, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { MAX_ENTRY_INDENT, PastedLine, splitEnteredText } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -71,11 +72,11 @@ import {
 } from "../utils/listView";
 
 export type EntryUpdates = Partial<
-  Pick<ListEntry, "text" | "kind" | "bold" | "dueDate" | "notes" | "tagOptionIds" | "indentLevel">
+  Pick<ListEntry, "text" | "kind" | "bold" | "images" | "dueDate" | "notes" | "tagOptionIds" | "indentLevel">
 >;
 
 // A line to add: its text, plus how it is marked when that is already known.
-export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean };
+export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean; images?: LineImage[] };
 
 export type ListEntriesViewHandle = {
   showToast: (message: string, undo?: () => void) => void;
@@ -226,6 +227,8 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     [entries, priorityOptions, settings],
   );
   const hiddenCount = entries.length - visibleEntries.length;
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
   const manualOrder = settings.sortMode === "manual";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [send, setSend] = useState<{ ids: string[]; mode: SendMode } | null>(null);
@@ -301,8 +304,6 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   // A line being moved with the arrow buttons can lose the cursor for a
   // moment as it changes place. While this is set the line gets it straight
   // back and is not treated as abandoned.
-  const keepIdRef = useRef<string | null>(null);
-  const keepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [focusedId, setFocusedIdState] = useState<string | null>(null);
   const focusedIdRef = useRef<string | null>(null);
   const setFocusedId = useCallback((next: string | null | ((current: string | null) => string | null)) => {
@@ -349,7 +350,6 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   useEffect(
     () => () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
-      if (keepTimer.current) clearTimeout(keepTimer.current);
       revealTimers.current.forEach(clearTimeout);
     },
     [],
@@ -548,7 +548,6 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   // --- The bar above the keyboard ------------------------------------------
   const addFocused = focusedId === ADD_ROW_ID;
   const focusedEntry = focusedId && !addFocused ? entries.find((entry) => entry.id === focusedId) ?? null : null;
-  const focusedIndex = focusedEntry ? visibleEntries.findIndex((entry) => entry.id === focusedEntry.id) : -1;
   const barFormat: LineFormat | null = focusedEntry
     ? { kind: focusedEntry.kind, bold: !!focusedEntry.bold, indentLevel: focusedEntry.indentLevel }
     : addFocused
@@ -566,18 +565,75 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     if (barFormat) applyFormat({ kind: barFormat.kind === kind ? "text" : kind });
   };
 
-  const moveFocused = (direction: -1 | 1) => {
-    if (!focusedEntry || focusedIndex < 0) return;
-    const neighbour = visibleEntries[focusedIndex + direction];
-    if (!neighbour) return;
-    const beyond = visibleEntries[focusedIndex + direction * 2] ?? null;
-    keepIdRef.current = focusedEntry.id;
-    if (keepTimer.current) clearTimeout(keepTimer.current);
-    keepTimer.current = setTimeout(() => {
-      keepIdRef.current = null;
-    }, 600);
-    if (direction < 0) onMoveEntry(focusedEntry.id, beyond?.id ?? null, neighbour.id);
-    else onMoveEntry(focusedEntry.id, neighbour.id, beyond?.id ?? null);
+  // --- Photos ------------------------------------------------------------
+  // The line photos are being picked for. Picking takes the cursor away, and
+  // that must not delete the line while it is still empty.
+  const pickingForRef = useRef<string | null>(null);
+
+  const pickPhotos = async () => {
+    try {
+      return await pickLineImages();
+    } catch (error) {
+      console.warn("Failed to pick photos", error);
+      showToast("Couldn't open your photos");
+      return [];
+    }
+  };
+
+  // Adds photos to the line with the cursor, or puts them on a new line with
+  // whatever was typed in the bottom row.
+  const addPhotos = async () => {
+    if (pickingForRef.current) return;
+    if (focusedEntry) {
+      const id = focusedEntry.id;
+      pickingForRef.current = id;
+      const images = await pickPhotos();
+      pickingForRef.current = null;
+      const latest = entriesRef.current.find((entry) => entry.id === id);
+      if (!latest) return;
+      if (images.length > 0) onUpdateEntry(id, { images: [...(latest.images ?? []), ...images] });
+      else if (!latest.text.trim() && !latest.images?.length && focusedIdRef.current !== id && !isBorrowed(id)) {
+        onDeleteEntry(id);
+      }
+      return;
+    }
+    if (!addFocused) return;
+    const format = addFormatRef.current;
+    const text = draftRef.current.trim();
+    // Taken now so the bottom row doesn't save it as a line of its own when
+    // the picker takes the cursor away.
+    setDraft("");
+    pickingForRef.current = ADD_ROW_ID;
+    const images = await pickPhotos();
+    pickingForRef.current = null;
+    if (!text && images.length === 0) return;
+    onInsertEntries(null, [
+      {
+        text,
+        checked: false,
+        indentLevel: format.indentLevel,
+        kind: format.kind,
+        ...(format.bold ? { bold: true } : {}),
+        ...(images.length > 0 ? { images } : {}),
+      },
+    ]);
+    setAddOverride(null);
+  };
+
+  // Holding a photo takes it off its line, with an undo. A line that was only
+  // that photo goes too.
+  const removeImage = (entryId: string, imageId: string) => {
+    const entry = entriesRef.current.find((candidate) => candidate.id === entryId);
+    const before = entry?.images ?? [];
+    if (!entry || !before.some((image) => image.id === imageId)) return;
+    const images = before.filter((image) => image.id !== imageId);
+    if (images.length === 0 && !entry.text.trim() && !isBorrowed(entry.id)) {
+      onDeleteEntry(entry.id);
+      showToast("Removed the photo", onRestoreEntries ? () => onRestoreEntries([entry]) : undefined);
+      return;
+    }
+    onUpdateEntry(entry.id, { images });
+    showToast("Removed the photo", () => onUpdateEntry(entry.id, { images: before }));
   };
 
   // --- Sending, checking and deleting (swipe and select mode) --------------
@@ -702,21 +758,13 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           onPress={() => barFormat && applyFormat({ indentLevel: clampIndent(barFormat.indentLevel + 1) })}
           styles={styles}
         />
-        <BarButton
-          accessibilityLabel="Move line up"
-          disabled={!focusedEntry || !manualOrder || focusedIndex <= 0}
-          icon={<ArrowUp size={20} color={iconTone} />}
-          onPress={() => moveFocused(-1)}
-          styles={styles}
-        />
-        <BarButton
-          accessibilityLabel="Move line down"
-          disabled={!focusedEntry || !manualOrder || focusedIndex < 0 || focusedIndex >= visibleEntries.length - 1}
-          icon={<ArrowDown size={20} color={iconTone} />}
-          onPress={() => moveFocused(1)}
-          styles={styles}
-        />
         <View style={styles.barDivider} />
+        <BarButton
+          accessibilityLabel="Add photo"
+          icon={<ImagePlus size={20} color={iconTone} />}
+          onPress={() => void addPhotos()}
+          styles={styles}
+        />
         <BarButton
           accessibilityLabel="Send to another list"
           disabled={!focusedEntry || (!canMove && !(focusedEntry && linkable(focusedEntry.id)))}
@@ -791,15 +839,10 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               }}
               onGrow={() => reveal(entry.id)}
               onBlurEmpty={() => {
-                if (keepIdRef.current !== entry.id && !isBorrowed(entry.id)) onDeleteEntry(entry.id);
+                if (!isBorrowed(entry.id) && pickingForRef.current !== entry.id) onDeleteEntry(entry.id);
               }}
-              onBlurLine={() => {
-                if (keepIdRef.current === entry.id) {
-                  requestAnimationFrame(() => inputRefs.current.get(entry.id)?.focus());
-                  return;
-                }
-                setFocusedId((current) => (current === entry.id ? null : current));
-              }}
+              onRemoveImage={canEdit ? (imageId) => removeImage(entry.id, imageId) : undefined}
+              onBlurLine={() => setFocusedId((current) => (current === entry.id ? null : current))}
               selecting={selecting}
               selected={selectedIds.has(entry.id)}
               onToggleSelect={() => toggleSelected(entry.id)}
@@ -1033,6 +1076,8 @@ type EntryRowProps = {
   onFocusLine: () => void;
   onBlurLine: () => void;
   onBlurEmpty: () => void;
+  // Holding a photo on the line; left out when the line can't be changed.
+  onRemoveImage?: (imageId: string) => void;
   // The text wrapped onto another row while being typed.
   onGrow: () => void;
   selecting: boolean;
@@ -1074,6 +1119,7 @@ const EntryRow = ({
   onFocusLine,
   onBlurLine,
   onBlurEmpty,
+  onRemoveImage,
   onGrow,
   selecting,
   selected,
@@ -1173,6 +1219,25 @@ const EntryRow = ({
   const hasMeta = !!due || !!priority || !!entry.notes;
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
+  // Photos start as thumbnails beside the text; a bigger one shows under it.
+  const images = entry.images ?? [];
+  const [imageSizes, setImageSizes] = useState<Record<string, LineImageSize>>({});
+  const [blockWidth, setBlockWidth] = useState(0);
+  const sizeOf = (id: string): LineImageSize => imageSizes[id] ?? "thumb";
+  const thumbs = images.filter((image) => sizeOf(image.id) === "thumb");
+  const expanded = images.filter((image) => sizeOf(image.id) !== "thumb");
+  const imageView = (image: LineImage) => (
+    <LineImageView
+      key={image.id}
+      image={image}
+      size={sizeOf(image.id)}
+      maxWidth={blockWidth}
+      colors={colors}
+      onPress={() => setImageSizes((current) => ({ ...current, [image.id]: nextLineImageSize(current[image.id] ?? "thumb") }))}
+      onLongPress={onRemoveImage ? () => onRemoveImage(image.id) : undefined}
+    />
+  );
+
   const row = (
     <Animated.View
       style={[
@@ -1210,60 +1275,74 @@ const EntryRow = ({
           ) : null}
         </View>
       </GestureDetector>
-      <View style={styles.textBlock}>
-        {selecting ? (
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityLabel={`Select ${entry.text}`}
-            accessibilityState={{ checked: selected }}
-            onPress={onToggleSelect}
-          >
-            <Text style={textStyle}>{entry.text}</Text>
-          </Pressable>
-        ) : canEdit ? (
-          <TextInput
-            ref={registerInput}
-            testID="list-line-input"
-            accessibilityLabel={entry.text || "Empty line"}
-            accessibilityHint="Edit the text. Return adds a line below."
-            value={draft}
-            onChangeText={changeText}
-            onFocus={() => {
-              focusedRef.current = true;
-              onFocusLine();
-            }}
-            onBlur={() => {
-              focusedRef.current = false;
-              if (draft.trim()) commit(draft);
-              else {
-                if (commitTimer.current) clearTimeout(commitTimer.current);
-                commitTimer.current = null;
-                setDraft(entry.text);
-                onBlurEmpty();
-              }
-              onBlurLine();
-            }}
-            onKeyPress={(event) => {
-              if (event.nativeEvent.key === "Backspace" && draft === "") onBackspaceEmpty();
-            }}
-            onContentSizeChange={() => {
-              if (focusedRef.current) onGrow();
-            }}
-            multiline
-            scrollEnabled={false}
-            style={[textStyle, styles.textInput]}
-          />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={entry.text}
-            accessibilityHint={hasMeta ? "Shows due date, priority and notes" : undefined}
-            disabled={!hasMeta}
-            onPress={onOpen}
-          >
-            <Text style={textStyle}>{entry.text}</Text>
-          </Pressable>
-        )}
+      <View
+        style={styles.textBlock}
+        onLayout={images.length > 0 ? (event) => setBlockWidth(event.nativeEvent.layout.width) : undefined}
+      >
+        <View style={styles.lineWithThumbs}>
+          <View style={styles.lineText}>
+            {selecting ? (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel={`Select ${entry.text}`}
+                accessibilityState={{ checked: selected }}
+                onPress={onToggleSelect}
+              >
+                <Text style={textStyle}>{entry.text}</Text>
+              </Pressable>
+            ) : canEdit ? (
+              <TextInput
+                ref={registerInput}
+                testID="list-line-input"
+                accessibilityLabel={entry.text || "Empty line"}
+                accessibilityHint="Edit the text. Return adds a line below."
+                value={draft}
+                onChangeText={changeText}
+                onFocus={() => {
+                  focusedRef.current = true;
+                  onFocusLine();
+                }}
+                onBlur={() => {
+                  focusedRef.current = false;
+                  if (draft.trim()) commit(draft);
+                  else {
+                    if (commitTimer.current) clearTimeout(commitTimer.current);
+                    commitTimer.current = null;
+                    if (images.length > 0) {
+                      // A photo can be a line on its own.
+                      if (entry.text) onCommitText("");
+                    } else {
+                      setDraft(entry.text);
+                      onBlurEmpty();
+                    }
+                  }
+                  onBlurLine();
+                }}
+                onKeyPress={(event) => {
+                  if (event.nativeEvent.key === "Backspace" && draft === "") onBackspaceEmpty();
+                }}
+                onContentSizeChange={() => {
+                  if (focusedRef.current) onGrow();
+                }}
+                multiline
+                scrollEnabled={false}
+                style={[textStyle, styles.textInput]}
+              />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={entry.text}
+                accessibilityHint={hasMeta ? "Shows due date, priority and notes" : undefined}
+                disabled={!hasMeta}
+                onPress={onOpen}
+              >
+                <Text style={textStyle}>{entry.text}</Text>
+              </Pressable>
+            )}
+          </View>
+          {thumbs.map(imageView)}
+        </View>
+        {expanded.length > 0 && <View style={styles.photos}>{expanded.map(imageView)}</View>}
         {(!!caption || hasMeta) && (
           <Pressable
             accessibilityRole="button"
@@ -1552,6 +1631,20 @@ const createStyles = (colors: ThemeColors) =>
     textBlock: {
       flex: 1,
       paddingVertical: LINE_PADDING_Y,
+    },
+    lineWithThumbs: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: 6,
+    },
+    lineText: {
+      flex: 1,
+    },
+    photos: {
+      alignItems: "flex-start",
+      gap: spacing.sm,
+      marginBottom: 2,
+      marginTop: 6,
     },
     text: {
       color: colors.ink,

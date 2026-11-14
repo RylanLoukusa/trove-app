@@ -1,11 +1,12 @@
 import React, { createRef, forwardRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Keyboard, Text } from "react-native";
-import { act, fireEvent, screen, within } from "@testing-library/react-native";
+import { Keyboard, StyleSheet, Text } from "react-native";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react-native";
 
 import { ListEntriesView, ListEntriesViewHandle, targetIndexFor } from "./ListEntriesView";
+import { pickLineImages } from "../media/lineImages";
 import { renderScreen } from "../test-utils/renderScreen";
-import type { ListEntry, TagOption } from "../types/models";
+import type { LineImage, ListEntry, TagOption } from "../types/models";
 import { MAX_ENTRY_INDENT } from "../utils/listEntries";
 import { defaultListViewSettings, ListViewSettings } from "../utils/listView";
 
@@ -44,6 +45,14 @@ jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
   );
   return { __esModule: true, default: MockSwipeable };
 });
+
+// The photo library is a stand-in: each test says what gets picked.
+jest.mock("../media/lineImages", () => ({
+  pickLineImages: jest.fn(() => Promise.resolve([])),
+  uploadPendingLineImages: jest.fn(() => Promise.resolve()),
+  useLineImageUri: () => "file:///photo.jpg",
+}));
+const mockPick = pickLineImages as jest.Mock;
 
 const high: TagOption = { id: "high", groupId: "priority", name: "High", color: "#D98A8A", sortOrder: 2, createdAt: "", updatedAt: "" };
 const low: TagOption = { ...high, id: "low", name: "Low", sortOrder: 0 };
@@ -528,39 +537,21 @@ describe("ListEntriesView", () => {
       expect(barState("Outdent line").disabled).toBe(false);
     });
 
-    it("moves a line up or down one place", async () => {
-      await renderList([entry("Cake"), entry("Venue"), entry("Band"), entry("Rings")]);
-
-      await focus("Band");
-      await fireEvent.press(screen.getByLabelText("Move line up"));
-      expect(handlers.onMoveEntry).toHaveBeenLastCalledWith("Band", "Cake", "Venue");
-
-      await fireEvent.press(screen.getByLabelText("Move line down"));
-      expect(handlers.onMoveEntry).toHaveBeenLastCalledWith("Band", "Rings", null);
-
-      await focus("Venue");
-      await fireEvent.press(screen.getByLabelText("Move line up"));
-      expect(handlers.onMoveEntry).toHaveBeenLastCalledWith("Venue", null, "Cake");
-    });
-
-    it("can't move the first line up or the last line down", async () => {
+    it("leaves moving lines to dragging them", async () => {
       await renderList([entry("Cake"), entry("Venue")]);
 
-      await focus("Cake");
-      expect(barState("Move line up").disabled).toBe(true);
-      expect(barState("Move line down").disabled).toBe(false);
-
       await focus("Venue");
-      expect(barState("Move line up").disabled).toBe(false);
-      expect(barState("Move line down").disabled).toBe(true);
+
+      expect(screen.queryByLabelText("Move line up")).toBeNull();
+      expect(screen.queryByLabelText("Move line down")).toBeNull();
     });
 
-    it("doesn't indent or move lines by hand while the list is sorted another way", async () => {
+    it("doesn't indent lines by hand while the list is sorted another way", async () => {
       await renderList([entry("Cake"), entry("Venue"), entry("Band")], { settings: { sortMode: "alpha" } });
 
       await focus("Cake");
 
-      ["Indent line", "Outdent line", "Move line up", "Move line down"].forEach((label) => {
+      ["Indent line", "Outdent line"].forEach((label) => {
         expect(barState(label).disabled).toBe(true);
       });
       expect(barState("Bold").disabled).toBe(false);
@@ -572,7 +563,7 @@ describe("ListEntriesView", () => {
 
       await focus("Venue");
       expect(screen.getByLabelText("Bold")).toBeTruthy();
-      expect(barState("Move line up").disabled).toBe(false);
+      expect(barState("Indent line").disabled).toBe(false);
 
       await fireEvent(screen.getByLabelText("Venue"), "blur");
       expect(screen.queryByLabelText("Bold")).toBeNull();
@@ -583,9 +574,7 @@ describe("ListEntriesView", () => {
 
       await focus(ADD_LINE);
       expect(barState("Checklist").selected).toBe(true);
-      ["Move line up", "Move line down", "Send to another list"].forEach((label) => {
-        expect(barState(label).disabled).toBe(true);
-      });
+      expect(barState("Send to another list").disabled).toBe(true);
       // The bottom line isn't a line yet, so it has no details to open.
       expect(screen.queryByLabelText("Line details")).toBeNull();
 
@@ -622,6 +611,156 @@ describe("ListEntriesView", () => {
       await fireEvent.press(screen.getByLabelText("Done"));
 
       expect(dismissKeyboard).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("photos on a line", () => {
+    const photo: LineImage = { id: "img-1", width: 400, height: 300, path: "me/line-images/img-1.jpg" };
+    const other: LineImage = { id: "img-2", width: 300, height: 600 };
+    const sizeOf = (index = 0) => {
+      const { width, height } = StyleSheet.flatten(screen.getAllByLabelText("Photo")[index].props.style);
+      return { width, height };
+    };
+    // The picker stays open until the test closes it.
+    const pickerOpen = () => {
+      let close!: (images: LineImage[]) => void;
+      mockPick.mockReturnValueOnce(
+        new Promise<LineImage[]>((resolve) => {
+          close = resolve;
+        }),
+      );
+      return (images: LineImage[]) => act(async () => close(images));
+    };
+
+    it("adds the photos picked to the line with the cursor", async () => {
+      mockPick.mockResolvedValueOnce([other]);
+      await renderList([entry("Cake", { images: [photo] })]);
+
+      await focus("Cake");
+      await fireEvent.press(screen.getByLabelText("Add photo"));
+
+      await waitFor(() => expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { images: [photo, other] }));
+    });
+
+    it("puts photos picked from the bottom row on a new line with what was typed", async () => {
+      const close = pickerOpen();
+      await renderList([entry("Cake")]);
+
+      await focus(ADD_LINE);
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Candles");
+      await fireEvent.press(screen.getByLabelText("Add photo"));
+      // The picker takes the cursor away; the text waits for the photos.
+      await fireEvent(screen.getByLabelText(ADD_LINE), "blur");
+      expect(handlers.onInsertEntries).not.toHaveBeenCalled();
+      await close([photo]);
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledTimes(1);
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+        expect.objectContaining({ text: "Candles", kind: "check", images: [photo] }),
+      ]);
+    });
+
+    it("still adds the typed text when no photo is picked", async () => {
+      const close = pickerOpen();
+      await renderList([entry("Cake")]);
+
+      await focus(ADD_LINE);
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Candles");
+      await fireEvent.press(screen.getByLabelText("Add photo"));
+      await close([]);
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [expect.objectContaining({ text: "Candles" })]);
+      expect(handlers.onInsertEntries.mock.calls[0][1][0]).not.toHaveProperty("images");
+    });
+
+    it("keeps an empty line while photos are picked for it, and drops it if none were", async () => {
+      let close = pickerOpen();
+      await renderList([entry("Cake", { text: "" })]);
+
+      await focus("Empty line");
+      await fireEvent.press(screen.getByLabelText("Add photo"));
+      await fireEvent(screen.getByLabelText("Empty line"), "blur");
+      expect(handlers.onDeleteEntry).not.toHaveBeenCalled();
+      await close([photo]);
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { images: [photo] });
+      expect(handlers.onDeleteEntry).not.toHaveBeenCalled();
+
+      close = pickerOpen();
+      await focus("Empty line");
+      await fireEvent.press(screen.getByLabelText("Add photo"));
+      await fireEvent(screen.getByLabelText("Empty line"), "blur");
+      await close([]);
+      expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Cake");
+    });
+
+    it("lets a photo be a line of its own", async () => {
+      await renderList([entry("Cake", { images: [photo] }), entry("Plate", { text: "", images: [other] })]);
+
+      await focus("Empty line");
+      await fireEvent(screen.getByLabelText("Empty line"), "blur");
+      await focus("Cake");
+      await fireEvent.changeText(screen.getByLabelText("Cake"), "");
+      await fireEvent(screen.getByLabelText("Cake"), "blur");
+
+      expect(handlers.onDeleteEntry).not.toHaveBeenCalled();
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { text: "" });
+    });
+
+    it("starts as a thumbnail the height of the text, grows with each tap, then shrinks back", async () => {
+      await renderList([entry("Cake", { images: [photo] })]);
+      // The photo knows how wide the line is once it has been laid out.
+      await fireEvent(screen.getByLabelText("Cake"), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
+
+      expect(sizeOf()).toEqual({ width: 24, height: 24 });
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(sizeOf()).toEqual({ width: 200, height: 150 });
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(sizeOf()).toEqual({ width: 330, height: 248 });
+      expect(screen.getByLabelText("Photo").props.accessibilityHint).toMatch(/^Tap to make it small again/);
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(sizeOf()).toEqual({ width: 24, height: 24 });
+    });
+
+    it("grows each photo on a line by itself", async () => {
+      await renderList([entry("Cake", { images: [photo, other] })]);
+      await fireEvent(screen.getByLabelText("Cake"), "layout", { nativeEvent: { layout: { width: 330, height: 24 } } });
+
+      await fireEvent.press(screen.getAllByLabelText("Photo")[1]);
+
+      // The bigger one moves under the text; the other stays beside it.
+      expect(sizeOf(0)).toEqual({ width: 24, height: 24 });
+      expect(sizeOf(1)).toEqual({ width: 75, height: 150 });
+    });
+
+    it("takes a photo off when it's held, with an undo", async () => {
+      await renderList([entry("Cake", { images: [photo, other] })]);
+
+      await fireEvent(screen.getAllByLabelText("Photo")[0], "longPress");
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { images: [other] });
+      expect(screen.getByText("Removed the photo")).toBeTruthy();
+
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenLastCalledWith("Cake", { images: [photo, other] });
+    });
+
+    it("deletes a line that was only that photo", async () => {
+      const onRestoreEntries = jest.fn();
+      const plate = entry("Plate", { text: "", images: [other] });
+      await renderList([entry("Cake"), plate], { onRestoreEntries });
+
+      await fireEvent(screen.getByLabelText("Photo"), "longPress");
+      expect(handlers.onDeleteEntry).toHaveBeenCalledWith("Plate");
+
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(onRestoreEntries).toHaveBeenCalledWith([plate]);
+    });
+
+    it("shows photos on a list that can only be viewed, without removing them", async () => {
+      await renderList([entry("Cake", { images: [photo] })], { canEdit: false });
+
+      expect(screen.getByLabelText("Photo").props.accessibilityHint).toBe("Tap to make it bigger");
+      await fireEvent.press(screen.getByLabelText("Photo"));
+      expect(screen.getByLabelText("Photo").props.accessibilityHint).toBe("Tap to make it bigger");
     });
   });
 
