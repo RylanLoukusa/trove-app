@@ -534,6 +534,44 @@ describe("ListScreen", () => {
     });
   });
 
+  describe("indented lines", () => {
+    const party = (): Partial<TroveData> => ({
+      items: [list("party", "Party")],
+      listEntries: [
+        line("Food", "party"),
+        line("Chips", "party", { indentLevel: 1 }),
+        line("Dip", "party", { indentLevel: 1 }),
+        line("Invites", "party"),
+      ],
+    });
+    const checked = () =>
+      ["Food", "Chips", "Dip", "Invites"].filter((id) => savedLine(id)!.checked);
+
+    it("are checked and unchecked with the line they're indented under", async () => {
+      await save(party());
+      await openList("party");
+
+      await fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      expect(checked()).toEqual(["Food", "Chips", "Dip"]);
+
+      await fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      expect(checked()).toEqual([]);
+    });
+
+    it("check the line they're under once they all are, and uncheck it again", async () => {
+      await save(party());
+      await openList("party");
+
+      await fireEvent.press(screen.getAllByRole("checkbox")[1]);
+      expect(checked()).toEqual(["Chips"]);
+      await fireEvent.press(screen.getAllByRole("checkbox")[2]);
+      expect(checked()).toEqual(["Food", "Chips", "Dip"]);
+
+      await fireEvent.press(screen.getAllByRole("checkbox")[1]);
+      expect(checked()).toEqual(["Dip"]);
+    });
+  });
+
   describe("the menu", () => {
     it("offers everything that can be done with a list of your own", async () => {
       await openList("chores");

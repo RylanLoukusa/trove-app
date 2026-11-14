@@ -102,7 +102,10 @@ type TroveContextValue = TroveData & {
   updateListEntry: (
     entryId: string,
     updates: Partial<
-      Pick<ListEntry, "text" | "checked" | "kind" | "bold" | "indentLevel" | "notes" | "dueDate" | "tagOptionIds">
+      Pick<
+        ListEntry,
+        "text" | "checked" | "kind" | "bold" | "images" | "indentLevel" | "notes" | "dueDate" | "tagOptionIds"
+      >
     >,
   ) => boolean;
   // Checks or unchecks several checklist lines at once. Returns how many changed.
@@ -116,7 +119,7 @@ type TroveContextValue = TroveData & {
   insertListEntries: (
     listId: string,
     afterEntryId: string | null,
-    inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel" | "bold">>>,
+    inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel" | "bold" | "images">>>,
   ) => ListEntry[];
   // Moves lines to other lists. A line pulled in from another list moves
   // that original. Without a position a line goes to the end of its new
@@ -848,6 +851,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         if (!changesSource || candidate.id !== entryId) return candidate;
         const next: ListEntry = { ...candidate, ...sourceUpdates, updatedAt: timestamp };
         if (!next.bold) delete next.bold;
+        if (!next.images?.length) delete next.images;
         if (next.kind !== "check") next.checked = false;
         if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
         return next;
@@ -938,6 +942,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         completedAt: checked ? timestamp : undefined,
         indentLevel: Math.max(0, Math.min(input.indentLevel ?? 0, MAX_ENTRY_INDENT)),
         ...(input.bold ? { bold: true } : {}),
+        ...(input.images?.length ? { images: input.images } : {}),
         position: positions[index],
         tagOptionIds: [],
         ownerId: list.ownerId ?? activeUserId ?? undefined,

@@ -1,4 +1,4 @@
-import type { ListEntry, SavedItem, SavedListItem } from "../types/models";
+import type { LineImage, ListEntry, SavedItem, SavedListItem } from "../types/models";
 
 // ---------------------------------------------------------------------------
 // Position keys (fractional indexing)
@@ -126,15 +126,28 @@ export const listItemKindFromSnapshot = (listItem: { kind?: unknown; plain?: unk
 const FORMAT_TAG_PREFIX = "fmt:";
 const PLAIN_LINE_TAG = `${FORMAT_TAG_PREFIX}text`;
 const BOLD_LINE_TAG = `${FORMAT_TAG_PREFIX}bold`;
+// A photo travels as `fmt:img:<id>:<width>x<height>:<storage path>`.
+const IMAGE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}img:`;
+
+const encodeLineImage = (image: LineImage): string =>
+  `${IMAGE_TAG_PREFIX}${image.id}:${Math.round(image.width)}x${Math.round(image.height)}:${image.path ?? ""}`;
+
+const decodeLineImage = (tag: string): LineImage | null => {
+  const match = /^([^:]+):(\d+)x(\d+):(.*)$/.exec(tag.slice(IMAGE_TAG_PREFIX.length));
+  if (!match) return null;
+  const [, id, width, height, path] = match;
+  return { id, width: Number(width), height: Number(height), ...(path ? { path } : {}) };
+};
 
 export const encodeEntryFormat = (
-  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds">,
+  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images">,
 ): { kind: "check" | "bullet"; tags: string[] } => ({
   kind: entry.kind === "check" ? "check" : "bullet",
   tags: [
     ...(entry.tagOptionIds ?? []).filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
     ...(entry.kind === "text" ? [PLAIN_LINE_TAG] : []),
     ...(entry.bold ? [BOLD_LINE_TAG] : []),
+    ...(entry.images ?? []).map(encodeLineImage),
   ],
 });
 
@@ -154,11 +167,18 @@ export const decodeListTags = (tags: string[]): Pick<SavedItem, "tagOptionIds"> 
 export const decodeEntryFormat = (
   kind: unknown,
   tags: string[],
-): Pick<ListEntry, "kind" | "tagOptionIds"> & { bold?: true } => ({
-  kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
-  tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
-  ...(tags.includes(BOLD_LINE_TAG) ? { bold: true as const } : {}),
-});
+): Pick<ListEntry, "kind" | "tagOptionIds" | "images"> & { bold?: true } => {
+  const images = tags
+    .filter((tag) => tag.startsWith(IMAGE_TAG_PREFIX))
+    .map(decodeLineImage)
+    .filter((image): image is LineImage => !!image);
+  return {
+    kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
+    tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+    ...(tags.includes(BOLD_LINE_TAG) ? { bold: true as const } : {}),
+    ...(images.length > 0 ? { images } : {}),
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Lines pulled in from other lists
@@ -488,6 +508,59 @@ const nonEmptyLines = (lines: LineText[] | undefined): string[] =>
 
 export const listDisplayTitle = (item: Pick<SavedItem, "title">, lines?: LineText[]): string =>
   isUntitledList(item) ? nonEmptyLines(lines)[0] ?? "New list" : item.title.trim();
+
+type CheckRow = Pick<ListEntry, "id" | "kind" | "checked" | "indentLevel">;
+
+// An indented line belongs to the nearest line above it with less indent, so
+// lines form groups. Checking or unchecking a line does the same to every
+// checkbox in its group, and a checkbox with checkboxes in its group is
+// checked exactly when they all are. Takes the lines in the list's own order
+// and returns each line whose checkbox changes, with its new state.
+export const checkWithGroup = (rows: CheckRow[], ids: string[], checked: boolean): Map<string, boolean> => {
+  const state = new Map(rows.filter((row) => row.kind === "check").map((row) => [row.id, row.checked]));
+  const indexById = new Map(rows.map((row, index) => [row.id, index]));
+  const groupEnd = (index: number) => {
+    let end = index + 1;
+    while (end < rows.length && rows[end].indentLevel > rows[index].indentLevel) end += 1;
+    return end;
+  };
+
+  const changedAt: number[] = [];
+  ids.forEach((id) => {
+    const index = indexById.get(id);
+    if (index === undefined) return;
+    for (let at = index; at < groupEnd(index); at += 1) {
+      if (state.has(rows[at].id)) state.set(rows[at].id, checked);
+    }
+    changedAt.push(index);
+  });
+
+  // The lines these belong to, nearest first, follow what's in their group.
+  const owners = new Set<number>();
+  changedAt.forEach((index) => {
+    let level = rows[index].indentLevel;
+    for (let at = index - 1; at >= 0 && level > 0; at -= 1) {
+      if (rows[at].indentLevel < level) {
+        owners.add(at);
+        level = rows[at].indentLevel;
+      }
+    }
+  });
+  [...owners]
+    .sort((a, b) => b - a)
+    .forEach((index) => {
+      if (!state.has(rows[index].id)) return;
+      const group = rows.slice(index + 1, groupEnd(index)).filter((row) => state.has(row.id));
+      if (group.length > 0) state.set(rows[index].id, group.every((row) => state.get(row.id)));
+    });
+
+  const changes = new Map<string, boolean>();
+  rows.forEach((row) => {
+    const next = state.get(row.id);
+    if (next !== undefined && next !== row.checked) changes.set(row.id, next);
+  });
+  return changes;
+};
 
 // When each list last changed, counting edits to its lines, and the lists
 // sorted with the most recently changed first.

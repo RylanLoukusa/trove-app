@@ -50,6 +50,15 @@ export type SavedListItem = {
 // A list line stored as its own record (trove_list_entries), so it can be
 // sorted, edited and synced individually and referenced from focus lists.
 // `listId` is the SavedItem (type "list") that owns the entry.
+// A photo on a line. `path` is where it is kept in storage, set once the
+// person is signed in; the photo itself also stays on the device that added it.
+export type LineImage = {
+  id: string;
+  width: number;
+  height: number;
+  path?: string;
+};
+
 export type ListEntry = {
   id: string;
   listId: string;
@@ -59,6 +68,8 @@ export type ListEntry = {
   indentLevel: number;
   // The whole line is shown in bold.
   bold?: boolean;
+  // Photos shown on the line, small until tapped.
+  images?: LineImage[];
   // Fractional index key; entries in a list sort by plain string comparison.
   position: string;
   notes?: string;

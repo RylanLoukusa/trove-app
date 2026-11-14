@@ -526,7 +526,7 @@ const listEntryRowToListEntry = (row: ListEntryRow): ListEntry => ({
   notes: row.notes ?? undefined,
   dueDate: row.due_date ?? undefined,
   completedAt: row.completed_at ?? undefined,
-  // Plain lines and bold travel in the tags; see decodeEntryFormat.
+  // Plain lines, bold and photos travel in the tags; see decodeEntryFormat.
   ...decodeEntryFormat(row.kind, stringArray(row.tags)),
   refEntryId: row.ref_entry_id ?? undefined,
   ownerId: row.owner_id,
@@ -1218,6 +1218,7 @@ const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConfl
     "text",
     "kind",
     "bold",
+    "images",
     "checked",
     "indentLevel",
     "position",

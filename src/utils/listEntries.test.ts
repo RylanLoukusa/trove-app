@@ -14,6 +14,7 @@ import {
   isUntitledList,
   listActivityTimes,
   listDisplayTitle,
+  checkWithGroup,
   decodeListTags,
   encodeListTags,
   listIdsLendingLines,
@@ -483,6 +484,26 @@ describe("plain and bold lines", () => {
     });
   });
 
+  it("syncs a line's photos inside its tags and reads them back", () => {
+    const images = [
+      { id: "img-1", width: 1200, height: 900, path: "me/line-images/img-1.jpg" },
+      // Added while signed out: only the phone that took it has it.
+      { id: "img-2", width: 640.4, height: 1136 },
+    ];
+    const encoded = encodeEntryFormat({ kind: "check", bold: true, tagOptionIds: ["tag-high"], images });
+    expect(encoded.tags).toEqual(["tag-high", "fmt:bold", "fmt:img:img-1:1200x900:me/line-images/img-1.jpg", "fmt:img:img-2:640x1136:"]);
+
+    expect(decodeEntryFormat(encoded.kind, encoded.tags)).toEqual({
+      kind: "check",
+      bold: true,
+      tagOptionIds: ["tag-high"],
+      images: [images[0], { id: "img-2", width: 640, height: 1136 }],
+    });
+    expect(decodeEntryFormat("check", ["fmt:img:broken"])).toEqual({ kind: "check", tagOptionIds: [] });
+    // Taking the last photo off drops its tag.
+    expect(encodeEntryFormat({ kind: "check", tagOptionIds: encoded.tags, images: [] }).tags).toEqual(["tag-high"]);
+  });
+
   it("never treats a format tag as one of the person's tags", () => {
     expect(decodeEntryFormat("check", ["fmt:text", "fmt:bold", "tag-high"])).toEqual({
       kind: "check",
@@ -659,5 +680,71 @@ describe("list activity", () => {
 
   it("keeps a steady order for lists changed at the same moment and falls back to the list's own time", () => {
     expect(sortListsByActivity([newer, same, older], new Map()).map((list) => list.id)).toEqual(["also-newer", "newer", "older"]);
+  });
+});
+
+describe("checking lines in groups", () => {
+  const row = (id: string, indentLevel: number, checked = false, kind: ListEntry["kind"] = "check") => ({
+    id,
+    kind,
+    checked,
+    indentLevel,
+  });
+  const changes = (result: Map<string, boolean>) => Object.fromEntries(result);
+
+  // Party
+  //   Food
+  //     Chips
+  //     Dip
+  //   Drinks
+  // Invites
+  const party = [
+    row("party", 0),
+    row("food", 1),
+    row("chips", 2),
+    row("dip", 2),
+    row("drinks", 1),
+    row("invites", 0),
+  ];
+
+  it("checks every line indented under a line, and nothing after its group", () => {
+    expect(changes(checkWithGroup(party, ["food"], true))).toEqual({ food: true, chips: true, dip: true });
+    expect(changes(checkWithGroup(party, ["party"], true))).toEqual({
+      party: true,
+      food: true,
+      chips: true,
+      dip: true,
+      drinks: true,
+    });
+  });
+
+  it("checks a line once everything indented under it is, all the way up", () => {
+    const rows = [row("party", 0), row("food", 1), row("chips", 2, true), row("dip", 2), row("drinks", 1, true), row("invites", 0)];
+
+    expect(changes(checkWithGroup(rows, ["dip"], true))).toEqual({ dip: true, food: true, party: true });
+  });
+
+  it("unchecks the lines a line is indented under when it's unchecked", () => {
+    const done = party.map((line) => ({ ...line, checked: true }));
+
+    expect(changes(checkWithGroup(done, ["chips"], false))).toEqual({ chips: false, food: false, party: false });
+    expect(changes(checkWithGroup(done, ["food"], false))).toEqual({
+      food: false,
+      chips: false,
+      dip: false,
+      party: false,
+    });
+  });
+
+  it("passes over a heading or bullet in between, which has no checkbox", () => {
+    const rows = [row("trip", 0), row("packing", 1, false, "text"), row("passport", 2), row("socks", 2, true)];
+
+    expect(changes(checkWithGroup(rows, ["passport"], true))).toEqual({ passport: true, trip: true });
+  });
+
+  it("leaves lines without indent on their own", () => {
+    const rows = [row("milk", 0), row("eggs", 0)];
+
+    expect(changes(checkWithGroup(rows, ["milk"], true))).toEqual({ milk: true });
   });
 });

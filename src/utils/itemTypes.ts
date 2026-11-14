@@ -34,7 +34,7 @@ export const normalizeFolder = (folder: Folder): Folder => ({
 });
 
 export const normalizeListEntry = (entry: ListEntry): ListEntry => {
-  const { bold, ...rest } = entry;
+  const { bold, images, ...rest } = entry;
   return {
     ...rest,
     kind: entry.kind === "bullet" || entry.kind === "text" ? entry.kind : "check",
@@ -43,6 +43,7 @@ export const normalizeListEntry = (entry: ListEntry): ListEntry => {
     indentLevel: entry.indentLevel ?? 0,
     tagOptionIds: entry.tagOptionIds ?? [],
     ...(bold ? { bold: true } : {}),
+    ...(images?.length ? { images } : {}),
   };
 };
 

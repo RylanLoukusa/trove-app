@@ -24,6 +24,7 @@ import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { uploadPendingLineImages } from "../../media/lineImages";
 import { HOME_LABEL } from "../../navigation/backLabel";
 import type { RootStackParamList } from "../../navigation/types";
 import { useListViewSettings } from "../../storage/listViewSettings";
@@ -44,6 +45,7 @@ import {
   listDisplayTitle,
   listIdsLendingLines,
   listItemKindFromSnapshot,
+  checkWithGroup,
   resolveEntries,
   sortEntries,
   UNTITLED_LIST_TITLE,
@@ -133,6 +135,11 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const [keyboardUp, setKeyboardUp] = useState(false);
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId || undefined);
   const showComments = isSharedAccess(item) || isFolderSharedByOwner;
+
+  // Photos added while offline go up once a list is opened again.
+  useEffect(() => {
+    void uploadPendingLineImages();
+  }, []);
 
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardUp(true));
@@ -347,15 +354,29 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     [addToFocusList, autoIds, entries, item.id, positionListEntry, targetIds],
   );
 
+  // Checks or unchecks lines together with the lines indented under them, and
+  // the lines they're indented under (see checkWithGroup).
+  const setCheckedWithGroup = useCallback(
+    (lineIds: string[], checked: boolean): number => {
+      const checking: string[] = [];
+      const unchecking: string[] = [];
+      checkWithGroup(entries, lineIds, checked).forEach((next, id) => (next ? checking : unchecking).push(targetOf(id)));
+      return (
+        (checking.length > 0 ? setEntriesChecked(checking, true) : 0) +
+        (unchecking.length > 0 ? setEntriesChecked(unchecking, false) : 0)
+      );
+    },
+    [entries, setEntriesChecked, targetOf],
+  );
+
   const onToggleEntry = useCallback(
     (entry: ListEntry) => {
       if (entry.kind !== "check") return;
-      const targetId = targetOf(entry.id);
-      const targetListId = entriesByIdRef.current.get(targetId)?.listId;
+      const targetListId = entriesByIdRef.current.get(targetOf(entry.id))?.listId;
       if (!targetListId || !canEditItem(targetListId)) return;
-      updateListEntry(targetId, { checked: !entry.checked });
+      setCheckedWithGroup([entry.id], !entry.checked);
     },
-    [canEditItem, targetOf, updateListEntry],
+    [canEditItem, setCheckedWithGroup, targetOf],
   );
 
   const onUpdateEntry = useCallback(
@@ -393,9 +414,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
 
   const onSetChecked = useCallback(
     (entryIds: string[], checked: boolean) => {
-      setEntriesChecked(entryIds.map(targetOf), checked);
+      setCheckedWithGroup(entryIds, checked);
     },
-    [setEntriesChecked, targetOf],
+    [setCheckedWithGroup],
   );
 
   // --- Title ---------------------------------------------------------------
