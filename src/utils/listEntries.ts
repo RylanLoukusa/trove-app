@@ -138,6 +138,19 @@ export const encodeEntryFormat = (
   ],
 });
 
+// A pinned list is synced the same way, as a tag on the list.
+const PINNED_LIST_TAG = `${FORMAT_TAG_PREFIX}pinned`;
+
+export const encodeListTags = (list: Pick<SavedItem, "pinned" | "tagOptionIds">): string[] => [
+  ...(list.tagOptionIds ?? []).filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+  ...(list.pinned ? [PINNED_LIST_TAG] : []),
+];
+
+export const decodeListTags = (tags: string[]): Pick<SavedItem, "tagOptionIds"> & { pinned?: true } => ({
+  tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
+  ...(tags.includes(PINNED_LIST_TAG) ? { pinned: true as const } : {}),
+});
+
 export const decodeEntryFormat = (
   kind: unknown,
   tags: string[],
@@ -475,14 +488,6 @@ const nonEmptyLines = (lines: LineText[] | undefined): string[] =>
 
 export const listDisplayTitle = (item: Pick<SavedItem, "title">, lines?: LineText[]): string =>
   isUntitledList(item) ? nonEmptyLines(lines)[0] ?? "New list" : item.title.trim();
-
-// The first few lines, for the row under a list's title. An untitled list
-// already shows its first line as the title, so the preview starts after it.
-export const listPreviewText = (item: Pick<SavedItem, "title">, lines?: LineText[], maxLines = 4): string =>
-  nonEmptyLines(lines)
-    .slice(isUntitledList(item) ? 1 : 0)
-    .slice(0, maxLines)
-    .join(", ");
 
 // When each list last changed, counting edits to its lines, and the lists
 // sorted with the most recently changed first.

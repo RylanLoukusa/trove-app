@@ -7,7 +7,7 @@ import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { Folder, SavedItem, SavedListItem } from "../types/models";
 import { isSharedAccess } from "../utils/access";
-import { listDisplayTitle, listPreviewText } from "../utils/listEntries";
+import { listDisplayTitle } from "../utils/listEntries";
 import { formatListDate } from "../utils/listView";
 
 // Small caps heading above a group of rows, with an optional action.
@@ -121,7 +121,6 @@ export const ListRow = ({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const lines = list.listItems ?? [];
   const title = listDisplayTitle(list, lines);
-  const preview = listPreviewText(list, lines);
   const checks = lines.filter((line) => line.kind === "check");
   const done = checks.filter((line) => line.checked).length;
   const date = formatListDate(activityAt ?? list.updatedAt);
@@ -139,17 +138,15 @@ export const ListRow = ({
         <Text numberOfLines={1} style={styles.listTitle}>
           {title}
         </Text>
+        {/* When it changed and where it's kept, never its lines. */}
         <View style={styles.listMeta}>
           <Text style={styles.listDate}>{date}</Text>
-          <Text numberOfLines={1} style={styles.listPreview}>
-            {preview || (folderLabel ? folderLabel : "No lines yet")}
-          </Text>
+          {!!folderLabel && (
+            <Text numberOfLines={1} style={styles.listFolder}>
+              {folderLabel}
+            </Text>
+          )}
         </View>
-        {!!folderLabel && !!preview && (
-          <Text numberOfLines={1} style={styles.listFolder}>
-            {folderLabel}
-          </Text>
-        )}
       </View>
       {checks.length > 0 && (
         <Text accessibilityLabel={`${done} of ${checks.length} done`} style={styles.count}>
@@ -277,15 +274,10 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.muted,
       fontSize: 14,
     },
-    listPreview: {
+    listFolder: {
       color: withAlpha(colors.muted, 0.85),
       flex: 1,
       fontSize: 14,
-    },
-    listFolder: {
-      color: withAlpha(colors.muted, 0.85),
-      fontSize: 12,
-      marginTop: 3,
     },
     compose: {
       alignItems: "center",

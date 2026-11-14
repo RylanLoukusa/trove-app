@@ -179,7 +179,7 @@ describe("FolderScreen", () => {
       await renderFolderScreen();
 
       expect(screen.queryByText("✈️ Trips")).toBeNull();
-      expect(within(screen.getByLabelText("Budget")).getByText("No lines yet")).toBeTruthy();
+      expect(within(screen.getByLabelText("Budget")).queryByText(/Trips/)).toBeNull();
     });
 
     it("shows its subfolders with how many lists each holds", async () => {

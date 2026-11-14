@@ -266,9 +266,38 @@ const choose = async (action: string) => {
   await fireEvent.press(screen.getByLabelText(action));
 };
 
+type JsonNode = { props?: Record<string, unknown>; children?: Array<JsonNode | string> | null };
+
+// What the open menu offers, in order: its actions and its settings.
 const menuActions = () => {
-  const labels = screen.getAllByRole("button").map((button) => button.props.accessibilityLabel as string);
-  return labels.slice(labels.indexOf("Close menu") + 1);
+  const labels: string[] = [];
+  const walk = (node: JsonNode | JsonNode[] | string | null) => {
+    if (!node || typeof node === "string") return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const role = node.props?.accessibilityRole;
+    if (role === "button" || role === "radiogroup") labels.push(node.props?.accessibilityLabel as string);
+    (node.children ?? []).forEach(walk);
+  };
+  walk(screen.toJSON() as JsonNode | JsonNode[] | null);
+  return labels.slice(labels.indexOf("Close menu") + 1).filter((label) => label !== "Done");
+};
+
+// The option picked for one of the menu's settings.
+const pickedIn = (setting: string) => {
+  const picked = within(screen.getByLabelText(setting))
+    .getAllByRole("radio")
+    .filter((choice) => choice.props.accessibilityState?.selected);
+  return picked.map((choice) => (choice.props.accessibilityLabel as string).replace(`${setting}: `, ""));
+};
+
+// Picks an option for one of the menu's settings. The menu stays open.
+const pick = async (setting: string, option: string) => {
+  await fireEvent.press(screen.getByLabelText(`${setting}: ${option}`));
+};
+
+// The menu covers the page until it is closed.
+const closeMenu = async () => {
+  await fireEvent.press(screen.getByLabelText("Done"));
 };
 
 describe("ListScreen", () => {
@@ -286,6 +315,8 @@ describe("ListScreen", () => {
     await AsyncStorage.clear();
     // Skip the one-time tag seeding so it doesn't add groups to the fixture.
     await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    // Leave out the Today and This week lists every new setup gets.
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:anonymous", "true");
     await save(household());
     alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
     dismissKeyboard = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
@@ -511,9 +542,10 @@ describe("ListScreen", () => {
       expect(menuActions()).toEqual([
         "Select lines",
         "Add lines from another list",
-        "Add lines automatically",
+        "Pin to Home",
         "Sort",
         "Checked lines",
+        "Add lines automatically",
         "Uncheck all",
         "Clear checked lines",
         "Move to folder",
@@ -526,9 +558,9 @@ describe("ListScreen", () => {
       await openList("packing");
       await openMenu();
 
-      expect(within(screen.getByLabelText("Add lines automatically")).getByText("Off")).toBeTruthy();
-      expect(within(screen.getByLabelText("Sort")).getByText("My order")).toBeTruthy();
-      expect(within(screen.getByLabelText("Checked lines")).getByText("Keep in place")).toBeTruthy();
+      expect(pickedIn("Sort")).toEqual(["My order"]);
+      expect(pickedIn("Checked lines")).toEqual(["Keep in place"]);
+      expect(pickedIn("Add lines automatically")).toEqual(["Off"]);
       expect(within(screen.getByLabelText("Move to folder")).getByText("Trips")).toBeTruthy();
     });
 
@@ -537,7 +569,14 @@ describe("ListScreen", () => {
       await openList("empty");
       await openMenu();
 
-      expect(menuActions()).toEqual(["Add lines automatically", "Sort", "Checked lines", "Move to folder", "Delete list"]);
+      expect(menuActions()).toEqual([
+        "Pin to Home",
+        "Sort",
+        "Checked lines",
+        "Add lines automatically",
+        "Move to folder",
+        "Delete list",
+      ]);
     });
 
     it("closes when the page behind it is tapped", async () => {
@@ -552,13 +591,13 @@ describe("ListScreen", () => {
     it("sorts the lines, says so under the title and remembers it", async () => {
       await openList("chores");
 
-      await choose("Sort");
-      expect(screen.getByText("Sort by")).toBeTruthy();
-      await fireEvent.press(screen.getByText("A to Z"));
+      await openMenu();
+      await pick("Sort", "A to Z");
+      expect(pickedIn("Sort")).toEqual(["A to Z"]);
+      await closeMenu();
 
       expect(shownLines()).toEqual(["Clean gutters", "Mow the lawn", "Water plants"]);
       expect(caption("1 of 3 done · Sorted A to Z")).toBeTruthy();
-      expect(screen.queryByText("Sort by")).toBeNull();
       // The lines themselves stay in the order they were put in.
       expect(ownLines("chores")).toEqual(["Mow the lawn", "Clean gutters", "Water plants"]);
       await waitFor(async () =>
@@ -580,14 +619,45 @@ describe("ListScreen", () => {
     it("hides checked lines when asked to", async () => {
       await openList("chores");
 
-      await choose("Checked lines");
-      await fireEvent.press(screen.getByText("Hide"));
+      await openMenu();
+      await pick("Checked lines", "Hide");
+      await closeMenu();
 
       expect(shownLines()).toEqual(["Mow the lawn", "Water plants"]);
       expect(screen.getByText("1 completed line hidden · Show")).toBeTruthy();
 
       await fireEvent.press(screen.getByText("1 completed line hidden · Show"));
       expect(shownLines()).toEqual(["Mow the lawn", "Clean gutters", "Water plants"]);
+    });
+
+    it("stays open while several settings are changed, until Done", async () => {
+      await openList("chores");
+      await openMenu();
+
+      await pick("Sort", "A to Z");
+      await pick("Checked lines", "Move to bottom");
+      await pick("Add lines automatically", "Next 7 days");
+
+      expect(pickedIn("Sort")).toEqual(["A to Z"]);
+      expect(pickedIn("Checked lines")).toEqual(["Move to bottom"]);
+      expect(pickedIn("Add lines automatically")).toEqual(["Next 7 days"]);
+      expect(savedList("chores")).toMatchObject({ listMode: "focus", focusRule: "due_week" });
+
+      await closeMenu();
+      expect(screen.queryByLabelText("Sort: A to Z")).toBeNull();
+      expect(shownLines()).toEqual(["Mow the lawn", "Water plants", "Clean gutters"]);
+      expect(caption("1 of 3 done · Adds lines due in the next 7 days · Sorted A to Z")).toBeTruthy();
+    });
+
+    it("pins the list to Home, and unpins it", async () => {
+      await openList("chores");
+
+      await choose("Pin to Home");
+      expect(savedList("chores")!.pinned).toBe(true);
+      expect(screen.queryByLabelText("Delete list")).toBeNull();
+
+      await choose("Unpin from Home");
+      expect(savedList("chores")!.pinned).toBeFalsy();
     });
 
     it("unchecks every line at once, and checks them again on Undo", async () => {
@@ -839,7 +909,7 @@ describe("ListScreen", () => {
       expect(pulledInto("today")).toEqual(["Pinned"]);
 
       await openMenu();
-      expect(within(screen.getByLabelText("Add lines automatically")).getByText("Due today or overdue")).toBeTruthy();
+      expect(pickedIn("Add lines automatically")).toEqual(["Due today"]);
     });
 
     it("keeps a line it added where that line is dragged to", async () => {
@@ -890,8 +960,9 @@ describe("ListScreen", () => {
       await save(wedding());
       await openList("today");
 
-      await choose("Add lines automatically");
-      await fireEvent.press(screen.getByText("Off"));
+      await openMenu();
+      await pick("Add lines automatically", "Off");
+      await closeMenu();
 
       expect(savedList("today")!.focusRule).toBeUndefined();
       expect(shownLines()).toEqual(["Pinned"]);
@@ -901,9 +972,9 @@ describe("ListScreen", () => {
     it("starts adding lines when a rule is picked", async () => {
       await openList("today");
 
-      await choose("Add lines automatically");
-      expect(screen.getByText("Only lines you add yourself")).toBeTruthy();
-      await fireEvent.press(screen.getByText("Due today or overdue"));
+      await openMenu();
+      await pick("Add lines automatically", "Due today");
+      await closeMenu();
 
       expect(savedList("today")).toMatchObject({ listMode: "focus", focusRule: "due_today" });
       expect(caption("0 of 1 done · Adds lines due today or overdue")).toBeTruthy();
@@ -1052,6 +1123,11 @@ describe("ListScreen", () => {
 
       await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Candles\n");
       expect(ownLines("party")).toEqual(["Balloons", "Cake", "Candles"]);
+
+      // Pinning is the owner's choice, not that of someone it was shared with.
+      await openMenu();
+      expect(menuActions()).toContain("Delete list");
+      expect(menuActions()).not.toContain("Pin to Home");
     });
 
     it("isn't thrown away for being empty when an editor leaves it", async () => {

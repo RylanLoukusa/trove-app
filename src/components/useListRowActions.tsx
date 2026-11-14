@@ -1,15 +1,16 @@
 import React, { ReactNode, useCallback, useState } from "react";
 import { Alert } from "react-native";
-import { FolderInput, Trash2 } from "lucide-react-native";
+import { FolderInput, Pin, PinOff, Trash2 } from "lucide-react-native";
 
 import { FolderTreeBrowserModal } from "./FolderTreeBrowserModal";
 import { MenuSheet } from "./MenuSheet";
 import { useTrove } from "../storage/storage";
 import { useThemeColors } from "../theme/ThemeContext";
+import { isSharedAccess } from "../utils/access";
 import { getFolderPathLabel } from "../utils/folderTree";
 import { listDisplayTitle } from "../utils/listEntries";
 
-// Holding a list's row offers to move it to a folder or delete it. Put
+// Holding a list's row offers to pin it, move it to a folder or delete it. Put
 // `overlays` last in the screen's root view.
 export const useListRowActions = (): { openListActions: (listId: string) => void; overlays: ReactNode } => {
   const colors = useThemeColors();
@@ -50,6 +51,21 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
         actions={
           actionList
             ? [
+                // Pinning is the owner's own choice, so a list shared with them can't be.
+                ...(isSharedAccess(actionList)
+                  ? []
+                  : [
+                      {
+                        key: "pin",
+                        label: actionList.pinned ? "Unpin from Home" : "Pin to Home",
+                        icon: actionList.pinned ? (
+                          <PinOff size={20} color={colors.accentDark} />
+                        ) : (
+                          <Pin size={20} color={colors.accentDark} />
+                        ),
+                        onPress: () => updateItem(actionList.id, { pinned: !actionList.pinned }),
+                      },
+                    ]),
                 {
                   key: "folder",
                   label: "Move to folder",

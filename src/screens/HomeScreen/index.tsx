@@ -16,13 +16,15 @@ import { useOnboardingTour, WELCOME_NOTE } from "../../onboarding/OnboardingTour
 import { useTrove } from "../../storage/storage";
 import { displayTextForSyncSnapshot } from "../../sync/syncStatus";
 import { useThemeColors } from "../../theme/ThemeContext";
+import { isSharedAccess } from "../../utils/access";
 import { folderLabel, getDescendantFolderIds, getVisibleRootFolders } from "../../utils/folderTree";
 import { listActivityTimes, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
-// Every list, newest first, with the folders one tap away above them.
+// Every list, newest first, with the folders one tap away above them and the
+// lists the person pinned between the two.
 export const HomeScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -41,7 +43,12 @@ export const HomeScreen = ({ navigation }: Props) => {
 
   const topFolders = useMemo(() => getVisibleRootFolders(folders), [folders]);
   const activity = useMemo(() => listActivityTimes(items, listEntries ?? []), [items, listEntries]);
-  const lists = useMemo(() => sortListsByActivity(items, activity), [activity, items]);
+  const [pinnedLists, lists] = useMemo(() => {
+    const sorted = sortListsByActivity(items, activity);
+    // Only the owner's pin counts: a list shared with them isn't pinned for them.
+    const isPinned = (list: (typeof sorted)[number]) => !!list.pinned && !isSharedAccess(list);
+    return [sorted.filter(isPinned), sorted.filter((list) => !isPinned(list))];
+  }, [activity, items]);
 
   const countForFolder = useCallback(
     (folderId: string): number => {
@@ -63,6 +70,17 @@ export const HomeScreen = ({ navigation }: Props) => {
     const list = createItem({ folderId: "", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
     if (list) navigation.navigate("List", { listId: list.id, isNew: true });
   }, [createItem, navigation]);
+
+  const renderListRow = (list: (typeof lists)[number]) => (
+    <ListRow
+      key={list.id}
+      list={list}
+      activityAt={activity.get(list.id)}
+      folderLabel={folderLabel(folders, list.folderId)}
+      onPress={() => navigation.navigate("List", { listId: list.id })}
+      onLongPress={() => openListActions(list.id)}
+    />
+  );
 
   const syncNeedsAttention = syncSnapshot.status === "failed" || syncSnapshot.status === "conflicted";
   const onPressSyncStatus = useCallback(async () => {
@@ -205,20 +223,16 @@ export const HomeScreen = ({ navigation }: Props) => {
               <Text style={styles.hint}>No folders yet. Folders keep related lists together.</Text>
             )}
 
+            {pinnedLists.length > 0 && (
+              <>
+                <SectionHeader title="Pinned" />
+                <RowGroup>{pinnedLists.map(renderListRow)}</RowGroup>
+              </>
+            )}
+
             <SectionHeader title="Lists" />
             {lists.length > 0 ? (
-              <RowGroup>
-                {lists.map((list) => (
-                  <ListRow
-                    key={list.id}
-                    list={list}
-                    activityAt={activity.get(list.id)}
-                    folderLabel={folderLabel(folders, list.folderId)}
-                    onPress={() => navigation.navigate("List", { listId: list.id })}
-                    onLongPress={() => openListActions(list.id)}
-                  />
-                ))}
-              </RowGroup>
+              <RowGroup>{lists.map(renderListRow)}</RowGroup>
             ) : (
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No lists yet</Text>

@@ -36,6 +36,7 @@ import {
 } from "../sync/syncStatus";
 import { seedData, seedFolders, seedItems, seedListEntries } from "../data/seedData";
 import { isBaseDataSeeded, markBaseDataSeeded } from "./baseDataSeed";
+import { isPinnedDefaultsDone, markPinnedDefaultsDone, planPinnedDefaults } from "./pinnedDefaults";
 import {
   isTagBackfillDone,
   markTagBackfillDone,
@@ -209,6 +210,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const activeUserId = isAuthReady ? session?.user?.id ?? null : null;
   const dataRef = useRef(data);
   dataRef.current = data;
+  // The account whose first pull from the server after loading has finished
+  // (or had none to wait for), so lists made on another device are here.
+  const [initialPullSettledFor, setInitialPullSettledFor] = useState<string | null>(null);
+  const pinnedDefaultsKeyRef = useRef<string | null>(null);
   const syncSnapshotRef = useRef(syncSnapshot);
   syncSnapshotRef.current = syncSnapshot;
   const skipRemotePushRef = useRef(true);
@@ -273,6 +278,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     pendingRemotePushRef.current = false;
     setSyncSnapshot({ retryCount: 0, status: "synced" });
     setIsReady(false);
+    setInitialPullSettledFor(null);
     setData(activeUserId ? emptyData : seedData);
 
     void (async () => {
@@ -324,28 +330,33 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const userId = activeUserId;
     if (!userId) {
       skipRemotePushRef.current = false;
+      setInitialPullSettledFor("anonymous");
       return;
     }
 
     const supabase = getSupabase();
     if (!supabase) {
       skipRemotePushRef.current = false;
+      setInitialPullSettledFor(userId);
       return;
     }
 
     if (hasPendingSync(syncSnapshotRef.current)) {
       skipRemotePushRef.current = false;
+      setInitialPullSettledFor(userId);
       return;
     }
 
     skipRemotePushRef.current = true;
     let cancelled = false;
     let shouldAllowRemotePush = false;
+    let pulled = false;
 
     void (async () => {
       try {
         const result = await pullTroveDataForUser(supabase, userId);
         if (cancelled) return;
+        pulled = result.kind !== "error";
         if (result.kind === "applied") {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
@@ -411,6 +422,9 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       } finally {
         if (!cancelled) {
           skipRemotePushRef.current = !shouldAllowRemotePush;
+          // Offline, it waits for the next launch rather than risk making
+          // lists that are already on the server.
+          if (pulled) setInitialPullSettledFor(userId);
         }
       }
     })();
@@ -1453,6 +1467,37 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       cancelled = true;
     };
   }, [activeUserId, createTagGroup, createTagOption, isAuthReady, isReady, updateItem]);
+
+  // Pins Today and This week once per account on this device, making them
+  // if they don't exist yet.
+  useEffect(() => {
+    const userKey = activeUserId ?? "anonymous";
+    if (!isReady || !isAuthReady || initialPullSettledFor !== userKey) return;
+    if (pinnedDefaultsKeyRef.current === userKey) return;
+    pinnedDefaultsKeyRef.current = userKey;
+
+    void (async () => {
+      if (await isPinnedDefaultsDone(userKey)) return;
+      if (pinnedDefaultsKeyRef.current !== userKey) return;
+      const plan = planPinnedDefaults(dataRef.current.items, canEditItem);
+      plan.pin.forEach((listId) => updateItem(listId, { pinned: true }));
+      for (const [index, list] of plan.create.entries()) {
+        // A moment apart, so the last one made sorts first.
+        if (index > 0) await new Promise((resolve) => setTimeout(resolve, 5));
+        if (pinnedDefaultsKeyRef.current !== userKey) return;
+        createItem({
+          folderId: "",
+          title: list.title,
+          type: "list",
+          tagOptionIds: [],
+          listMode: "focus",
+          focusRule: list.focusRule,
+          pinned: true,
+        });
+      }
+      await markPinnedDefaultsDone(userKey);
+    })();
+  }, [activeUserId, canEditItem, createItem, initialPullSettledFor, isAuthReady, isReady, updateItem]);
 
   const resetToSeed = useCallback(() => {
     setData(seedData);

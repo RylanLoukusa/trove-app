@@ -476,6 +476,44 @@ describe("plain and bold lines sync", () => {
   });
 });
 
+describe("pinned lists sync", () => {
+  afterEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it("reads a pinned list from the tag its pin travels in", async () => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_folders: { data: [folderRow()], error: null },
+      trove_items: { data: [itemRow({ tags: ["fmt:pinned"] }), itemRow({ id: "list-2", title: "Packing" })], error: null },
+    });
+
+    const result = await pullTroveDataForUser(supabase, userId);
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    const byId = new Map(result.data.items.map((item) => [item.id, item]));
+    expect(byId.get("list-1")).toMatchObject({ pinned: true, tagOptionIds: [] });
+    expect(byId.get("list-2")?.pinned).toBeUndefined();
+  });
+
+  it("sends the pin with the list's tags", async () => {
+    const local: TroveData = {
+      folders: [folder],
+      items: [{ ...list, pinned: true }],
+      listEntries: [],
+      tagGroups: [],
+      tagOptions: [],
+    };
+
+    const { result, args } = await pushWith(local, [], {});
+
+    expect(result.ok).toBe(true);
+    expect(args("trove_upsert_item_for_current_user")!.target_tags).toEqual(["fmt:pinned"]);
+  });
+});
+
 describe("notes, links and photos from before Trove kept only lists", () => {
   let warn: jest.SpyInstance;
 

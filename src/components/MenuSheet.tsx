@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 
+export type MenuChoice = { value: string; label: string };
+
 export type MenuAction = {
   key: string;
   label: string;
@@ -14,7 +16,13 @@ export type MenuAction = {
   destructive?: boolean;
   // Starts a new group, with a gap above it.
   separated?: boolean;
-  onPress: () => void;
+  // Runs the action and closes the menu.
+  onPress?: () => void;
+  // A setting instead: its options are shown under the label and picking
+  // one leaves the menu open, so several settings can be changed in one go.
+  choices?: MenuChoice[];
+  selectedValue?: string;
+  onChoose?: (value: string) => void;
 };
 
 type Props = {
@@ -40,6 +48,7 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
   }, [progress, visible]);
 
   if (!visible) return null;
+  const hasSettings = actions.some((action) => !!action.choices);
 
   return (
     <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
@@ -62,10 +71,22 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
         ]}
       >
         <View style={styles.grabber} />
-        {!!title && (
-          <Text numberOfLines={1} style={styles.title}>
-            {title}
-          </Text>
+        {hasSettings ? (
+          // With settings to change, an obvious way out.
+          <View style={styles.header}>
+            <Text numberOfLines={1} style={styles.headerTitle}>
+              {title ?? ""}
+            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Done" hitSlop={10} onPress={onClose}>
+              {({ pressed }) => <Text style={[styles.done, pressed && styles.donePressed]}>Done</Text>}
+            </Pressable>
+          </View>
+        ) : (
+          !!title && (
+            <Text numberOfLines={1} style={styles.title}>
+              {title}
+            </Text>
+          )
         )}
         <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
           {actions.map((action, index) => (
@@ -75,25 +96,54 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                   style={[styles.divider, action.separated ? styles.dividerGroup : !!action.icon && styles.dividerInset]}
                 />
               )}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                onPress={() => {
-                  onClose();
-                  action.onPress();
-                }}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              >
-                {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-                <Text numberOfLines={1} style={[styles.label, action.destructive && styles.labelDestructive]}>
-                  {action.label}
-                </Text>
-                {!!action.detail && (
-                  <Text numberOfLines={1} style={styles.detail}>
-                    {action.detail}
+              {action.choices ? (
+                <View accessibilityRole="radiogroup" accessibilityLabel={action.label} style={styles.setting}>
+                  <View style={styles.settingLabel}>
+                    {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
+                    <Text numberOfLines={1} style={styles.label}>
+                      {action.label}
+                    </Text>
+                  </View>
+                  <View style={[styles.choices, !!action.icon && styles.choicesInset]}>
+                    {action.choices.map((choice) => {
+                      const selected = choice.value === action.selectedValue;
+                      return (
+                        <Pressable
+                          key={choice.value}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`${action.label}: ${choice.label}`}
+                          accessibilityState={{ selected, checked: selected }}
+                          hitSlop={4}
+                          onPress={() => action.onChoose?.(choice.value)}
+                          style={({ pressed }) => [styles.choice, selected && styles.choiceSelected, pressed && styles.choicePressed]}
+                        >
+                          <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  onPress={() => {
+                    onClose();
+                    action.onPress?.();
+                  }}
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                >
+                  {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
+                  <Text numberOfLines={1} style={[styles.label, action.destructive && styles.labelDestructive]}>
+                    {action.label}
                   </Text>
-                )}
-              </Pressable>
+                  {!!action.detail && (
+                    <Text numberOfLines={1} style={styles.detail}>
+                      {action.detail}
+                    </Text>
+                  )}
+                </Pressable>
+              )}
             </React.Fragment>
           ))}
         </ScrollView>
@@ -167,6 +217,68 @@ const createStyles = (colors: ThemeColors) =>
     },
     rowPressed: {
       backgroundColor: colors.background,
+    },
+    header: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      paddingBottom: 2,
+      paddingHorizontal: spacing.sm,
+    },
+    headerTitle: {
+      color: colors.muted,
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    done: {
+      color: colors.accentDark,
+      fontSize: 17,
+      fontWeight: "700",
+    },
+    donePressed: {
+      opacity: 0.5,
+    },
+    setting: {
+      paddingBottom: spacing.sm,
+      paddingHorizontal: spacing.sm,
+    },
+    settingLabel: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 44,
+    },
+    choices: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    choicesInset: {
+      paddingLeft: ICON_WIDTH + spacing.sm,
+    },
+    choice: {
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+    },
+    choiceSelected: {
+      backgroundColor: colors.accentDark,
+      borderColor: colors.accentDark,
+    },
+    choicePressed: {
+      opacity: 0.6,
+    },
+    choiceText: {
+      color: colors.ink,
+      fontSize: 15,
+    },
+    choiceTextSelected: {
+      color: colors.onAccent,
+      fontWeight: "600",
     },
     icon: {
       alignItems: "center",

@@ -18,11 +18,13 @@ export const normalizeSavedItem = (item: SavedItem): SavedItem => {
           },
         ];
 
+  const { pinned, ...rest } = item;
   return {
-    ...item,
+    ...rest,
     mediaItems,
     type: normalizeItemType(item.type),
     tagOptionIds: item.tagOptionIds ?? [],
+    ...(pinned ? { pinned: true } : {}),
   };
 };
 

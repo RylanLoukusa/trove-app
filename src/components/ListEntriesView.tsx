@@ -9,7 +9,6 @@ import React, {
   useState,
 } from "react";
 import {
-  InputAccessoryView,
   Keyboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -87,12 +86,13 @@ export type ListEntriesViewHandle = {
 type LineFormat = { kind: ListItemKind; bold: boolean; indentLevel: number };
 
 // Shared by every line's text box so iOS shows one bar above the keyboard.
-const KEYBOARD_BAR_ID = "trove-list-keyboard-bar";
 const ADD_ROW_ID = "__add";
 const COMMIT_DELAY_MS = 700;
 // Space between the screen edge and a line; also where a line is held to drag it.
 const GUTTER = 20;
 const SELECT_BAR_HEIGHT = 76;
+// The format bar: a row of 38pt buttons with 4pt above and below.
+const KEYBOARD_BAR_HEIGHT = 46;
 
 type Props = {
   entries: ListEntry[];
@@ -655,6 +655,13 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       : countLabel(send?.ids.length ?? 0);
   const sendCanAdd = !!send && canLink && send.ids.some(linkable);
 
+  // Puts the keyboard away and opens a line's due date, priority and notes.
+  const openDetails = (id: string) => {
+    Keyboard.dismiss();
+    setFocusedId(null);
+    setOpenEntryId(id);
+  };
+
   const iconTone = colors.accentDark;
   const keyboardBar = focusedId ? (
     <View style={styles.bar}>
@@ -717,24 +724,10 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           onPress={() => focusedEntry && startSend([focusedEntry.id], linkable(focusedEntry.id) ? "add" : "move")}
           styles={styles}
         />
-        <BarButton
-          accessibilityLabel="Line details"
-          disabled={!focusedEntry}
-          icon={<Info size={20} color={iconTone} />}
-          onPress={() => {
-            if (!focusedEntry) return;
-            const id = focusedEntry.id;
-            Keyboard.dismiss();
-            setFocusedId(null);
-            setOpenEntryId(id);
-          }}
-          styles={styles}
-        />
       </View>
       <BarButton label="Done" strong onPress={() => Keyboard.dismiss()} styles={styles} />
     </View>
   ) : null;
-  const inlineBar = Platform.OS !== "ios" ? keyboardBar : null;
 
   const openEntry = entries.find((entry) => entry.id === openEntryId) ?? null;
   const openEntryLists = openEntry
@@ -753,7 +746,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         style={styles.scroll}
         contentContainerStyle={[styles.content, selecting && { paddingBottom: SELECT_BAR_HEIGHT + insets.bottom + spacing.lg }]}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        keyboardDismissMode="on-drag"
         scrollEnabled={!dragging}
         onScroll={onScroll}
         scrollEventThrottle={32}
@@ -784,6 +777,8 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               }}
               onToggle={() => onToggleEntry(entry)}
               onOpen={() => setOpenEntryId(entry.id)}
+              isFocused={focusedId === entry.id}
+              onOpenDetails={() => openDetails(entry.id)}
               registerInput={(input) => registerInput(entry.id, input)}
               onCommitText={(text) => {
                 if (text !== entry.text) onUpdateEntry(entry.id, { text });
@@ -805,7 +800,6 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
                 }
                 setFocusedId((current) => (current === entry.id ? null : current));
               }}
-              belowRow={focusedId === entry.id ? inlineBar : null}
               selecting={selecting}
               selected={selectedIds.has(entry.id)}
               onToggleSelect={() => toggleSelected(entry.id)}
@@ -874,13 +868,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
                   placeholderTextColor={withAlpha(colors.muted, 0.7)}
                   multiline
                   scrollEnabled={false}
-                  inputAccessoryViewID={KEYBOARD_BAR_ID}
                   style={[styles.text, styles.textInput, addFormat.bold && styles.textBold]}
                 />
               </View>
             </View>
           )}
-          {addFocused && inlineBar}
 
           {canEdit && !selecting ? (
             // Tapping the empty page below the last line carries on typing.
@@ -892,6 +884,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           {footer}
         </View>
       </ScrollView>
+
+      {/* Docked under the page, which the screen keeps above the keyboard. It
+          works for whichever line has the cursor (an iOS keyboard accessory
+          can only be tied to one text field). */}
+      {canEdit && !selecting && keyboardBar}
 
       {selecting && (
         <View style={[styles.selectBar, { paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
@@ -940,8 +937,9 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           accessibilityLiveRegion="polite"
           style={[
             styles.toast,
-            // Above the select bar, or the home indicator when no keyboard is up.
-            { bottom: (selecting ? SELECT_BAR_HEIGHT : 0) + (focusedId ? 0 : insets.bottom) + spacing.sm },
+            // Above the select bar or the format bar, or the home indicator
+            // when no keyboard is up.
+            { bottom: (selecting ? SELECT_BAR_HEIGHT : 0) + (focusedId ? KEYBOARD_BAR_HEIGHT : insets.bottom) + spacing.sm },
           ]}
         >
           <Text style={styles.toastText}>{toast.message}</Text>
@@ -960,9 +958,6 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         </View>
       )}
 
-      {canEdit && Platform.OS === "ios" && (
-        <InputAccessoryView nativeID={KEYBOARD_BAR_ID}>{keyboardBar}</InputAccessoryView>
-      )}
 
       {(canMove || canLink) && (
         <SendToListSheet
@@ -1024,6 +1019,9 @@ type EntryRowProps = {
   onLayoutHeight: (height: number) => void;
   onToggle: () => void;
   onOpen: () => void;
+  // The line has the cursor: it shows a button for its details.
+  isFocused: boolean;
+  onOpenDetails: () => void;
   onDragStart: () => void;
   onDragUpdate: (translationY: number) => void;
   onDragEnd: () => void;
@@ -1037,7 +1035,6 @@ type EntryRowProps = {
   onBlurEmpty: () => void;
   // The text wrapped onto another row while being typed.
   onGrow: () => void;
-  belowRow?: ReactNode;
   selecting: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -1065,6 +1062,8 @@ const EntryRow = ({
   onLayoutHeight,
   onToggle,
   onOpen,
+  isFocused,
+  onOpenDetails,
   onDragStart,
   onDragUpdate,
   onDragEnd,
@@ -1076,7 +1075,6 @@ const EntryRow = ({
   onBlurLine,
   onBlurEmpty,
   onGrow,
-  belowRow,
   selecting,
   selected,
   onToggleSelect,
@@ -1253,7 +1251,6 @@ const EntryRow = ({
             }}
             multiline
             scrollEnabled={false}
-            inputAccessoryViewID={KEYBOARD_BAR_ID}
             style={[textStyle, styles.textInput]}
           />
         ) : (
@@ -1303,6 +1300,18 @@ const EntryRow = ({
           </Pressable>
         )}
       </View>
+      {isFocused && !selecting && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Line details"
+          accessibilityHint="Due date, priority and notes"
+          hitSlop={{ top: 6, bottom: 6, left: 8, right: 12 }}
+          onPress={onOpenDetails}
+          style={({ pressed }) => [styles.detailsButton, pressed && styles.markerPressed]}
+        >
+          <Info size={21} color={colors.accentDark} />
+        </Pressable>
+      )}
       {selecting && (
         <Pressable accessible={false} onPress={onToggleSelect} style={styles.selectMark}>
           {selected ? (
@@ -1395,7 +1404,6 @@ const EntryRow = ({
       >
         {row}
       </ReanimatedSwipeable>
-      {belowRow}
     </>
   );
 };
@@ -1588,6 +1596,12 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 4,
       height: 8,
       width: 8,
+    },
+    detailsButton: {
+      alignItems: "flex-end",
+      height: LINE_ROW_HEIGHT,
+      justifyContent: "center",
+      width: 34,
     },
     selectMark: {
       alignItems: "flex-end",

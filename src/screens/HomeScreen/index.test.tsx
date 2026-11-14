@@ -203,19 +203,19 @@ describe("HomeScreen", () => {
       expect(listRowTitles()[0]).toBe("Call the plumber");
     });
 
-    it("previews a list's lines and how many are checked off", async () => {
+    it("says how many lines are checked off, without showing the lines", async () => {
       await renderHomeScreen();
 
       const row = within(screen.getByLabelText("Groceries"));
-      expect(row.getByText("Milk, Eggs, Fruit")).toBeTruthy();
       expect(row.getByLabelText("1 of 2 done")).toBeTruthy();
+      expect(row.queryByText(/Milk|Eggs|Fruit/)).toBeNull();
     });
 
-    it("shows an unnamed list by its first line and previews the rest", async () => {
+    it("shows an unnamed list by its first line, and none of its other lines", async () => {
       await renderHomeScreen();
 
       const row = within(screen.getByLabelText("Call the plumber"));
-      expect(row.getByText("Ask about the leak")).toBeTruthy();
+      expect(row.queryByText(/Ask about the leak/)).toBeNull();
       expect(row.queryByText(UNTITLED_LIST_TITLE)).toBeNull();
       expect(row.queryByLabelText(/done$/)).toBeNull();
     });
@@ -241,6 +241,54 @@ describe("HomeScreen", () => {
 
       expect(screen.getByText("No lists yet")).toBeTruthy();
       expect(screen.getByText("Tap the pencil to start one.")).toBeTruthy();
+    });
+  });
+
+  describe("pinned lists", () => {
+    const headers = () => screen.getAllByRole("header").map((header) => header.props.children as string);
+
+    it("get their own section between Folders and Lists, and aren't repeated under Lists", async () => {
+      await renderHomeScreen({
+        trove: { items: [groceries, { ...chores, pinned: true }, packing, { ...unnamed, pinned: true }] },
+      });
+
+      expect(headers()).toEqual(["Trove", "Folders", "Pinned", "Lists"]);
+      expect(listRowTitles()).toEqual(["Chores", "Call the plumber", "Packing", "Groceries"]);
+      expect(within(screen.getByLabelText("Chores")).getByText("📁 Home")).toBeTruthy();
+    });
+
+    it("leave the section out when nothing is pinned", async () => {
+      await renderHomeScreen();
+
+      expect(headers()).toEqual(["Trove", "Folders", "Lists"]);
+    });
+
+    it("only count the person's own pin, not that of whoever shared the list", async () => {
+      await renderHomeScreen({ trove: { items: [{ ...groceries, pinned: true, accessRole: "editor" }] } });
+
+      expect(headers()).toEqual(["Trove", "Folders", "Lists"]);
+      expect(listRowTitles()).toEqual(["Groceries"]);
+    });
+
+    it("can be pinned and unpinned by holding the list", async () => {
+      await renderHomeScreen({ trove: { items: [groceries, { ...packing, pinned: true }] } });
+
+      await fireEvent(screen.getByLabelText("Groceries"), "longPress");
+      await fireEvent.press(screen.getByLabelText("Pin to Home"));
+      expect(updateItem).toHaveBeenLastCalledWith("groceries", { pinned: true });
+
+      await fireEvent(screen.getByLabelText("Packing"), "longPress");
+      await fireEvent.press(screen.getByLabelText("Unpin from Home"));
+      expect(updateItem).toHaveBeenLastCalledWith("packing", { pinned: false });
+    });
+
+    it("can't be pinned by someone a list was shared with", async () => {
+      await renderHomeScreen({ trove: { items: [{ ...groceries, accessRole: "editor" }] } });
+
+      await fireEvent(screen.getByLabelText("Groceries"), "longPress");
+
+      expect(screen.getByLabelText("Delete list")).toBeTruthy();
+      expect(screen.queryByLabelText("Pin to Home")).toBeNull();
     });
   });
 
@@ -318,11 +366,12 @@ describe("HomeScreen", () => {
   });
 
   describe("holding a list", () => {
-    it("offers to move or delete it", async () => {
+    it("offers to pin, move or delete it", async () => {
       await renderHomeScreen();
 
       await fireEvent(screen.getByLabelText("Packing"), "longPress");
 
+      expect(screen.getByLabelText("Pin to Home")).toBeTruthy();
       expect(screen.getByLabelText("Move to folder")).toBeTruthy();
       expect(within(screen.getByLabelText("Move to folder")).getByText("Trips > Japan")).toBeTruthy();
       expect(screen.getByLabelText("Delete list")).toBeTruthy();

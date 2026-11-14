@@ -9,12 +9,13 @@ import {
   Eraser,
   FolderInput,
   ListPlus,
+  Pin,
+  PinOff,
   RotateCcw,
   Sparkles,
   Trash2,
 } from "lucide-react-native";
 
-import { ChoiceSheet } from "../../components/ChoiceSheet";
 import { CommentThread } from "../../components/CommentThread";
 import { FocusListPicker, FocusPickerList } from "../../components/FocusListPicker";
 import { FolderTreeBrowserModal } from "../../components/FolderTreeBrowserModal";
@@ -50,7 +51,6 @@ import {
 import {
   CompletedMode,
   completedModeLabels,
-  focusRuleLabels,
   ListSortMode,
   listSortLabels,
   matchesFocusRule,
@@ -66,17 +66,21 @@ type Props = {
   isNew?: boolean;
 };
 
+// The settings in the list's menu. Picking one leaves the menu open, so
+// several can be changed in one go.
 type RuleChoice = FocusRule | "none";
-const ruleOptions: Array<{ value: RuleChoice; label: string; detail?: string }> = [
-  { value: "none", label: "Off", detail: "Only lines you add yourself" },
-  ...(Object.keys(focusRuleLabels) as FocusRule[]).map((value) => ({
-    value,
-    label: focusRuleLabels[value],
-    detail: "Pulls in matching lines from all your lists",
-  })),
+const ruleChoices: Array<{ value: RuleChoice; label: string }> = [
+  { value: "none", label: "Off" },
+  { value: "due_today", label: "Due today" },
+  { value: "due_week", label: "Next 7 days" },
+  { value: "due_weekend", label: "This weekend" },
+  { value: "high_priority", label: "Top priority" },
 ];
-
-const sortOptions = (Object.keys(listSortLabels) as ListSortMode[]).map((value) => ({ value, label: listSortLabels[value] }));
+const sortChoices = (Object.keys(listSortLabels) as ListSortMode[]).map((value) => ({ value, label: listSortLabels[value] }));
+const completedChoices = (Object.keys(completedModeLabels) as CompletedMode[]).map((value) => ({
+  value,
+  label: completedModeLabels[value],
+}));
 // Said under the title while the lines are in an order other than the person's own.
 const sortCaptions: Record<ListSortMode, string> = {
   manual: "",
@@ -92,10 +96,6 @@ const ruleCaptions: Record<FocusRule, string> = {
   due_weekend: "Adds lines due this weekend",
   high_priority: "Adds highest priority lines",
 };
-const completedOptions = (Object.keys(completedModeLabels) as CompletedMode[]).map((value) => ({
-  value,
-  label: completedModeLabels[value],
-}));
 
 // One list: its title and its lines on a single page. A line pulled in from
 // another list is edited in place but stays in its own list.
@@ -129,7 +129,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const [settings, updateSettings] = useListViewSettings(item.id);
   const [selecting, setSelecting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sheet, setSheet] = useState<"sort" | "completed" | "rule" | "pull" | "folder" | null>(null);
+  const [sheet, setSheet] = useState<"pull" | "folder" | null>(null);
   const [keyboardUp, setKeyboardUp] = useState(false);
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId || undefined);
   const showComments = isSharedAccess(item) || isFolderSharedByOwner;
@@ -499,6 +499,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
 
   const folderLabel = getFolderPathLabel(folders, item.folderId);
   const iconTone = colors.accentDark;
+  // Pinning is the owner's own choice, so a list shared with them can't be.
+  const canPin = canEdit && !isSharedAccess(item);
   const menuActions: MenuAction[] = [
     ...(canEdit && entries.length > 0
       ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
@@ -513,35 +515,57 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
-    ...(canBorrow
+    ...(canPin
       ? [
           {
-            key: "rule",
-            label: "Add lines automatically",
-            detail: rule ? focusRuleLabels[rule] : "Off",
-            icon: <Sparkles size={20} color={iconTone} />,
-            onPress: () => setSheet("rule"),
+            key: "pin",
+            label: item.pinned ? "Unpin from Home" : "Pin to Home",
+            icon: item.pinned ? <PinOff size={20} color={iconTone} /> : <Pin size={20} color={iconTone} />,
+            onPress: () => updateItem(item.id, { pinned: !item.pinned }),
           },
         ]
       : []),
     {
       key: "sort",
       label: "Sort",
-      detail: listSortLabels[settings.sortMode],
       icon: <ArrowUpDown size={20} color={iconTone} />,
       separated: true,
-      onPress: () => setSheet("sort"),
+      choices: sortChoices,
+      selectedValue: settings.sortMode,
+      onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
     },
     {
       key: "completed",
       label: "Checked lines",
-      detail: completedModeLabels[settings.completedMode],
       icon: <CheckCheck size={20} color={iconTone} />,
-      onPress: () => setSheet("completed"),
+      choices: completedChoices,
+      selectedValue: settings.completedMode,
+      onChoose: (value) => updateSettings({ completedMode: value as CompletedMode }),
     },
+    ...(canBorrow
+      ? [
+          {
+            key: "rule",
+            label: "Add lines automatically",
+            icon: <Sparkles size={20} color={iconTone} />,
+            choices: ruleChoices,
+            selectedValue: rule ?? "none",
+            onChoose: (value: string) => {
+              const next = value as RuleChoice;
+              updateItem(item.id, next === "none" ? { focusRule: undefined } : { listMode: "focus", focusRule: next });
+            },
+          },
+        ]
+      : []),
     ...(canEdit && doneLines.length > 0
       ? [
-          { key: "uncheck", label: "Uncheck all", icon: <RotateCcw size={20} color={iconTone} />, onPress: uncheckAll },
+          {
+            key: "uncheck",
+            label: "Uncheck all",
+            icon: <RotateCcw size={20} color={iconTone} />,
+            separated: true,
+            onPress: uncheckAll,
+          },
           { key: "clear", label: "Clear checked lines", icon: <Eraser size={20} color={iconTone} />, onPress: clearChecked },
         ]
       : []),
@@ -682,33 +706,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
         />
       </KeyboardAvoidingView>
 
-      <MenuSheet visible={menuOpen} actions={menuActions} onClose={() => setMenuOpen(false)} />
-      <ChoiceSheet
-        visible={sheet === "sort"}
-        title="Sort by"
-        options={sortOptions}
-        selectedValue={settings.sortMode}
-        onSelect={(sortMode) => updateSettings({ sortMode })}
-        onClose={() => setSheet(null)}
-      />
-      <ChoiceSheet
-        visible={sheet === "completed"}
-        title="Checked lines"
-        options={completedOptions}
-        selectedValue={settings.completedMode}
-        onSelect={(completedMode) => updateSettings({ completedMode })}
-        onClose={() => setSheet(null)}
-      />
-      <ChoiceSheet<RuleChoice>
-        visible={sheet === "rule"}
-        title="Add lines automatically"
-        options={ruleOptions}
-        selectedValue={rule ?? "none"}
-        onSelect={(value) =>
-          updateItem(item.id, value === "none" ? { focusRule: undefined } : { listMode: "focus", focusRule: value })
-        }
-        onClose={() => setSheet(null)}
-      />
+      <MenuSheet visible={menuOpen} title={titleOf(item)} actions={menuActions} onClose={() => setMenuOpen(false)} />
       <FocusListPicker
         visible={sheet === "pull"}
         focusListTitle={titleOf(item)}

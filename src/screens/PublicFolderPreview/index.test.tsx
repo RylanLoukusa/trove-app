@@ -110,11 +110,11 @@ describe("PublicFolderPreviewScreen", () => {
     expect(screen.queryByText(/^Shared by/)).toBeNull();
   });
 
-  it("lists what is kept directly in the folder, with a preview and progress", async () => {
+  it("lists what is kept directly in the folder, with how much is done but not the lines", async () => {
     await renderPreview();
 
     const plan = within(await screen.findByLabelText("Plan"));
-    expect(plan.getByText("Book flights, Book hotel, Ask about rail pass")).toBeTruthy();
+    expect(plan.queryByText(/Book flights/)).toBeNull();
     expect(plan.getByLabelText("1 of 2 done")).toBeTruthy();
     expect(screen.getByLabelText("Ideas for day trips")).toBeTruthy();
     expect(screen.queryByLabelText("Clothes")).toBeNull();
