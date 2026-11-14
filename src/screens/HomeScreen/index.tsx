@@ -158,7 +158,7 @@ export const HomeScreen = ({ navigation }: Props) => {
           <Text accessibilityRole="header" style={styles.title}>
             Trove
           </Text>
-          {isReady && !!session?.user && isPro && (
+          {isReady && !!session?.user && (
             <Pressable
               accessibilityRole={syncNeedsAttention ? "button" : "text"}
               disabled={!syncNeedsAttention}

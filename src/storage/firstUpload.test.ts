@@ -1,4 +1,5 @@
-import { keepOwnDataFromDevice } from "./keepOwnData";
+import { mergeForFirstUpload } from "./firstUpload";
+import type { SyncBaseline } from "../sync/syncBaseline";
 import type { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 
 const me = "me";
@@ -56,21 +57,29 @@ const data = (overrides: Partial<TroveData>): TroveData => ({
   tagOptions: [],
   ...overrides,
 });
+const seen = (overrides: Partial<SyncBaseline> = {}): SyncBaseline => ({
+  folders: {},
+  items: {},
+  listEntries: {},
+  tagGroups: {},
+  tagOptions: {},
+  ...overrides,
+});
 
 const ids = (records: Array<{ id: string }>) => records.map((record) => record.id);
 
-describe("keepOwnDataFromDevice", () => {
-  it("keeps the person's own lists and lines as they are on the device", () => {
+describe("mergeForFirstUpload", () => {
+  it("keeps the phone's own lists and lines as they are there", () => {
     const device = data({
       items: [list("today", me, { pinned: true }), list("groceries", undefined)],
       listEntries: [line("milk", "groceries")],
     });
     const server = data({
-      items: [list("groceries", me, { title: "Old name" }), list("deleted-here", me)],
-      listEntries: [line("old-line", "groceries"), line("gone", "deleted-here")],
+      items: [list("groceries", me, { title: "Old name" })],
+      listEntries: [line("milk", "groceries")],
     });
 
-    const result = keepOwnDataFromDevice(device, server, me);
+    const result = mergeForFirstUpload(device, server, me, seen({ items: { groceries: stamp }, listEntries: { milk: stamp } }));
 
     expect(ids(result.items)).toEqual(["today", "groceries"]);
     expect(result.items[0].pinned).toBe(true);
@@ -78,21 +87,51 @@ describe("keepOwnDataFromDevice", () => {
     expect(ids(result.listEntries)).toEqual(["milk"]);
   });
 
+  it("adds what only the server has, unless the phone saw it there and deleted it", () => {
+    const device = data({ items: [list("groceries", me)], listEntries: [line("milk", "groceries")] });
+    const server = data({
+      folders: [folder("from-other-phone", me), folder("deleted-folder", me)],
+      items: [list("groceries", me), list("from-other-phone", me), list("deleted-here", me)],
+      listEntries: [
+        line("milk", "groceries"),
+        line("eggs-from-other-phone", "groceries"),
+        line("deleted-line", "groceries"),
+        line("passport", "from-other-phone"),
+        line("gone", "deleted-here"),
+      ],
+    });
+
+    const result = mergeForFirstUpload(
+      device,
+      server,
+      me,
+      seen({
+        folders: { "deleted-folder": stamp },
+        items: { groceries: stamp, "deleted-here": stamp },
+        listEntries: { milk: stamp, "deleted-line": stamp },
+      }),
+    );
+
+    expect(ids(result.folders)).toEqual(["from-other-phone"]);
+    expect(ids(result.items)).toEqual(["groceries", "from-other-phone"]);
+    expect(ids(result.listEntries)).toEqual(["milk", "eggs-from-other-phone", "passport"]);
+  });
+
   it("takes what was shared with them from the server, and drops what no longer is", () => {
     const device = data({
-      folders: [folder("mine", me), folder("unshared", friend)],
+      folders: [folder("unshared", friend)],
       items: [list("party", friend, { title: "Old party" }), list("left", friend)],
       listEntries: [line("old-balloons", "party")],
     });
     const server = data({
-      folders: [folder("mine", me), folder("family", friend)],
+      folders: [folder("family", friend)],
       items: [list("party", friend)],
       listEntries: [line("balloons", "party")],
     });
 
-    const result = keepOwnDataFromDevice(device, server, me);
+    const result = mergeForFirstUpload(device, server, me, seen({ items: { party: stamp } }));
 
-    expect(ids(result.folders)).toEqual(["mine", "family"]);
+    expect(ids(result.folders)).toEqual(["family"]);
     expect(ids(result.items)).toEqual(["party"]);
     expect(result.items[0].title).toBe("party");
     expect(ids(result.listEntries)).toEqual(["balloons"]);
@@ -100,15 +139,15 @@ describe("keepOwnDataFromDevice", () => {
 
   it("keeps tags with the group they belong to", () => {
     const device = data({
-      tagGroups: [group("priority"), group("old-shared", friend)],
-      tagOptions: [option("high", "priority"), option("stale", "old-shared")],
+      tagGroups: [group("priority")],
+      tagOptions: [option("high", "priority")],
     });
     const server = data({
       tagGroups: [group("priority", me), group("shared", friend)],
-      tagOptions: [option("server-high", "priority"), option("red", "shared")],
+      tagOptions: [option("high", "priority"), option("red", "shared")],
     });
 
-    const result = keepOwnDataFromDevice(device, server, me);
+    const result = mergeForFirstUpload(device, server, me, seen({ tagOptions: { high: stamp } }));
 
     expect(ids(result.tagGroups)).toEqual(["priority", "shared"]);
     expect(ids(result.tagOptions)).toEqual(["high", "red"]);

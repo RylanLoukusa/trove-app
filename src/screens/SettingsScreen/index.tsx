@@ -46,14 +46,10 @@ export const SettingsScreen = ({ navigation }: Props) => {
   const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
   const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
-  const { isPro, presentPaywall, restorePurchases } = useEntitlement();
+  const { restorePurchases } = useEntitlement();
   const supabaseConfigured = useIsSupabaseConfigured();
 
   const [busy, setBusy] = useState(false);
-
-  const onEnableSync = useCallback((): void => {
-    presentPaywall("sync");
-  }, [presentPaywall]);
 
   const onRestorePurchases = useCallback(async (): Promise<void> => {
     const result = await restorePurchases();
@@ -193,16 +189,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
         ) : session?.user ? (
           <>
             <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
-            {isPro ? (
-              <Text style={styles.body}>Cloud sync is on — your folders stay backed up across devices.</Text>
-            ) : (
-              <>
-                <Text style={styles.body}>
-                  Your data stays on this device. Upgrade to Trove Pro to sync it across devices and share folders.
-                </Text>
-                <AppButton label="Enable cloud sync" onPress={onEnableSync} style={styles.button} />
-              </>
-            )}
+            <Text style={styles.body}>Cloud sync is on, so your lists and folders are backed up and on all your devices.</Text>
             <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
             <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.button} />
           </>

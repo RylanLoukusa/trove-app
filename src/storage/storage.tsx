@@ -3,7 +3,6 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import type { AppStateStatus } from "react-native";
 import { Alert, AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
-import { useEntitlement } from "../entitlements/EntitlementContext";
 import { getSupabase } from "../lib/supabase";
 import { syncShareExtensionFolders } from "../share/sharedImport";
 import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
@@ -36,7 +35,7 @@ import {
 } from "../sync/syncStatus";
 import { seedData, seedFolders, seedItems, seedListEntries } from "../data/seedData";
 import { isBaseDataSeeded, markBaseDataSeeded } from "./baseDataSeed";
-import { keepOwnDataFromDevice } from "./keepOwnData";
+import { isOwnDataUploaded, markOwnDataUploaded, mergeForFirstUpload } from "./firstUpload";
 import { isPinnedDefaultsDone, markPinnedDefaultsDone, planPinnedDefaults } from "./pinnedDefaults";
 import {
   isTagBackfillDone,
@@ -50,7 +49,6 @@ import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "..
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
-import { requiresProForSync } from "../utils/limits";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
 import { normalizeTroveData } from "../utils/itemTypes";
 import {
@@ -187,7 +185,6 @@ export const saveTroveData = async (data: TroveData, userId?: string | null): Pr
 
 const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
-  const { isPro, isLoading: isEntitlementLoading } = useEntitlement();
   const [data, setDataState] = useState<TroveData>(seedData);
   // Every local change goes through here so that removing a line also removes
   // it from any focus list that shows it.
@@ -222,13 +219,6 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const remoteRowExistsRef = useRef(false);
   const pendingRemotePushRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  // Without Pro a person's own folders and lists never go up to the server, so
-  // a pull must not swap them for the server's out-of-date copy. Until it is
-  // known whether they have Pro, nothing is pulled.
-  const ownDataStaysOnDeviceRef = useRef(requiresProForSync(isPro));
-  ownDataStaysOnDeviceRef.current = requiresProForSync(isPro);
-  const entitlementKnownRef = useRef(!isEntitlementLoading);
-  entitlementKnownRef.current = !isEntitlementLoading;
   const lastForegroundRefreshAtRef = useRef(0);
 
   const setAndPersistSyncSnapshot = useCallback(
@@ -242,13 +232,13 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const markLocalChangePending = useCallback(() => {
-    if (!activeUserId || requiresProForSync(isPro)) return;
+    if (!activeUserId) return;
     setSyncSnapshot((current) => {
       const nextSnapshot = queuedSyncSnapshot(current);
       void saveSyncSnapshot(activeUserId, nextSnapshot);
       return nextSnapshot;
     });
-  }, [activeUserId, isPro]);
+  }, [activeUserId]);
 
   const applyPushResult = useCallback(
     (result: PushTroveResult, fallbackError: string): { ok: boolean; error?: string } => {
@@ -341,7 +331,6 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       setInitialPullSettledFor("anonymous");
       return;
     }
-    if (isEntitlementLoading) return;
 
     const supabase = getSupabase();
     if (!supabase) {
@@ -363,6 +352,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
 
     void (async () => {
       try {
+        // Lists kept only on this device (before every account synced) are
+        // merged with the server's copy and uploaded, rather than replaced.
+        const seenBefore = (await isOwnDataUploaded(userId)) ? null : await loadSyncBaseline(userId);
+        if (cancelled) return;
+        let upload: TroveData | null = null;
         const result = await pullTroveDataForUser(supabase, userId);
         if (cancelled) return;
         pulled = result.kind !== "error";
@@ -370,11 +364,12 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
           skipNextRemotePushRef.current = true;
-          setData(
-            ownDataStaysOnDeviceRef.current
-              ? (current) => keepOwnDataFromDevice(current, result.data, userId)
-              : result.data,
-          );
+          if (seenBefore) {
+            upload = mergeForFirstUpload(dataRef.current, result.data, userId, seenBefore);
+            setData(upload);
+          } else {
+            setData(result.data);
+          }
         } else if (result.kind === "noop_up_to_date") {
           remoteRowExistsRef.current = true;
           shouldAllowRemotePush = true;
@@ -382,6 +377,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
           if (!cancelled) {
             skipNextRemotePushRef.current = true;
             setData(local);
+            if (seenBefore) upload = local;
           }
         } else if (result.kind === "no_row") {
           shouldAllowRemotePush = true;
@@ -427,10 +423,16 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
             }));
             markLocalChangePending();
             await markBaseDataSeeded(userId);
-          } else if (isPro && hasTroveData(dataRef.current)) {
+          } else if (hasTroveData(dataRef.current)) {
             const ensured = await ensureRemoteRowForUser(supabase, userId, dataRef.current);
             remoteRowExistsRef.current = ensured.created;
+            if (ensured.created) await markOwnDataUploaded(userId);
           }
+        }
+        if (upload && !cancelled) {
+          const pushed = await pushTroveDataForUser(supabase, userId, upload);
+          if (!cancelled) applyPushResult(pushed, "Unable to sync Trove data.");
+          if (pushed.ok) await markOwnDataUploaded(userId);
         }
       } finally {
         if (!cancelled) {
@@ -445,22 +447,21 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [activeUserId, isEntitlementLoading, isReady, isAuthReady]);
+  }, [activeUserId, isReady, isAuthReady]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady) return;
     const userId = activeUserId;
     if (!userId) return;
-    // Free users can still receive folders shared with them (the pull effect above),
-    // but their own local data never gets pushed to the cloud without Pro.
-    if (requiresProForSync(isPro)) return;
     const supabase = getSupabase();
     if (!supabase) return;
-    if (skipRemotePushRef.current) return;
+    // The change that put pulled data in place needs no push. It is let go
+    // first, even mid-pull, or it would swallow the next real change instead.
     if (skipNextRemotePushRef.current) {
       skipNextRemotePushRef.current = false;
       return;
     }
+    if (skipRemotePushRef.current) return;
     if (!remoteRowExistsRef.current && !hasTroveData(data)) return;
 
     pendingRemotePushRef.current = true;
@@ -497,7 +498,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         pendingRemotePushRef.current = false;
       }
     };
-  }, [activeUserId, applyPushResult, data, isPro, isReady, isAuthReady]);
+  }, [activeUserId, applyPushResult, data, isReady, isAuthReady]);
 
   const createFolder = useCallback<TroveContextValue["createFolder"]>((input) => {
     const parentFolder = dataRef.current.folders.find((folder) => folder.id === input.parentFolderId);
@@ -1223,10 +1224,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     if (!supabase) {
       return { ok: false, error: "Supabase not configured." };
     }
-    // Pulled once it's known whose copy of their own lists counts.
-    if (!entitlementKnownRef.current) return { ok: true };
-
     try {
+      // Until this device's own lists are on the server, its copy of them
+      // wins (see the first pull after loading).
+      const seenBefore = (await isOwnDataUploaded(userId)) ? null : await loadSyncBaseline(userId);
       if (options?.force) {
         await clearStoredRemoteUpdatedAt(userId);
       }
@@ -1234,13 +1235,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       const result = await pullTroveDataForUser(supabase, userId);
 
       if (result.kind === "applied") {
-        skipNextRemotePushRef.current = true;
+        // A merge is sent back up; the server's own copy needs no push.
+        skipNextRemotePushRef.current = !seenBefore;
         skipRemotePushRef.current = false;
-        setData(
-          ownDataStaysOnDeviceRef.current
-            ? (current) => keepOwnDataFromDevice(current, result.data, userId)
-            : result.data,
-        );
+        setData(seenBefore ? (current) => mergeForFirstUpload(current, result.data, userId, seenBefore) : result.data);
         remoteRowExistsRef.current = true;
         setAndPersistSyncSnapshot(syncedSyncSnapshot());
         return { ok: true };
@@ -1287,10 +1285,6 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, error: "Sign in to sync folders before sharing." };
     }
 
-    if (requiresProForSync(isPro)) {
-      return { ok: false, error: "Cloud sync requires Trove Pro." };
-    }
-
     const supabase = getSupabase();
     if (!supabase) {
       return { ok: false, error: "Supabase not configured." };
@@ -1302,7 +1296,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     pendingRemotePushRef.current = false;
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
-  }, [activeUserId, applyPushResult, isPro, setAndPersistSyncSnapshot]);
+  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
   const syncFolderForSharing = useCallback<TroveContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
@@ -1324,7 +1318,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     pendingRemotePushRef.current = false;
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
-  }, [activeUserId, applyPushResult, isPro, setAndPersistSyncSnapshot]);
+  }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
   const resolveSyncConflict = useCallback<TroveContextValue["resolveSyncConflict"]>(async (resolution) => {
     const userId = activeUserId;
