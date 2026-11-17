@@ -38,6 +38,7 @@ import { RecentlyDeletedScreen } from "./src/screens/RecentlyDeletedScreen";
 import { ArchivedScreen } from "./src/screens/ArchivedScreen";
 import { TemplatesScreen } from "./src/screens/TemplatesScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
+import { ShareListScreen } from "./src/screens/ShareListScreen";
 import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
 import {
   clearSharedImport,
@@ -59,6 +60,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AcceptFolderInvite: "share-invite/:token",
       PublicFolderPreview: "shared/:token",
       ShareFolder: "folder/:folderId/share",
+      ShareList: "item/:listId/share",
       Folder: "folder/:folderId",
       Home: "home",
       List: "item/:listId",
@@ -212,6 +214,7 @@ function AppNavigator() {
             <Stack.Screen name="ManageTags" component={ManageTagsScreen} />
             <Stack.Screen name="AddEditTagGroup" component={AddEditTagGroupScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
+            <Stack.Screen name="ShareList" component={ShareListScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
           </>
         ) : (

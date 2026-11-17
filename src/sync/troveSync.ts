@@ -267,6 +267,11 @@ const hasTroveData = (data: TroveData): boolean =>
 const writableItemsForUser = (troveData: TroveData, userId: string): SavedItem[] => {
   const foldersById = new Map(troveData.folders.map((folder) => [folder.id, folder]));
   return troveData.items.filter((item) => {
+    // A list shared with this person on its own, to edit.
+    if (item.sharedWithMe) {
+      return item.accessRole === "editor";
+    }
+
     if (!item.folderId) {
       return (item.ownerId ?? userId) === userId;
     }
@@ -414,14 +419,50 @@ const FOCUS_RULES: FocusRule[] = ["due_today", "due_week", "due_weekend", "high_
 const focusRuleValue = (value: string | null): FocusRule | undefined =>
   FOCUS_RULES.find((rule) => rule === value);
 
+// The lists shared on their own, from trove_list_share_summary.
+type ListShareSummaryRow = {
+  item_id: string;
+  direction: "in" | "out";
+  role: "viewer" | "editor" | null;
+  people: number;
+  owner_name: string | null;
+  updated_at: string | null;
+};
+
+type ListShares = {
+  withMe: Map<string, ListShareSummaryRow>;
+  byMe: Map<string, number>;
+};
+
+const noListShares: ListShares = { withMe: new Map(), byMe: new Map() };
+
+const listSharesFromRows = (rows: ListShareSummaryRow[]): ListShares => ({
+  withMe: new Map(rows.filter((row) => row.direction === "in").map((row) => [row.item_id, row])),
+  byMe: new Map(rows.filter((row) => row.direction === "out").map((row) => [row.item_id, row.people])),
+});
+
 const itemRowToSavedItem = (
   row: ItemRow,
   userId: string,
   folderAccessById: Map<string, AccessRole>,
-): SavedItem =>
-  normalizeSavedItem({
+  listShares: ListShares = noListShares,
+): SavedItem => {
+  const folderRole = row.folder_id ? folderAccessById.get(row.folder_id) : undefined;
+  const shareWithMe = row.owner_id === userId ? undefined : listShares.withMe.get(row.id);
+  const sharedWith = row.owner_id === userId ? listShares.byMe.get(row.id) : undefined;
+  // Shared on its own and not through a folder this person has: it shows on
+  // their Home, as their app knows nothing of the owner's folder.
+  const onItsOwn = !!shareWithMe && !folderRole;
+  const roleRank = { viewer: 1, editor: 2, owner: 3 } as const;
+  const accessRole: AccessRole =
+    row.owner_id === userId
+      ? "owner"
+      : [folderRole, shareWithMe?.role ?? undefined]
+          .filter((role): role is AccessRole => !!role)
+          .sort((a, b) => roleRank[b] - roleRank[a])[0] ?? "viewer";
+  return normalizeSavedItem({
     id: row.id,
-    folderId: row.folder_id ?? "",
+    folderId: onItsOwn ? "" : row.folder_id ?? "",
     title: row.title,
     description: row.description ?? undefined,
     type: normalizeItemType(row.type),
@@ -448,13 +489,16 @@ const itemRowToSavedItem = (
     ...decodeListTags(stringArray(row.tags)),
     ownerId: row.owner_id,
     createdBy: row.created_by ?? undefined,
-    accessRole: row.owner_id === userId ? "owner" : row.folder_id ? folderAccessById.get(row.folder_id) ?? "viewer" : "viewer",
+    accessRole,
+    ...(onItsOwn ? { sharedWithMe: shareWithMe.owner_name ? { by: shareWithMe.owner_name } : {} } : {}),
+    ...(sharedWith ? { sharedWith } : {}),
     notes: row.notes ?? undefined,
     listMode: row.type === "list" && row.list_mode === "focus" ? "focus" : undefined,
     focusRule: row.type === "list" && row.list_mode === "focus" ? focusRuleValue(row.focus_rule) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
+};
 
 const folderToRow = (folder: Folder, userId: string): FolderRow => ({
   id: folder.id,
@@ -937,6 +981,29 @@ const fetchLegacyTroveDataForUser = async (
   };
 };
 
+const isMissingFunctionError = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  return (
+    candidate.code === "PGRST202" ||
+    candidate.code === "42883" ||
+    message.includes("Could not find the function") ||
+    message.includes("schema cache")
+  );
+};
+
+const claimListInvites = async (supabase: SupabaseClient): Promise<void> => {
+  try {
+    const result = await supabase.rpc("trove_claim_list_invites");
+    if (result?.error && !isMissingFunctionError(result.error)) {
+      console.warn("Failed to claim shared lists", result.error);
+    }
+  } catch (error) {
+    console.warn("Failed to claim shared lists", error);
+  }
+};
+
 const fetchNormalizedTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
@@ -959,6 +1026,7 @@ const fetchNormalizedTroveDataForUser = async (
     tagGroupsResult,
     tagOptionsResult,
     listEntriesResult,
+    listSharesResult,
   ] = await Promise.all([
     supabase
       .from("trove_sync_state")
@@ -1012,6 +1080,7 @@ const fetchNormalizedTroveDataForUser = async (
       .from("trove_tag_options")
       .select("id, group_id, name, color, sort_order, created_at, updated_at"),
     supabase.from("trove_list_entries").select(LIST_ENTRY_COLUMNS),
+    supabase.rpc("trove_list_share_summary"),
   ]);
 
   if (syncStateResult.error) {
@@ -1049,6 +1118,15 @@ const fetchNormalizedTroveDataForUser = async (
     return { kind: "error" };
   }
 
+  // A server without list sharing yet has no summary; lists then come only
+  // through folders, as before.
+  if (listSharesResult?.error && !isMissingFunctionError(listSharesResult.error)) {
+    console.warn("Failed to pull shared lists", listSharesResult.error);
+    return { kind: "error" };
+  }
+
+  const listShareRows = listSharesResult?.error ? [] : ((listSharesResult?.data ?? []) as ListShareSummaryRow[]);
+  const listShares = listSharesFromRows(listShareRows);
   const folderRows = (foldersResult.data ?? []) as unknown as FolderRow[];
   const shares = (sharesResult.data ?? []) as unknown as ShareRow[];
   const folderRowsById = new Map(folderRows.map((folder) => [folder.id, folder]));
@@ -1061,7 +1139,7 @@ const fetchNormalizedTroveDataForUser = async (
   const itemRows = (itemsResult.data ?? []) as unknown as ItemRow[];
   const items = itemRows
     .filter((item) => item.type === "list")
-    .map((item) => itemRowToSavedItem(item, userId, folderAccessById));
+    .map((item) => itemRowToSavedItem(item, userId, folderAccessById, listShares));
   const legacyItems = itemRows.filter((item) => isOwnLegacyItemRow(item, userId));
   const tagGroups = ((tagGroupsResult.data ?? []) as unknown as TagGroupRow[]).map(tagGroupRowToTagGroup);
   const tagOptions = ((tagOptionsResult.data ?? []) as unknown as TagOptionRow[]).map(tagOptionRowToTagOption);
@@ -1072,6 +1150,7 @@ const fetchNormalizedTroveDataForUser = async (
     ...items.map((item) => item.updatedAt),
     ...listEntryRows.map((entry) => entry.updated_at),
     ...shares.map((share) => share.updated_at),
+    ...listShareRows.map((share) => share.updated_at),
     ...tagGroups.map((tagGroup) => tagGroup.updatedAt),
     ...tagOptions.map((tagOption) => tagOption.updatedAt),
   ]);
@@ -1910,6 +1989,8 @@ const pullTroveDataForUser = async (
   supabase: SupabaseClient,
   userId: string,
 ): Promise<PullTroveResult> => {
+  // Lists shared by email before this person had an account become theirs.
+  await claimListInvites(supabase);
   const normalizedResult = await fetchNormalizedTroveDataForUser(supabase, userId);
   if (normalizedResult.kind === "error") {
     return { kind: "error" };
@@ -2053,6 +2134,11 @@ const subscribeTroveRealtimeForUser = (
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "trove_folder_share_invites" },
+      scheduleRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "trove_list_shares" },
       scheduleRefresh,
     )
     .on(

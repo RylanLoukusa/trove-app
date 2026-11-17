@@ -406,3 +406,23 @@ describe("TroveProvider repeating lines and lists that start over", () => {
     expect(Date.parse(chores.resetAt!)).toBeGreaterThan(Date.parse(yesterday));
   });
 });
+
+describe("TroveProvider lists shared on their own", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+  });
+
+  it("can't leave a shared list without being signed in, and keeps it", async () => {
+    const shared = list("party", "Party", "", { ownerId: "ann", accessRole: "editor", sharedWithMe: { by: "Ann" } });
+    const hook = await renderTrove({ ...data, items: [...data.items, shared] });
+
+    let result: { ok: boolean; error?: string } | undefined;
+    await act(async () => {
+      result = await hook.result.current.leaveSharedList("party");
+    });
+
+    expect(result).toEqual({ ok: false, error: "Sign in to leave a shared list." });
+    expect(hook.result.current.items.find((item) => item.id === "party")).toMatchObject({ sharedWithMe: { by: "Ann" } });
+  });
+});

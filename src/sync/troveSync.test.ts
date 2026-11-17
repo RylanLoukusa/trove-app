@@ -385,7 +385,7 @@ describe("list entries sync", () => {
     expect(result.ok).toBe(false);
     expect(result.conflict).toMatchObject({ entityKind: "listEntries", entityId: "e1", reason: "remote_changed" });
     expect(result.conflict?.fields?.map((field) => field.field)).toEqual(["text"]);
-    expect(rpcCalls).toHaveLength(0);
+    expect(rpcCalls.map(([name]) => name)).toEqual(["trove_list_share_summary"]);
   });
 
   it("does not re-upload a line someone else deleted that this device never changed", async () => {
@@ -578,7 +578,11 @@ describe("notes, links and photos from before Trove kept only lists", () => {
 
     expect(result.kind).toBe("applied");
     expect(deletedIds).toEqual([]);
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    // Only the lists shared with this person are asked for.
+    expect((supabase.rpc.mock.calls as Array<[string]>).map(([name]) => name).sort()).toEqual([
+      "trove_claim_list_invites",
+      "trove_list_share_summary",
+    ]);
     expect(supabase.storage.from).not.toHaveBeenCalled();
   });
 
@@ -596,7 +600,10 @@ describe("notes, links and photos from before Trove kept only lists", () => {
 
   it("still finishes the pull when the server refuses a delete", async () => {
     const { result, deletedIds } = await pullWith([itemRow(), note], (supabase) => {
-      supabase.rpc.mockRejectedValue(new Error("Network request failed"));
+      supabase.rpc.mockImplementation(async (name: string) => {
+        if (name === "trove_delete_item_for_current_user") throw new Error("Network request failed");
+        return { data: [], error: null };
+      });
     });
 
     expect(deletedIds).toEqual(["note-1"]);
@@ -637,5 +644,89 @@ describe("notes, links and photos from before Trove kept only lists", () => {
 
     expect(result.ok).toBe(true);
     expect(args("trove_delete_missing_items_for_current_user")).toMatchObject({ local_item_ids: ["list-1", "note-1"] });
+  });
+});
+
+describe("lists shared on their own", () => {
+  afterEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  const summaryRows = [
+    { item_id: "their-list", direction: "in", role: "editor", people: 1, owner_name: "Ann", updated_at: "2026-03-03T00:00:00.000Z" },
+    { item_id: "their-view", direction: "in", role: "viewer", people: 1, owner_name: null, updated_at: "2026-03-01T00:00:00.000Z" },
+    { item_id: "list-1", direction: "out", role: null, people: 2, owner_name: null, updated_at: "2026-03-01T00:00:00.000Z" },
+  ];
+  const theirs = (id: string) => itemRow({ id, owner_id: "user-2", created_by: "user-2", folder_id: "their-folder" });
+
+  const pullShared = async () => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_folders: { data: [folderRow()], error: null },
+      trove_items: { data: [itemRow(), theirs("their-list"), theirs("their-view")], error: null },
+    });
+    supabase.rpc.mockImplementation(async (name: string) =>
+      name === "trove_list_share_summary" ? { data: summaryRows, error: null } : { data: 0, error: null },
+    );
+    return { supabase, result: await pullTroveDataForUser(supabase, userId) };
+  };
+
+  it("puts a list shared with this person on their Home, with their role and who shared it", async () => {
+    const { supabase, result } = await pullShared();
+
+    expect(supabase.rpc).toHaveBeenCalledWith("trove_claim_list_invites");
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    const byId = new Map(result.data.items.map((item) => [item.id, item]));
+    expect(byId.get("their-list")).toMatchObject({ folderId: "", accessRole: "editor", sharedWithMe: { by: "Ann" } });
+    expect(byId.get("their-view")).toMatchObject({ folderId: "", accessRole: "viewer", sharedWithMe: {} });
+    expect(byId.get("list-1")).toMatchObject({ folderId: "folder-1", accessRole: "owner", sharedWith: 2 });
+    expect(byId.get("list-1")?.sharedWithMe).toBeUndefined();
+    // A new share is news even when no list changed.
+    expect(result.remoteUpdatedAt).toBe("2026-03-03T00:00:00.000Z");
+  });
+
+  it("still pulls from a server that can't share single lists yet", async () => {
+    const supabase = createFakeSupabase({
+      ...emptyResponses,
+      trove_sync_state: { data: { updated_at: "2026-03-01T00:00:00.000Z", normalized_initialized: true }, error: null },
+      trove_items: { data: [itemRow({ folder_id: null })], error: null },
+    });
+    supabase.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
+
+    const result = await pullTroveDataForUser(supabase, userId);
+
+    expect(result.kind).toBe("applied");
+    if (result.kind !== "applied") return;
+    expect(result.data.items.map((item) => item.id)).toEqual(["list-1"]);
+  });
+
+  it("sends up changes to a shared list this person can edit, but not to one they can only view", async () => {
+    const shared = (id: string, accessRole: "editor" | "viewer"): SavedItem => ({
+      ...list,
+      id,
+      folderId: "",
+      title: `${id} changed here`,
+      ownerId: "user-2",
+      accessRole,
+      sharedWithMe: { by: "Ann" },
+      updatedAt: "2026-03-05T00:00:00.000Z",
+    });
+    const local: TroveData = {
+      folders: [folder],
+      items: [list, shared("their-list", "editor"), shared("their-view", "viewer")],
+      listEntries: [],
+      tagGroups: [],
+      tagOptions: [],
+    };
+
+    const { result, allArgs } = await pushWith(local, [], {}, { items: [itemRow(), theirs("their-list"), theirs("their-view")] });
+
+    expect(result.ok).toBe(true);
+    const upserted = allArgs("trove_upsert_item_for_current_user");
+    expect(upserted.map((params) => params.target_item_id)).toContain("their-list");
+    expect(upserted.map((params) => params.target_item_id)).not.toContain("their-view");
+    expect(upserted.find((params) => params.target_item_id === "their-list")).toMatchObject({ target_folder_id: null });
   });
 });

@@ -4,6 +4,7 @@ import type { AppStateStatus } from "react-native";
 import { Alert, AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
 import { getSupabase } from "../lib/supabase";
+import { leaveSharedList as leaveSharedListOnServer } from "../collaboration/listSharing";
 import { syncShareExtensionFolders } from "../share/sharedImport";
 import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
 import {
@@ -204,6 +205,9 @@ type TroveContextValue = TroveData & {
   resolveSyncConflict: (resolution: SyncConflictResolution) => Promise<{ ok: boolean; error?: string }>;
   syncFolderForSharing: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
   syncToRemote: () => Promise<{ ok: boolean; error?: string }>;
+  // Leaves a list someone shared with this person on its own: it goes from
+  // this device and stops syncing here. The owner's list is untouched.
+  leaveSharedList: (listId: string) => Promise<{ ok: boolean; error?: string }>;
   resetToSeed: () => void;
   clearLocalData: () => void;
 };
@@ -1402,6 +1406,32 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     return applyPushResult(result, "Unable to sync this folder before sharing.");
   }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
 
+  const leaveSharedList = useCallback<TroveContextValue["leaveSharedList"]>(async (listId) => {
+    const userId = activeUserId;
+    const supabase = getSupabase();
+    if (!userId || !supabase) {
+      return { ok: false, error: "Sign in to leave a shared list." };
+    }
+
+    const result = await leaveSharedListOnServer(supabase, listId, userId);
+    if (result.error) return { ok: false, error: result.error };
+
+    // Its lines also leave any list here that shows them.
+    setData((current) => {
+      const leaving = new Set(
+        current.listEntries.filter((entry) => entry.listId === listId).map((entry) => entry.id),
+      );
+      return {
+        ...current,
+        items: current.items.filter((item) => item.id !== listId),
+        listEntries: current.listEntries.filter(
+          (entry) => entry.listId !== listId && !(entry.refEntryId && leaving.has(entry.refEntryId)),
+        ),
+      };
+    });
+    return { ok: true };
+  }, [activeUserId, setData]);
+
   const syncFolderForSharing = useCallback<TroveContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
     if (!userId) {
@@ -1955,6 +1985,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
+      leaveSharedList,
       resetToSeed,
       clearLocalData,
     }),
@@ -2004,6 +2035,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
+      leaveSharedList,
       resetToSeed,
       clearLocalData,
     ],

@@ -604,6 +604,7 @@ describe("ListScreen", () => {
         "Duplicate",
         "Save as template",
         "Send as text",
+        "Share list",
         "Move to folder",
         "Archive",
         "Delete list",
@@ -634,6 +635,7 @@ describe("ListScreen", () => {
         "Add lines automatically",
         "Duplicate",
         "Save as template",
+        "Share list",
         "Move to folder",
         "Archive",
         "Delete list",
@@ -1304,6 +1306,36 @@ describe("ListScreen", () => {
       await leave();
 
       expect(savedList("party")).toBeDefined();
+    });
+
+    it("shared on its own says who shared it, and can be left but not moved or deleted", async () => {
+      await save({
+        items: [list("party", "Party", { folderId: "", accessRole: "editor", ownerId: "someone-else", sharedWithMe: { by: "Ann" } })],
+        listEntries: [line("Balloons", "party")],
+      });
+      await openList("party");
+
+      expect(caption("0 of 1 done · Shared by Ann · Can edit")).toBeTruthy();
+      expect(screen.getByText("Comments on item party")).toBeTruthy();
+      await openMenu();
+      expect(menuActions()).toContain("People on this list");
+      expect(menuActions()).toContain("Leave list");
+      expect(menuActions()).not.toContain("Delete list");
+      expect(menuActions()).not.toContain("Move to folder");
+      expect(menuActions()).not.toContain("Archive");
+    });
+
+    it("can be shared by its owner, and says with how many people", async () => {
+      await save({ items: [list("party", "Party", { folderId: "", sharedWith: 2 })], listEntries: [line("Balloons", "party")] });
+      await openList("party");
+
+      expect(caption("0 of 1 done · Shared with 2 people")).toBeTruthy();
+      expect(screen.getByText("Comments on item party")).toBeTruthy();
+      await openMenu();
+      expect(within(screen.getByLabelText("Share list")).getByText("2 people")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Share list"));
+
+      expect(navigation.navigate).toHaveBeenCalledWith("ShareList", { listId: "party" });
     });
 
     it("has its comments underneath", async () => {

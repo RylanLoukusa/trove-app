@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useState } from "react";
 import { Alert } from "react-native";
-import { Archive, Copy, FolderInput, Pin, PinOff, Trash2 } from "lucide-react-native";
+import { Archive, Copy, FolderInput, LogOut, Pin, PinOff, Trash2 } from "lucide-react-native";
 
 import { FolderTreeBrowserModal } from "./FolderTreeBrowserModal";
 import { MenuSheet } from "./MenuSheet";
@@ -14,7 +14,7 @@ import { listDisplayTitle } from "../utils/listEntries";
 // `overlays` last in the screen's root view.
 export const useListRowActions = (): { openListActions: (listId: string) => void; overlays: ReactNode } => {
   const colors = useThemeColors();
-  const { folders, items, updateItem, trashItem, setItemArchived, copyItem, canEditItem } = useTrove();
+  const { folders, items, updateItem, trashItem, setItemArchived, copyItem, canEditItem, leaveSharedList } = useTrove();
   const [actionListId, setActionListId] = useState<string | null>(null);
   const [movingListId, setMovingListId] = useState<string | null>(null);
   const actionList = items.find((item) => item.id === actionListId);
@@ -22,10 +22,25 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
 
   const openListActions = useCallback(
     (listId: string) => {
-      if (canEditItem(listId)) setActionListId(listId);
+      const list = items.find((item) => item.id === listId);
+      if (canEditItem(listId) || list?.sharedWithMe) setActionListId(listId);
     },
-    [canEditItem],
+    [canEditItem, items],
   );
+
+  const leave = (listId: string) => {
+    Alert.alert("Leave this list?", "It goes from your Trove. The owner keeps it, and can share it with you again.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: () =>
+          void leaveSharedList(listId).then((result) => {
+            if (!result.ok) Alert.alert("Could not leave list", result.error ?? "Try again in a moment.");
+          }),
+      },
+    ]);
+  };
 
   // No "are you sure": a deleted list waits in Recently deleted for 30 days.
   const moveToDeleted = (listId: string) => {
@@ -39,7 +54,25 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
         visible={!!actionList}
         title={actionList ? listDisplayTitle(actionList, actionList.listItems) : undefined}
         actions={
-          actionList
+          actionList?.sharedWithMe
+            ? [
+                // Shared with this person on its own: the rest is the owner's.
+                {
+                  key: "copy",
+                  label: "Duplicate",
+                  icon: <Copy size={20} color={colors.accentDark} />,
+                  onPress: () => void copyItem(actionList.id),
+                },
+                {
+                  key: "leave",
+                  label: "Leave list",
+                  icon: <LogOut size={20} color={colors.danger} />,
+                  destructive: true,
+                  separated: true,
+                  onPress: () => leave(actionList.id),
+                },
+              ]
+            : actionList
             ? [
                 // Pinning is the owner's own choice, so a list shared with them can't be.
                 ...(isSharedAccess(actionList)

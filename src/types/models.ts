@@ -166,6 +166,12 @@ export type SavedItem = {
   ownerId?: string;
   createdBy?: string;
   accessRole?: AccessRole;
+  // Set by sync, never sent up. `sharedWithMe`: this list was shared with
+  // this person on its own (not through a folder), by `by`; it shows on
+  // their Home. `sharedWith`: how many people the owner shared it with,
+  // counting invites still waiting.
+  sharedWithMe?: { by?: string };
+  sharedWith?: number;
   createdAt: string;
   updatedAt: string;
   notes?: string;
