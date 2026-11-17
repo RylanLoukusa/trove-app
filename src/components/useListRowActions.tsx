@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useState } from "react";
 import { Alert } from "react-native";
-import { FolderInput, Pin, PinOff, Trash2 } from "lucide-react-native";
+import { Archive, Copy, FolderInput, Pin, PinOff, Trash2 } from "lucide-react-native";
 
 import { FolderTreeBrowserModal } from "./FolderTreeBrowserModal";
 import { MenuSheet } from "./MenuSheet";
@@ -10,11 +10,11 @@ import { isSharedAccess } from "../utils/access";
 import { getFolderPathLabel } from "../utils/folderTree";
 import { listDisplayTitle } from "../utils/listEntries";
 
-// Holding a list's row offers to pin it, move it to a folder or delete it. Put
+// Holding a list's row offers to pin, copy, move, archive or delete it. Put
 // `overlays` last in the screen's root view.
 export const useListRowActions = (): { openListActions: (listId: string) => void; overlays: ReactNode } => {
   const colors = useThemeColors();
-  const { folders, items, updateItem, deleteItem, canEditItem } = useTrove();
+  const { folders, items, updateItem, trashItem, setItemArchived, copyItem, canEditItem } = useTrove();
   const [actionListId, setActionListId] = useState<string | null>(null);
   const [movingListId, setMovingListId] = useState<string | null>(null);
   const actionList = items.find((item) => item.id === actionListId);
@@ -27,20 +27,10 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
     [canEditItem],
   );
 
-  const confirmDelete = (listId: string) => {
-    Alert.alert("Delete this list?", "Its lines are deleted too. Lines pulled in from other lists stay in those lists.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            const result = await deleteItem(listId);
-            if (!result.ok) Alert.alert("Could not delete list", result.error ?? "Try again in a moment.");
-          })();
-        },
-      },
-    ]);
+  // No "are you sure": a deleted list waits in Recently deleted for 30 days.
+  const moveToDeleted = (listId: string) => {
+    const result = trashItem(listId);
+    if (!result.ok) Alert.alert("Could not delete list", result.error ?? "Try again in a moment.");
   };
 
   const overlays = (
@@ -74,11 +64,24 @@ export const useListRowActions = (): { openListActions: (listId: string) => void
                   onPress: () => setMovingListId(actionList.id),
                 },
                 {
+                  key: "copy",
+                  label: "Duplicate",
+                  icon: <Copy size={20} color={colors.accentDark} />,
+                  onPress: () => void copyItem(actionList.id),
+                },
+                {
+                  key: "archive",
+                  label: "Archive",
+                  icon: <Archive size={20} color={colors.accentDark} />,
+                  separated: true,
+                  onPress: () => void setItemArchived(actionList.id, true),
+                },
+                {
                   key: "delete",
                   label: "Delete list",
                   icon: <Trash2 size={20} color={colors.danger} />,
                   destructive: true,
-                  onPress: () => confirmDelete(actionList.id),
+                  onPress: () => moveToDeleted(actionList.id),
                 },
               ]
             : []

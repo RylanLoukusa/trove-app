@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lucide-react-native";
+import { Archive, Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lucide-react-native";
 
 import { SkeletonBlock, SkeletonText } from "../../components";
 import { CommentThread } from "../../components/CommentThread";
@@ -25,7 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
 export const FolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, listEntries, createItem, deleteFolder, canManageFolder, canEditFolderContent } = useTrove();
+  const { folders, isReady, items, listEntries, createItem, trashFolder, setFolderArchived, canManageFolder, canEditFolderContent } = useTrove();
   const { openListActions, overlays } = useListRowActions();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -76,26 +76,38 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     await Share.share({ message: sections.join("\n\n") });
   }, [folder, lists, subfolders]);
 
+  const listsInside = folder ? countForFolder(folder.id) : 0;
+
   const confirmDelete = useCallback((): void => {
     if (!folder) return;
-    Alert.alert("Delete this folder?", "Its subfolders and every list inside them are deleted too.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            const result = await deleteFolder(folder.id);
-            if (!result.ok) {
-              Alert.alert("Could not delete folder", result.error ?? "Try again in a moment.");
-              return;
-            }
-            goBack();
-          })();
+    Alert.alert(
+      "Delete this folder?",
+      listsInside > 0
+        ? "It moves to Recently deleted with its subfolders and lists. You can put it back for 30 days."
+        : "It has no lists in it, so it is deleted straight away.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              const result = await trashFolder(folder.id);
+              if (!result.ok) {
+                Alert.alert("Could not delete folder", result.error ?? "Try again in a moment.");
+                return;
+              }
+              goBack();
+            })();
+          },
         },
-      },
-    ]);
-  }, [deleteFolder, folder, goBack]);
+      ],
+    );
+  }, [folder, goBack, listsInside, trashFolder]);
+
+  const archiveFolder = useCallback((): void => {
+    if (folder && setFolderArchived(folder.id, true)) goBack();
+  }, [folder, goBack, setFolderArchived]);
 
   if (!isReady || !folder) {
     return (
@@ -151,12 +163,23 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     },
     ...(canManage
       ? [
+          ...(listsInside > 0
+            ? [
+                {
+                  key: "archive",
+                  label: "Archive folder",
+                  icon: <Archive size={20} color={colors.accentDark} />,
+                  separated: true,
+                  onPress: archiveFolder,
+                },
+              ]
+            : []),
           {
             key: "delete",
             label: "Delete folder",
             icon: <Trash2 size={20} color={colors.danger} />,
             destructive: true,
-            separated: true,
+            separated: listsInside === 0,
             onPress: confirmDelete,
           },
         ]

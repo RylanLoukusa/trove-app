@@ -321,13 +321,21 @@ Deno.serve(async (request) => {
           )
         : [rootFolder];
 
-    const itemRows = await serviceFetch<ItemRow[]>(
+    const allItemRows = await serviceFetch<ItemRow[]>(
       `/rest/v1/trove_items?select=id,folder_id,title,description,type,url,source_url,source_platform,shared_text,media,media_items,attachments,list_items,rich_text,tags,created_at,updated_at&folder_id=in.${inList(folderIds)}&order=created_at.asc`,
       { method: "GET" },
     );
 
+    // The app marks a list as deleted, archived or a template with a tag;
+    // none of those belong on a public page.
+    const setAside = (tag: string): boolean =>
+      tag.startsWith("fmt:deleted:") || tag.startsWith("fmt:archived:") || tag === "fmt:template";
+    const itemRows = allItemRows.filter((row) => !(row.tags ?? []).some(setAside));
+
     const tagOptionsById = new Map<string, TagOptionRow>();
-    const tagOptionIds = Array.from(new Set(itemRows.flatMap((row) => row.tags ?? [])));
+    const tagOptionIds = Array.from(
+      new Set(itemRows.flatMap((row) => row.tags ?? []).filter((tag) => !tag.startsWith("fmt:"))),
+    );
     if (tagOptionIds.length > 0) {
       const tagOptions = await serviceFetch<TagOptionRow[]>(
         `/rest/v1/trove_tag_options?select=id,name,color&id=in.${inList(tagOptionIds)}`,

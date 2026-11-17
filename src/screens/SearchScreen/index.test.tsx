@@ -92,11 +92,12 @@ type Setup = {
   query?: string;
   isReady?: boolean;
   items?: SavedItem[];
+  archivedItems?: SavedItem[];
   listEntries?: ListEntry[];
 };
 
-const renderSearchScreen = async ({ query, isReady = true, items = lists, listEntries = [] }: Setup = {}) => {
-  mockUseTrove.mockReturnValue({ folders, isReady, items, listEntries });
+const renderSearchScreen = async ({ query, isReady = true, items = lists, listEntries = [], archivedItems = [] }: Setup = {}) => {
+  mockUseTrove.mockReturnValue({ folders, isReady, items, archivedItems, listEntries });
   const route = { key: "search-key", name: "Search", params: query === undefined ? undefined : { query } };
   navigation.getState.mockReturnValue({ routes: [{ key: "home-key", name: "Home" }, route] });
   await renderScreen(<SearchScreen navigation={navigation as unknown as Navigation} route={route as unknown as Route} />);
@@ -251,6 +252,18 @@ describe("SearchScreen", () => {
       await search("bread");
 
       expect(rowLabels()).toEqual(["Breadcrumbs, on Today", "Bread, on Groceries"]);
+    });
+
+    it("finds archived lists and their lines too", async () => {
+      await renderSearchScreen({
+        archivedItems: [makeList({ id: "old-trip", title: "Lisbon 2024", listItems: [line("o1", "Zebra crossing photo")] })],
+      });
+
+      await search("lisbon");
+      expect(rowLabels()).toEqual(["Lisbon 2024"]);
+
+      await search("zebra");
+      expect(rowLabels()).toEqual(["Zebra crossing photo, on Lisbon 2024"]);
     });
 
     it("says so when nothing matches", async () => {

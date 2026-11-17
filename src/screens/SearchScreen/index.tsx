@@ -24,7 +24,9 @@ const RECENT_LIMIT = 8;
 export const SearchScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items, listEntries } = useTrove();
+  const { folders, isReady, items, archivedItems, listEntries } = useTrove();
+  // Archived lists are off Home but can still be found.
+  const searchable = useMemo(() => [...items, ...archivedItems], [archivedItems, items]);
   const [query, setQuery] = useState(route.params?.query ?? "");
   const hasQuery = query.trim().length > 0;
 
@@ -36,9 +38,9 @@ export const SearchScreen = ({ navigation, route }: Props) => {
     [listEntries],
   );
   const results = useMemo(() => {
-    const found = searchTrove(query, folders, items, borrowedLineIds);
+    const found = searchTrove(query, folders, searchable, borrowedLineIds);
     return { ...found, lists: sortListsByActivity(found.lists, activity) };
-  }, [activity, borrowedLineIds, folders, items, query]);
+  }, [activity, borrowedLineIds, folders, query, searchable]);
   const foundNothing = results.folders.length + results.lists.length + results.lines.length === 0;
 
   const countForFolder = useCallback(

@@ -1,6 +1,6 @@
 import React, { createRef, forwardRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Keyboard, StyleSheet, Text } from "react-native";
+import { Keyboard, Linking, StyleSheet, Text } from "react-native";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react-native";
 import { State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
@@ -1436,5 +1436,25 @@ describe("targetIndexFor", () => {
     expect(targetIndexFor(0, 139, mixed)).toBe(1);
     expect(targetIndexFor(0, 141, mixed)).toBe(2);
     expect(targetIndexFor(2, -61, mixed)).toBe(1);
+  });
+
+  describe("web links", () => {
+    it("offers each link in a line as a button that opens it", async () => {
+      const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+      await renderList([
+        entry("recipe", { text: "Soup https://example.com/soup and www.shop.co.uk" }),
+        entry("plain", { text: "No links here" }),
+      ]);
+
+      expect(screen.getAllByRole("link").map((link) => link.props.accessibilityLabel)).toEqual([
+        "Open example.com",
+        "Open shop.co.uk",
+      ]);
+
+      await fireEvent.press(screen.getByLabelText("Open shop.co.uk"));
+
+      expect(openURL).toHaveBeenCalledWith("https://www.shop.co.uk");
+      openURL.mockRestore();
+    });
   });
 });

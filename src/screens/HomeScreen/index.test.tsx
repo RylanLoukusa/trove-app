@@ -120,7 +120,9 @@ const signOut = jest.fn();
 const syncToRemote = jest.fn();
 const createItem = jest.fn();
 const updateItem = jest.fn();
-const deleteItem = jest.fn();
+const trashItem = jest.fn();
+const setItemArchived = jest.fn();
+const copyItem = jest.fn();
 const canEditItem = jest.fn();
 const presentPaywall = jest.fn();
 const maybeStart = jest.fn();
@@ -157,7 +159,9 @@ const renderHomeScreen = async ({
     syncToRemote,
     createItem,
     updateItem,
-    deleteItem,
+    trashItem,
+    setItemArchived,
+    copyItem,
     canEditItem,
   });
   mockUseEntitlement.mockReturnValue({
@@ -378,21 +382,27 @@ describe("HomeScreen", () => {
       expect(navigation.navigate).not.toHaveBeenCalled();
     });
 
-    it("deletes the list only after it is confirmed", async () => {
-      deleteItem.mockResolvedValue({ ok: true });
+    it("moves the list to Recently deleted without asking", async () => {
+      trashItem.mockReturnValue({ ok: true });
       await renderHomeScreen();
 
       await fireEvent(screen.getByLabelText("Groceries"), "longPress");
       await fireEvent.press(screen.getByLabelText("Delete list"));
 
-      expect(deleteItem).not.toHaveBeenCalled();
-      expect(alertSpy).toHaveBeenCalledWith("Delete this list?", expect.any(String), expect.any(Array));
-      const buttons = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
-      expect(buttons.map((button) => button.text)).toEqual(["Cancel", "Delete"]);
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(trashItem).toHaveBeenCalledWith("groceries");
+    });
 
-      buttons[1].onPress?.();
+    it("duplicates or archives the list", async () => {
+      await renderHomeScreen();
 
-      expect(deleteItem).toHaveBeenCalledWith("groceries");
+      await fireEvent(screen.getByLabelText("Groceries"), "longPress");
+      await fireEvent.press(screen.getByLabelText("Duplicate"));
+      expect(copyItem).toHaveBeenCalledWith("groceries");
+
+      await fireEvent(screen.getByLabelText("Groceries"), "longPress");
+      await fireEvent.press(screen.getByLabelText("Archive"));
+      expect(setItemArchived).toHaveBeenCalledWith("groceries", true);
     });
 
     it("offers nothing for a list this person can only view", async () => {

@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
-import { Ellipsis, LogIn, LogOut, Search, Settings, Sparkles, UserRound } from "lucide-react-native";
+import { Archive, Ellipsis, LayoutTemplate, LogIn, LogOut, Search, Settings, Sparkles, Trash2, UserRound } from "lucide-react-native";
 
 import { SkeletonBlock, SkeletonText } from "../../components";
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
@@ -96,12 +96,32 @@ export const HomeScreen = ({ navigation }: Props) => {
   }, [navigation, syncSnapshot.status, syncToRemote]);
 
   const menuActions: MenuAction[] = [
+    {
+      key: "templates",
+      label: "New list from a template",
+      icon: <LayoutTemplate size={20} color={colors.accentDark} />,
+      onPress: () => navigation.navigate("Templates"),
+    },
+    {
+      key: "archived",
+      label: "Archived",
+      icon: <Archive size={20} color={colors.accentDark} />,
+      separated: true,
+      onPress: () => navigation.navigate("Archived"),
+    },
+    {
+      key: "deleted",
+      label: "Recently deleted",
+      icon: <Trash2 size={20} color={colors.accentDark} />,
+      onPress: () => navigation.navigate("RecentlyDeleted"),
+    },
     ...(session?.user
       ? [
           {
             key: "profile",
             label: "Profile",
             icon: <UserRound size={20} color={colors.accentDark} />,
+            separated: true,
             onPress: () => navigation.navigate("Profile"),
           },
         ]
@@ -110,6 +130,7 @@ export const HomeScreen = ({ navigation }: Props) => {
       key: "settings",
       label: "Settings",
       icon: <Settings size={20} color={colors.accentDark} />,
+      separated: !session?.user,
       onPress: () => navigation.navigate("Settings"),
     },
     session?.user

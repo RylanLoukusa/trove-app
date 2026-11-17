@@ -157,6 +157,49 @@ export const ListRow = ({
   );
 };
 
+// A row with a title and a line of detail under it, for lists and folders
+// that are set aside (deleted, archived) and for templates.
+export const DetailRow = ({
+  title,
+  detail,
+  trailing,
+  onPress,
+  onLongPress,
+  hint,
+}: {
+  title: string;
+  detail?: string;
+  trailing?: string;
+  onPress: () => void;
+  onLongPress?: () => void;
+  hint?: string;
+}) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${title}, ${detail}` : title}
+      accessibilityHint={hint}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={({ pressed }) => [styles.row, styles.listRow, pressed && styles.rowPressed]}
+    >
+      <View style={styles.listText}>
+        <Text numberOfLines={1} style={styles.listTitle}>
+          {title}
+        </Text>
+        {!!detail && (
+          <Text numberOfLines={1} style={[styles.listDate, styles.detail]}>
+            {detail}
+          </Text>
+        )}
+      </View>
+      {!!trailing && <Text style={styles.count}>{trailing}</Text>}
+    </Pressable>
+  );
+};
+
 // The floating button that starts a new list.
 export const ComposeButton = ({ onPress, label = "New list" }: { onPress: () => void; label?: string }) => {
   const colors = useThemeColors();
@@ -273,6 +316,9 @@ const createStyles = (colors: ThemeColors) =>
     listDate: {
       color: colors.muted,
       fontSize: 14,
+    },
+    detail: {
+      marginTop: 3,
     },
     listFolder: {
       color: withAlpha(colors.muted, 0.85),

@@ -90,8 +90,11 @@ const navigation = {
 
 const createItem = jest.fn();
 const updateItem = jest.fn();
-const deleteItem = jest.fn();
-const deleteFolder = jest.fn();
+const trashItem = jest.fn();
+const trashFolder = jest.fn();
+const setFolderArchived = jest.fn();
+const setItemArchived = jest.fn();
+const copyItem = jest.fn();
 const canManageFolder = jest.fn();
 const canEditFolderContent = jest.fn();
 const canEditItem = jest.fn();
@@ -121,8 +124,11 @@ const renderFolderScreen = async ({
     listEntries,
     createItem,
     updateItem,
-    deleteItem,
-    deleteFolder,
+    trashItem,
+    trashFolder,
+    setFolderArchived,
+    setItemArchived,
+    copyItem,
     canManageFolder,
     canEditFolderContent,
     canEditItem,
@@ -405,16 +411,16 @@ describe("FolderScreen", () => {
     });
 
     it("deletes the folder only after it is confirmed, then goes back", async () => {
-      deleteFolder.mockResolvedValue({ ok: true });
+      trashFolder.mockResolvedValue({ ok: true });
       await renderFolderScreen();
 
       await fireEvent.press(screen.getByLabelText("Folder options"));
       await fireEvent.press(screen.getByLabelText("Delete folder"));
 
-      expect(deleteFolder).not.toHaveBeenCalled();
+      expect(trashFolder).not.toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalledWith(
         "Delete this folder?",
-        "Its subfolders and every list inside them are deleted too.",
+        "It moves to Recently deleted with its subfolders and lists. You can put it back for 30 days.",
         expect.any(Array),
       );
       const buttons = alertSpy.mock.calls[0][2] as Array<{ text: string; style?: string; onPress?: () => void }>;
@@ -423,11 +429,22 @@ describe("FolderScreen", () => {
       buttons[1].onPress?.();
 
       await waitFor(() => expect(navigation.goBack).toHaveBeenCalledTimes(1));
-      expect(deleteFolder).toHaveBeenCalledWith("trips");
+      expect(trashFolder).toHaveBeenCalledWith("trips");
+    });
+
+    it("archives the folder and goes back", async () => {
+      setFolderArchived.mockReturnValue(true);
+      await renderFolderScreen();
+
+      await fireEvent.press(screen.getByLabelText("Folder options"));
+      await fireEvent.press(screen.getByLabelText("Archive folder"));
+
+      expect(setFolderArchived).toHaveBeenCalledWith("trips", true);
+      expect(navigation.goBack).toHaveBeenCalledTimes(1);
     });
 
     it("stays on the folder and says why when it could not be deleted", async () => {
-      deleteFolder.mockResolvedValue({ ok: false, error: "You're offline." });
+      trashFolder.mockResolvedValue({ ok: false, error: "You're offline." });
       await renderFolderScreen();
 
       await fireEvent.press(screen.getByLabelText("Folder options"));

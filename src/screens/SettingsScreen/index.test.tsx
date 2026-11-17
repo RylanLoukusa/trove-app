@@ -1,6 +1,6 @@
 import React from "react";
-import { Alert } from "react-native";
-import { fireEvent, screen } from "@testing-library/react-native";
+import { Alert, Share } from "react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import { SettingsScreen } from "./index";
@@ -36,6 +36,25 @@ const mockUseTrove = useTrove as jest.Mock;
 const mockUseEntitlement = useEntitlement as jest.Mock;
 const mockDeleteStoredMediaForItems = deleteStoredMediaForItems as jest.Mock;
 
+const mockWrittenFiles: Array<{ name: string; content: string }> = [];
+jest.mock("expo-file-system", () => ({
+  Paths: { cache: "cache" },
+  File: class {
+    uri: string;
+    fileName: string;
+    exists = false;
+    constructor(_folder: string, fileName: string) {
+      this.fileName = fileName;
+      this.uri = `file:///cache/${fileName}`;
+    }
+    create() {}
+    delete() {}
+    write(content: string) {
+      mockWrittenFiles.push({ name: this.fileName, content });
+    }
+  },
+}));
+
 const folders: Folder[] = [];
 const items: SavedItem[] = [];
 
@@ -62,7 +81,14 @@ const setAuthState = (session: Session | null) => {
 };
 
 const renderSettingsScreen = async () => {
-  mockUseTrove.mockReturnValue({ folders, isReady: true, items, resetToSeed, clearLocalData });
+  mockUseTrove.mockReturnValue({
+    folders,
+    isReady: true,
+    items,
+    resetToSeed,
+    clearLocalData,
+    getExportData: () => ({ folders, items, listEntries: [], tagGroups: [], tagOptions: [] }),
+  });
   mockUseEntitlement.mockReturnValue({
     isPro: false,
     isLoading: false,
@@ -156,5 +182,25 @@ describe("SettingsScreen", () => {
 
     expect(screen.getByText(/Add EXPO_PUBLIC_SUPABASE_URL/)).toBeTruthy();
     expect(screen.queryByText("Go to login screen")).toBeNull();
+  });
+
+  it("exports everything as a text file and as a backup file", async () => {
+    setAuthState(null);
+    const shareSpy = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+    mockWrittenFiles.length = 0;
+    await renderSettingsScreen();
+
+    await fireEvent.press(screen.getByText("Export everything as text"));
+    await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
+    await fireEvent.press(screen.getByText("Export a backup file"));
+    await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(2));
+
+    expect(mockWrittenFiles.map((file) => file.name)).toEqual([
+      expect.stringMatching(/^trove-\d{4}-\d{2}-\d{2}\.md$/),
+      expect.stringMatching(/^trove-\d{4}-\d{2}-\d{2}\.json$/),
+    ]);
+    expect(JSON.parse(mockWrittenFiles[1].content)).toMatchObject({ format: "trove-backup", version: 1, lists: [] });
+    expect(shareSpy.mock.calls[1][0]).toEqual({ url: expect.stringMatching(/^file:\/\/\/cache\/trove-.*\.json$/) });
+    shareSpy.mockRestore();
   });
 });

@@ -135,6 +135,17 @@ export type SavedItem = {
   ruleTagId?: string;
   // Shown in the Pinned section at the top of Home.
   pinned?: boolean;
+  // When the list was put in Recently deleted. It is deleted for good 30 days
+  // later. `deletedWithFolderId` is the folder it was deleted along with, when
+  // a whole folder was deleted: that folder stays out of sight with it.
+  deletedAt?: string;
+  deletedWithFolderId?: string;
+  // When the list was archived: kept and searchable, but off Home and out of
+  // Today. `archivedWithFolderId` is the folder archived along with it.
+  archivedAt?: string;
+  archivedWithFolderId?: string;
+  // A template: a list kept only to start new lists from.
+  isTemplate?: boolean;
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];
