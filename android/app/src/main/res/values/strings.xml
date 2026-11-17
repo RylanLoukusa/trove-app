@@ -1,3 +1,4 @@
 <resources>
   <string name="app_name">Trove</string>
+  <string name="trove_widget_description">The first list pinned to Home, with what\'s left to do.</string>
 </resources>

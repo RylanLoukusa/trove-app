@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C1D2E3F4A5B6012345678902 /* TroveWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678901 /* TroveWidget.swift */; };
+		C1D2E3F4A5B6012345678906 /* TroveWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678905 /* TroveWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C1D2E3F4A5B6012345678912 /* TroveWidgetModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */; };
+		C1D2E3F4A5B6012345678914 /* TroveWidgetModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */; };
 		244BF043D225B92FCE868DA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */; };
@@ -21,6 +25,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		C1D2E3F4A5B601234567890C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1D2E3F4A5B601234567890A;
+			remoteInfo = TroveWidget;
+		};
 		A1B2C3D4E5F601234567890E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -38,6 +49,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				A1B2C3D4E5F6012345678907 /* ShareExtension.appex in Embed App Extensions */,
+				C1D2E3F4A5B6012345678906 /* TroveWidget.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -45,6 +57,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C1D2E3F4A5B6012345678901 /* TroveWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroveWidget.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6012345678903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C1D2E3F4A5B6012345678904 /* TroveWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TroveWidget.entitlements; sourceTree = "<group>"; };
+		C1D2E3F4A5B6012345678905 /* TroveWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TroveWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TroveWidgetModule.swift; path = Trove/TroveWidgetModule.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TroveWidgetModuleBridge.m; path = Trove/TroveWidgetModuleBridge.m; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Trove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Trove.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Trove/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Trove/Info.plist; sourceTree = "<group>"; };
@@ -67,6 +85,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		C1D2E3F4A5B6012345678908 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -85,12 +110,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C1D2E3F4A5B601234567890B /* TroveWidget */ = {
+			isa = PBXGroup;
+			children = (
+				C1D2E3F4A5B6012345678901 /* TroveWidget.swift */,
+				C1D2E3F4A5B6012345678903 /* Info.plist */,
+				C1D2E3F4A5B6012345678904 /* TroveWidget.entitlements */,
+			);
+			path = TroveWidget;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* Trove */ = {
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				A1B2C3D4E5F6012345678912 /* SharedImportModule.swift */,
 				A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */,
+				C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */,
+				C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */,
 				F11748442D0722820044C1D9 /* Trove-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -131,6 +168,7 @@
 			children = (
 				13B07FAE1A68108700A75B9A /* Trove */,
 				A1B2C3D4E5F6012345678911 /* ShareExtension */,
+				C1D2E3F4A5B601234567890B /* TroveWidget */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
@@ -147,6 +185,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* Trove.app */,
 				A1B2C3D4E5F6012345678905 /* ShareExtension.appex */,
+				C1D2E3F4A5B6012345678905 /* TroveWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -189,6 +228,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		C1D2E3F4A5B601234567890A /* TroveWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1D2E3F4A5B6012345678910 /* Build configuration list for PBXNativeTarget "TroveWidget" */;
+			buildPhases = (
+				C1D2E3F4A5B6012345678907 /* Sources */,
+				C1D2E3F4A5B6012345678908 /* Frameworks */,
+				C1D2E3F4A5B6012345678909 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TroveWidget;
+			productName = TroveWidget;
+			productReference = C1D2E3F4A5B6012345678905 /* TroveWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		13B07F861A680F5B00A75B9A /* Trove */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Trove" */;
@@ -208,6 +264,7 @@
 			);
 			dependencies = (
 				A1B2C3D4E5F6012345678910 /* PBXTargetDependency */,
+				C1D2E3F4A5B601234567890D /* PBXTargetDependency */,
 			);
 			name = Trove;
 			productName = Trove;
@@ -247,6 +304,10 @@
 						DevelopmentTeam = 9YNCQGQ47P;
 						ProvisioningStyle = Automatic;
 					};
+					C1D2E3F4A5B601234567890A = {
+						DevelopmentTeam = 9YNCQGQ47P;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Trove" */;
@@ -264,11 +325,19 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* Trove */,
 				A1B2C3D4E5F601234567890C /* ShareExtension */,
+				C1D2E3F4A5B601234567890A /* TroveWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		C1D2E3F4A5B6012345678909 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		13B07F8E1A680F5B00A75B9A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -436,6 +505,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		C1D2E3F4A5B6012345678907 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1D2E3F4A5B6012345678902 /* TroveWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		13B07F871A680F5B00A75B9A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -443,6 +520,8 @@
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				A1B2C3D4E5F6012345678914 /* SharedImportModule.swift in Sources */,
 				A1B2C3D4E5F6012345678915 /* SharedImportModuleBridge.m in Sources */,
+				C1D2E3F4A5B6012345678912 /* TroveWidgetModule.swift in Sources */,
+				C1D2E3F4A5B6012345678914 /* TroveWidgetModuleBridge.m in Sources */,
 				19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -458,6 +537,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		C1D2E3F4A5B601234567890D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1D2E3F4A5B601234567890A /* TroveWidget */;
+			targetProxy = C1D2E3F4A5B601234567890C /* PBXContainerItemProxy */;
+		};
 		A1B2C3D4E5F6012345678910 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A1B2C3D4E5F601234567890C /* ShareExtension */;
@@ -466,6 +550,57 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		C1D2E3F4A5B601234567890E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TroveWidget/TroveWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9YNCQGQ47P;
+				INFOPLIST_FILE = TroveWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove.TroveWidget;
+				PRODUCT_NAME = TroveWidget;
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C1D2E3F4A5B601234567890F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TroveWidget/TroveWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9YNCQGQ47P;
+				INFOPLIST_FILE = TroveWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylanloukusa.trove.TroveWidget;
+				PRODUCT_NAME = TroveWidget;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5369AB779FF23CE7A9F3DAE2 /* Pods-Trove.debug.xcconfig */;
@@ -712,6 +847,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		C1D2E3F4A5B6012345678910 /* Build configuration list for PBXNativeTarget "TroveWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1D2E3F4A5B601234567890E /* Debug */,
+				C1D2E3F4A5B601234567890F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Trove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
