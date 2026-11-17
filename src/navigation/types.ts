@@ -17,6 +17,9 @@ export type RootStackParamList = {
   Profile: undefined;
   SyncConflict: undefined;
   Settings: undefined;
+  RecentlyDeleted: undefined;
+  Archived: undefined;
+  Templates: undefined;
   ManageTags: undefined;
   AddEditTagGroup: { groupId?: string } | undefined;
   Paywall: { trigger: PaywallTrigger };

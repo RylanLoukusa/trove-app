@@ -173,20 +173,48 @@ const PINNED_LIST_TAG = `${FORMAT_TAG_PREFIX}pinned`;
 // server's focus rule only takes the date and priority rules.
 const RULE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}ruletag:`;
 
-export const encodeListTags = (list: Pick<SavedItem, "pinned" | "ruleTagId" | "tagOptionIds">): string[] => [
+// So are a deleted or archived list (with when, and the folder it went with)
+// and a template.
+const DELETED_LIST_PREFIX = `${FORMAT_TAG_PREFIX}deleted:`;
+const DELETED_FOLDER_PREFIX = `${FORMAT_TAG_PREFIX}delfolder:`;
+const ARCHIVED_LIST_PREFIX = `${FORMAT_TAG_PREFIX}archived:`;
+const ARCHIVED_FOLDER_PREFIX = `${FORMAT_TAG_PREFIX}arcfolder:`;
+const TEMPLATE_LIST_TAG = `${FORMAT_TAG_PREFIX}template`;
+
+type ListTagFields = Pick<
+  SavedItem,
+  "pinned" | "ruleTagId" | "deletedAt" | "deletedWithFolderId" | "archivedAt" | "archivedWithFolderId" | "isTemplate"
+>;
+
+export const encodeListTags = (list: ListTagFields & Pick<SavedItem, "tagOptionIds">): string[] => [
   ...(list.tagOptionIds ?? []).filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
   ...(list.pinned ? [PINNED_LIST_TAG] : []),
   ...(list.ruleTagId ? [`${RULE_TAG_PREFIX}${list.ruleTagId}`] : []),
+  ...(list.deletedAt ? [`${DELETED_LIST_PREFIX}${list.deletedAt}`] : []),
+  ...(list.deletedAt && list.deletedWithFolderId ? [`${DELETED_FOLDER_PREFIX}${list.deletedWithFolderId}`] : []),
+  ...(list.archivedAt ? [`${ARCHIVED_LIST_PREFIX}${list.archivedAt}`] : []),
+  ...(list.archivedAt && list.archivedWithFolderId ? [`${ARCHIVED_FOLDER_PREFIX}${list.archivedWithFolderId}`] : []),
+  ...(list.isTemplate ? [TEMPLATE_LIST_TAG] : []),
 ];
 
 export const decodeListTags = (
   tags: string[],
-): Pick<SavedItem, "tagOptionIds"> & { pinned?: true; ruleTagId?: string } => {
-  const ruleTagId = tags.find((tag) => tag.startsWith(RULE_TAG_PREFIX))?.slice(RULE_TAG_PREFIX.length);
+): Pick<SavedItem, "tagOptionIds"> & Omit<ListTagFields, "pinned" | "isTemplate"> & { pinned?: true; isTemplate?: true } => {
+  const valueOf = (prefix: string) => tags.find((tag) => tag.startsWith(prefix))?.slice(prefix.length) || undefined;
+  const ruleTagId = valueOf(RULE_TAG_PREFIX);
+  const deletedAt = valueOf(DELETED_LIST_PREFIX);
+  const deletedWithFolderId = deletedAt ? valueOf(DELETED_FOLDER_PREFIX) : undefined;
+  const archivedAt = valueOf(ARCHIVED_LIST_PREFIX);
+  const archivedWithFolderId = archivedAt ? valueOf(ARCHIVED_FOLDER_PREFIX) : undefined;
   return {
     tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
     ...(tags.includes(PINNED_LIST_TAG) ? { pinned: true as const } : {}),
     ...(ruleTagId ? { ruleTagId } : {}),
+    ...(deletedAt ? { deletedAt } : {}),
+    ...(deletedWithFolderId ? { deletedWithFolderId } : {}),
+    ...(archivedAt ? { archivedAt } : {}),
+    ...(archivedWithFolderId ? { archivedWithFolderId } : {}),
+    ...(tags.includes(TEMPLATE_LIST_TAG) ? { isTemplate: true as const } : {}),
   };
 };
 

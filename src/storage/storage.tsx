@@ -47,6 +47,7 @@ import {
 } from "./tagBackfill";
 import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
+import { copyEntriesForList, copyTitle, isPastKeeping, SetAsideFolder, sortByLifecycle } from "../utils/listLifecycle";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
@@ -96,7 +97,39 @@ type TroveContextValue = TroveData & {
   deleteFolder: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
   createItem: (input: Omit<SavedItem, "id" | "createdAt" | "updatedAt">) => SavedItem | null;
   updateItem: (itemId: string, updates: Partial<Omit<SavedItem, "id" | "createdAt">>) => void;
+  // Deletes for good. Everyday deleting goes through trashItem / trashFolder,
+  // which keep the list in Recently deleted first.
   deleteItem: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
+  // Lists set aside: `items` and `folders` hold only what is in everyday use.
+  archivedItems: SavedItem[];
+  deletedItems: SavedItem[];
+  templates: SavedItem[];
+  archivedFolders: SetAsideFolder[];
+  deletedFolders: SetAsideFolder[];
+  // Moves a list to Recently deleted, where it waits 30 days.
+  trashItem: (itemId: string) => { ok: boolean; error?: string };
+  // Puts a deleted list back; onto Home when its folder is gone.
+  restoreItem: (itemId: string) => boolean;
+  // Moves a folder, its subfolders and their lists to Recently deleted. A
+  // folder with no lists in it is simply deleted.
+  trashFolder: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
+  restoreFolder: (folderId: string) => boolean;
+  setItemArchived: (itemId: string, archived: boolean) => boolean;
+  // Archives (or brings back) a folder along with every list in it.
+  setFolderArchived: (folderId: string, archived: boolean) => boolean;
+  // Copies a list and its own lines. `fresh` starts the copy unchecked and
+  // without dates; `template` says whether the copy is a template.
+  copyItem: (
+    itemId: string,
+    options?: { title?: string; fresh?: boolean; template?: boolean; folderId?: string },
+  ) => SavedItem | null;
+  // Everything on this device except what is in Recently deleted, for exports.
+  getExportData: () => TroveData;
+  // Makes a list from ready-made lines (a starter template).
+  createItemWithLines: (
+    title: string,
+    lines: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "indentLevel" | "bold">>>,
+  ) => SavedItem | null;
   // Editing a line pulled in from another list edits the original, except
   // for its indent, which belongs to the list it is shown in.
   updateListEntry: (
@@ -1558,17 +1591,280 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   }, [createTagGroup, createTagOption]);
   const clearLocalData = useCallback(() => setData(emptyData), []);
 
+
+  // --- Recently deleted, Archive, copies -------------------------------------
+  const trashItem = useCallback<TroveContextValue["trashItem"]>((itemId) => {
+    const item = dataRef.current.items.find((candidate) => candidate.id === itemId);
+    const folder = dataRef.current.folders.find((candidate) => candidate.id === item?.folderId);
+    if (!item || !canEditItemRecord(item, folder)) {
+      return { ok: false, error: "You do not have permission to delete this list." };
+    }
+    updateItem(itemId, { deletedAt: new Date().toISOString(), deletedWithFolderId: undefined });
+    return { ok: true };
+  }, [updateItem]);
+
+  const restoreItem = useCallback<TroveContextValue["restoreItem"]>((itemId) => {
+    const { items, folders } = dataRef.current;
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) return false;
+    // Its folder may have been deleted since, or still be in Recently deleted.
+    const folderInUse = sortByLifecycle(items, folders).folders.some((folder) => folder.id === item.folderId);
+    updateItem(itemId, {
+      deletedAt: undefined,
+      deletedWithFolderId: undefined,
+      ...(item.folderId && !folderInUse ? { folderId: "" } : {}),
+    });
+    return true;
+  }, [updateItem]);
+
+  const trashFolder = useCallback<TroveContextValue["trashFolder"]>(async (folderId) => {
+    const { items, folders } = dataRef.current;
+    const folder = folders.find((candidate) => candidate.id === folderId);
+    if (!canManageFolderRecord(folder)) {
+      return { ok: false, error: "Only the folder owner can delete this folder." };
+    }
+    const treeIds = new Set(getFolderTreeIds(folders, folderId));
+    const lists = items.filter((item) => treeIds.has(item.folderId) && !item.deletedAt);
+    // Nothing to keep: an empty folder goes straight away.
+    if (lists.length === 0) return deleteFolder(folderId);
+    const deletedAt = new Date().toISOString();
+    lists.forEach((list) => updateItem(list.id, { deletedAt, deletedWithFolderId: folderId }));
+    return { ok: true };
+  }, [deleteFolder, updateItem]);
+
+  const restoreFolder = useCallback<TroveContextValue["restoreFolder"]>((folderId) => {
+    const { items, folders } = dataRef.current;
+    const folder = folders.find((candidate) => candidate.id === folderId);
+    if (!folder) return false;
+    items
+      .filter((item) => item.deletedAt && item.deletedWithFolderId === folderId)
+      .forEach((item) => updateItem(item.id, { deletedAt: undefined, deletedWithFolderId: undefined }));
+    // The folder it sat in may be gone or deleted: it comes back on Home.
+    const parentInUse =
+      !folder.parentFolderId ||
+      sortByLifecycle(
+        items.filter((item) => item.deletedWithFolderId !== folderId),
+        folders,
+      ).folders.some((candidate) => candidate.id === folder.parentFolderId);
+    if (!parentInUse) updateFolder(folderId, { parentFolderId: null });
+    return true;
+  }, [updateFolder, updateItem]);
+
+  const setItemArchived = useCallback<TroveContextValue["setItemArchived"]>((itemId, archived) => {
+    const item = dataRef.current.items.find((candidate) => candidate.id === itemId);
+    const folder = dataRef.current.folders.find((candidate) => candidate.id === item?.folderId);
+    if (!item || !canEditItemRecord(item, folder)) return false;
+    if (archived) {
+      updateItem(itemId, { archivedAt: new Date().toISOString(), archivedWithFolderId: undefined, pinned: false });
+      return true;
+    }
+    const { items, folders } = dataRef.current;
+    // Taken out of an archived folder, it goes to Home; the folder stays archived.
+    const folderInUse = sortByLifecycle(items, folders).folders.some((candidate) => candidate.id === item.folderId);
+    updateItem(itemId, {
+      archivedAt: undefined,
+      archivedWithFolderId: undefined,
+      ...(item.folderId && !folderInUse ? { folderId: "" } : {}),
+    });
+    return true;
+  }, [updateItem]);
+
+  const setFolderArchived = useCallback<TroveContextValue["setFolderArchived"]>((folderId, archived) => {
+    const { items, folders } = dataRef.current;
+    const folder = folders.find((candidate) => candidate.id === folderId);
+    if (!folder || !canManageFolderRecord(folder)) return false;
+    if (!archived) {
+      const treeIds = new Set(getFolderTreeIds(folders, folderId));
+      items
+        .filter((item) => item.archivedWithFolderId === folderId || (treeIds.has(item.folderId) && item.archivedAt))
+        .forEach((item) => updateItem(item.id, { archivedAt: undefined, archivedWithFolderId: undefined }));
+      return true;
+    }
+    const treeIds = new Set(getFolderTreeIds(folders, folderId));
+    const lists = items.filter((item) => treeIds.has(item.folderId) && !item.deletedAt && !item.isTemplate);
+    if (lists.length === 0) return false;
+    const archivedAt = new Date().toISOString();
+    lists.forEach((list) => updateItem(list.id, { archivedAt, archivedWithFolderId: folderId, pinned: false }));
+    return true;
+  }, [updateItem]);
+
+  const copyItem = useCallback<TroveContextValue["copyItem"]>((itemId, options = {}) => {
+    const { items, folders, listEntries } = dataRef.current;
+    const source = items.find((candidate) => candidate.id === itemId);
+    if (!source) return null;
+    // A copy sits beside its list, or on Home when it is a template, comes
+    // from one, or sits in a folder this person can't add to.
+    const canAddTo = (id: string) => canEditFolderContentRecord(folders.find((candidate) => candidate.id === id));
+    const beside = options.template || source.isTemplate || !canAddTo(source.folderId) ? "" : source.folderId;
+    const folderId = options.folderId ?? beside;
+    const folder = folders.find((candidate) => candidate.id === folderId);
+    if (folderId && !canEditFolderContentRecord(folder)) {
+      Alert.alert("Cannot add list", "You do not have permission to add lists to that folder.");
+      return null;
+    }
+    const timestamp = new Date().toISOString();
+    const fresh = options.fresh ?? false;
+    const template = options.template ?? false;
+    const title =
+      options.title?.trim() ||
+      copyTitle(
+        source.title,
+        items.filter((item) => !!item.isTemplate === template).map((item) => item.title),
+      );
+    const copy: SavedItem = {
+      id: createId("item"),
+      folderId,
+      title,
+      type: "list",
+      tagOptionIds: [...source.tagOptionIds],
+      // A copy keeps how the list adds lines by itself, but not its pin.
+      ...(source.listMode ? { listMode: source.listMode } : {}),
+      ...(source.focusRule ? { focusRule: source.focusRule } : {}),
+      ...(source.ruleTagId ? { ruleTagId: source.ruleTagId } : {}),
+      ...(template ? { isTemplate: true } : {}),
+      ownerId: folder?.ownerId ?? activeUserId ?? undefined,
+      createdBy: activeUserId ?? undefined,
+      accessRole: folder?.accessRole ?? (activeUserId ? "owner" : undefined),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const lines = copyEntriesForList(
+      listEntries.filter((entry) => entry.listId === source.id),
+      {
+        listId: copy.id,
+        fresh,
+        timestamp,
+        ownerId: copy.ownerId,
+        userId: activeUserId ?? undefined,
+        createId: () => createId("entry"),
+      },
+    );
+    setData((current) => ({
+      ...current,
+      items: [copy, ...current.items],
+      listEntries: [...current.listEntries, ...lines],
+    }));
+    markLocalChangePending();
+    return copy;
+  }, [activeUserId, markLocalChangePending, setData]);
+
+  const createItemWithLines = useCallback<TroveContextValue["createItemWithLines"]>((title, lines) => {
+    const timestamp = new Date().toISOString();
+    const list: SavedItem = {
+      id: createId("item"),
+      folderId: "",
+      title: title.trim() || UNTITLED_LIST_TITLE,
+      type: "list",
+      tagOptionIds: [],
+      ownerId: activeUserId ?? undefined,
+      createdBy: activeUserId ?? undefined,
+      accessRole: activeUserId ? "owner" : undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const positions = generatePositionsBetween(null, null, lines.length);
+    const entries = lines.map<ListEntry>((line, index) => ({
+      id: createId("entry"),
+      listId: list.id,
+      kind: line.kind ?? "check",
+      text: line.text,
+      checked: false,
+      indentLevel: Math.min(line.indentLevel ?? 0, MAX_ENTRY_INDENT),
+      ...(line.bold ? { bold: true } : {}),
+      position: positions[index],
+      tagOptionIds: [],
+      ownerId: list.ownerId,
+      createdBy: activeUserId ?? undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }));
+    setData((current) => ({
+      ...current,
+      items: [list, ...current.items],
+      listEntries: [...current.listEntries, ...entries],
+    }));
+    markLocalChangePending();
+    return list;
+  }, [activeUserId, markLocalChangePending, setData]);
+
+  const getExportData = useCallback<TroveContextValue["getExportData"]>(() => {
+    const current = dataRef.current;
+    const lifecycle = sortByLifecycle(current.items, current.folders);
+    const goneListIds = new Set(lifecycle.deleted.map((item) => item.id));
+    const goneFolderIds = new Set(
+      lifecycle.deletedFolders.flatMap(({ folder }) => getFolderTreeIds(current.folders, folder.id)),
+    );
+    return {
+      ...current,
+      folders: current.folders.filter((folder) => !goneFolderIds.has(folder.id)),
+      items: current.items.filter((item) => !goneListIds.has(item.id)),
+      listEntries: current.listEntries.filter((entry) => !goneListIds.has(entry.listId)),
+    };
+  }, []);
+
+  // What has waited its 30 days in Recently deleted goes for good. Only the
+  // owner's device does this, so a shared list isn't removed from under them.
+  const purgedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!isReady) return;
+    const { deleted, deletedFolders } = sortByLifecycle(data.items, data.folders);
+    const mine = (ownerId?: string) => !ownerId || !activeUserId || ownerId === activeUserId;
+    const once = (id: string): boolean => {
+      if (purgedRef.current.has(id)) return false;
+      purgedRef.current.add(id);
+      return true;
+    };
+    const goneWithFolder = new Set<string>();
+    deletedFolders.forEach(({ folder, at }) => {
+      if (!isPastKeeping(at) || !mine(folder.ownerId)) return;
+      goneWithFolder.add(folder.id);
+      if (once(folder.id)) void deleteFolder(folder.id);
+    });
+    deleted.forEach((item) => {
+      if (!item.deletedAt || !isPastKeeping(item.deletedAt) || !mine(item.ownerId)) return;
+      if (item.deletedWithFolderId && goneWithFolder.has(item.deletedWithFolderId)) return;
+      if (once(item.id)) void deleteItem(item.id);
+    });
+  }, [activeUserId, data.folders, data.items, deleteFolder, deleteItem, isReady]);
+
   // Screens read list lines as `item.listItems`; they are derived from the
   // entry records here rather than stored on the item.
-  const hydratedItems = useMemo(
-    () => hydrateItemsWithEntries(data.items, data.listEntries),
-    [data.items, data.listEntries],
-  );
+  // Screens get the lists and folders in everyday use; what is deleted,
+  // archived or a template is handed over separately. Lines of deleted lists
+  // are out of sight everywhere but on those lists themselves.
+  const { lifecycle, visibleEntries } = useMemo(() => {
+    const raw = sortByLifecycle(data.items, data.folders);
+    const deletedIds = new Set(raw.deleted.map((item) => item.id));
+    const visible =
+      deletedIds.size === 0 ? data.listEntries : data.listEntries.filter((entry) => !deletedIds.has(entry.listId));
+    const sorted = sortByLifecycle(hydrateItemsWithEntries(data.items, visible), data.folders);
+    return {
+      lifecycle:
+        deletedIds.size === 0 ? sorted : { ...sorted, deleted: hydrateItemsWithEntries(raw.deleted, data.listEntries) },
+      visibleEntries: visible,
+    };
+  }, [data.folders, data.items, data.listEntries]);
 
   const value = useMemo<TroveContextValue>(
     () => ({
       ...data,
-      items: hydratedItems,
+      items: lifecycle.active,
+      folders: lifecycle.folders,
+      listEntries: visibleEntries,
+      archivedItems: lifecycle.archived,
+      deletedItems: lifecycle.deleted,
+      templates: lifecycle.templates,
+      archivedFolders: lifecycle.archivedFolders,
+      deletedFolders: lifecycle.deletedFolders,
+      trashItem,
+      restoreItem,
+      trashFolder,
+      restoreFolder,
+      setItemArchived,
+      setFolderArchived,
+      copyItem,
+      createItemWithLines,
+      getExportData,
       isReady,
       syncSnapshot,
       createFolder,
@@ -1607,7 +1903,17 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     }),
     [
       data,
-      hydratedItems,
+      lifecycle,
+      visibleEntries,
+      trashItem,
+      restoreItem,
+      trashFolder,
+      restoreFolder,
+      setItemArchived,
+      setFolderArchived,
+      copyItem,
+      createItemWithLines,
+      getExportData,
       isReady,
       syncSnapshot,
       createFolder,

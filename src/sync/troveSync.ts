@@ -1195,6 +1195,11 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "focusRule",
     "ruleTagId",
     "pinned",
+    "deletedAt",
+    "deletedWithFolderId",
+    "archivedAt",
+    "archivedWithFolderId",
+    "isTemplate",
   ]);
 
 const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>

@@ -1,17 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
+  Archive,
+  ArchiveRestore,
   ArrowUpDown,
   CheckCheck,
   CircleCheck,
+  Copy,
   Ellipsis,
   Eraser,
+  FilePlus2,
   FolderInput,
+  LayoutTemplate,
   ListPlus,
   Pin,
   PinOff,
   RotateCcw,
+  Share2,
   Sparkles,
   Trash2,
 } from "lucide-react-native";
@@ -33,6 +39,7 @@ import { spacing, ThemeColors } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import type { FocusRule, ListEntry, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
+import { listToText } from "../../utils/exportData";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import {
   canListBorrowLines,
@@ -115,6 +122,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     tagOptions,
     updateItem,
     deleteItem,
+    trashItem,
+    setItemArchived,
+    copyItem,
     updateListEntry,
     setEntriesChecked,
     insertListEntries,
@@ -482,27 +492,43 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     else navigation.navigate("Home");
   }, [navigation]);
 
-  const confirmDelete = useCallback(() => {
-    Alert.alert("Delete this list?", "Its lines are deleted too. Lines pulled in from other lists stay in those lists.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            removedRef.current = true;
-            const result = await deleteItem(item.id);
-            if (!result.ok) {
-              removedRef.current = false;
-              Alert.alert("Could not delete list", result.error ?? "Try again in a moment.");
-              return;
-            }
-            goBack();
-          })();
-        },
-      },
-    ]);
-  }, [deleteItem, goBack, item.id]);
+  // No "are you sure": the list waits in Recently deleted for 30 days.
+  const moveToDeleted = useCallback(() => {
+    removedRef.current = true;
+    const result = trashItem(item.id);
+    if (!result.ok) {
+      removedRef.current = false;
+      Alert.alert("Could not delete list", result.error ?? "Try again in a moment.");
+      return;
+    }
+    goBack();
+  }, [goBack, item.id, trashItem]);
+
+  const toggleArchived = useCallback(() => {
+    const archiving = !item.archivedAt;
+    if (archiving) removedRef.current = true;
+    if (!setItemArchived(item.id, archiving)) {
+      removedRef.current = false;
+      return;
+    }
+    if (archiving) goBack();
+  }, [goBack, item.archivedAt, item.id, setItemArchived]);
+
+  // A copy opens straight away, so it can be renamed.
+  const duplicate = useCallback(() => {
+    const copy = copyItem(item.id);
+    if (copy) navigation.replace("List", { listId: copy.id });
+  }, [copyItem, item.id, navigation]);
+
+  const saveAsTemplate = useCallback(() => {
+    const template = copyItem(item.id, { title: titleOf(item), fresh: true, template: true });
+    if (template) viewRef.current?.showToast("Saved as a template");
+  }, [copyItem, item, titleOf]);
+
+  const useTemplate = useCallback(() => {
+    const list = copyItem(item.id, { title: titleOf(item), fresh: true });
+    if (list) navigation.replace("List", { listId: list.id });
+  }, [copyItem, item, navigation, titleOf]);
 
   // --- Menu ----------------------------------------------------------------
   const checkLines = entries.filter((entry) => entry.kind === "check");
@@ -534,10 +560,16 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     });
   };
 
+  const sendAsText = () => {
+    void Share.share({ message: listToText(titleOf(item), entries) });
+  };
+
   const folderLabel = getFolderPathLabel(folders, item.folderId);
   const iconTone = colors.accentDark;
+  const isTemplate = !!item.isTemplate;
+  const isArchived = !!item.archivedAt;
   // Pinning is the owner's own choice, so a list shared with them can't be.
-  const canPin = canEdit && !isSharedAccess(item);
+  const canPin = canEdit && !isSharedAccess(item) && !isTemplate && !isArchived;
   const menuActions: MenuAction[] = [
     ...(canEdit && entries.length > 0
       ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
@@ -621,22 +653,61 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           { key: "clear", label: "Clear checked lines", icon: <Eraser size={20} color={iconTone} />, onPress: clearChecked },
         ]
       : []),
-    ...(canEdit
+    ...(isTemplate
       ? [
           {
-            key: "folder",
-            label: "Move to folder",
-            detail: folderLabel,
-            icon: <FolderInput size={20} color={iconTone} />,
+            key: "use",
+            label: "New list from this template",
+            icon: <FilePlus2 size={20} color={iconTone} />,
             separated: true,
-            onPress: () => setSheet("folder"),
+            onPress: useTemplate,
+          },
+        ]
+      : [
+          {
+            key: "copy",
+            label: "Duplicate",
+            icon: <Copy size={20} color={iconTone} />,
+            separated: true,
+            onPress: duplicate,
           },
           {
+            key: "template",
+            label: "Save as template",
+            icon: <LayoutTemplate size={20} color={iconTone} />,
+            onPress: saveAsTemplate,
+          },
+        ]),
+    ...(entries.length > 0
+      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
+      : []),
+    ...(canEdit
+      ? [
+          ...(isTemplate
+            ? []
+            : [
+                {
+                  key: "folder",
+                  label: "Move to folder",
+                  detail: folderLabel,
+                  icon: <FolderInput size={20} color={iconTone} />,
+                  separated: true,
+                  onPress: () => setSheet("folder"),
+                },
+                {
+                  key: "archive",
+                  label: isArchived ? "Unarchive" : "Archive",
+                  icon: isArchived ? <ArchiveRestore size={20} color={iconTone} /> : <Archive size={20} color={iconTone} />,
+                  onPress: toggleArchived,
+                },
+              ]),
+          {
             key: "delete",
-            label: "Delete list",
+            label: isTemplate ? "Delete template" : "Delete list",
             icon: <Trash2 size={20} color={colors.danger} />,
             destructive: true,
-            onPress: confirmDelete,
+            separated: isTemplate,
+            onPress: moveToDeleted,
           },
         ]
       : []),
@@ -644,6 +715,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
 
   // --- Page ----------------------------------------------------------------
   const caption = [
+    isTemplate ? "Template" : "",
+    isArchived ? "Archived" : "",
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
     rule ? ruleCaptions[rule] : ruleTag ? `Adds lines tagged ${ruleTag.name}` : "",
     sortCaptions[settings.sortMode],

@@ -33,6 +33,9 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { RecentlyDeletedScreen } from "./src/screens/RecentlyDeletedScreen";
+import { ArchivedScreen } from "./src/screens/ArchivedScreen";
+import { TemplatesScreen } from "./src/screens/TemplatesScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
 import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
 import {
@@ -201,6 +204,9 @@ function AppNavigator() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="SyncConflict" component={SyncConflictScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="RecentlyDeleted" component={RecentlyDeletedScreen} />
+            <Stack.Screen name="Archived" component={ArchivedScreen} />
+            <Stack.Screen name="Templates" component={TemplatesScreen} />
             <Stack.Screen name="ManageTags" component={ManageTagsScreen} />
             <Stack.Screen name="AddEditTagGroup" component={AddEditTagGroupScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />

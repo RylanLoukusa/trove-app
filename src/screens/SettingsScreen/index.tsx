@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { File, Paths } from "expo-file-system";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
 import { getSignedInLabel } from "../../auth/authDisplay";
@@ -12,6 +13,7 @@ import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { ThemePreference, useThemeColors, useThemePreference } from "../../theme/ThemeContext";
+import { buildBackup, exportFileName, troveToText } from "../../utils/exportData";
 import { createStyles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -44,7 +46,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
-  const { folders, isReady, items, resetToSeed, clearLocalData } = useTrove();
+  const { folders, isReady, items, resetToSeed, clearLocalData, getExportData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const { restorePurchases } = useEntitlement();
   const supabaseConfigured = useIsSupabaseConfigured();
@@ -67,6 +69,29 @@ export const SettingsScreen = ({ navigation }: Props) => {
   }, [resetToSeed]);
 
 
+  // Hands a copy of everything to the share sheet, as a file where the
+  // device can share files and as plain text otherwise.
+  const exportData = useCallback(
+    async (kind: "text" | "backup"): Promise<void> => {
+      const data = getExportData();
+      const content = kind === "text" ? troveToText(data) : JSON.stringify(buildBackup(data), null, 2);
+      try {
+        if (Platform.OS === "ios") {
+          const file = new File(Paths.cache, exportFileName(kind === "text" ? "md" : "json"));
+          if (file.exists) file.delete();
+          file.create();
+          file.write(content);
+          await Share.share({ url: file.uri });
+        } else {
+          await Share.share({ message: content });
+        }
+      } catch {
+        Alert.alert("Could not export", "Please try again.");
+      }
+    },
+    [getExportData],
+  );
+
   const onSignOut = useCallback(async () => {
     setBusy(true);
     await signOut();
@@ -75,7 +100,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
 
   const onDeleteAccount = useCallback(async () => {
     setBusy(true);
-    const mediaResult = await deleteStoredMediaForItems(items);
+    const mediaResult = await deleteStoredMediaForItems(getExportData().items);
     if (!mediaResult.ok) {
       setBusy(false);
       Alert.alert("Could not delete account", mediaResult.error ?? "Unable to delete uploaded media.");
@@ -92,7 +117,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
 
     setBusy(false);
     Alert.alert("Could not delete account", result.error);
-  }, [clearLocalData, deleteAccount, items]);
+  }, [clearLocalData, deleteAccount, getExportData]);
 
   const confirmDeleteAccount = useCallback((): void => {
     Alert.alert(
@@ -167,6 +192,26 @@ export const SettingsScreen = ({ navigation }: Props) => {
         <View style={styles.legalLinks}>
           <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
             <Text style={styles.legalLinkText}>Manage Tags</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.sectionTitle}>Your data</Text>
+        <View style={styles.legalLinks}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void exportData("text")}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>Export everything as text</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void exportData("backup")}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>Export a backup file</Text>
             <Text style={styles.legalLinkArrow}>›</Text>
           </Pressable>
         </View>

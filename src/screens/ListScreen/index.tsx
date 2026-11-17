@@ -16,9 +16,12 @@ type Props = NativeStackScreenProps<RootStackParamList, "List">;
 export const ListScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { folders, isReady, items } = useTrove();
+  const { folders, isReady, items, archivedItems, templates } = useTrove();
   const backLabel = backLabelFor(navigation.getState(), route.key, folders);
-  const item = items.find((candidate) => candidate.id === route.params.listId && candidate.type === "list");
+  // An archived list or a template opens like any other list.
+  const item = [...items, ...archivedItems, ...templates].find(
+    (candidate) => candidate.id === route.params.listId && candidate.type === "list",
+  );
   // Once shown, a list that goes away (deleted, or thrown away for being
   // empty) leaves a blank page behind while the screen closes.
   const wasShown = useRef(false);

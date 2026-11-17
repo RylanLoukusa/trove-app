@@ -1,6 +1,6 @@
 import React from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert, Keyboard } from "react-native";
+import { Alert, Keyboard, Share } from "react-native";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -190,6 +190,7 @@ type Route = NativeStackScreenProps<RootStackParamList, "List">["route"];
 const leaveListeners = new Set<() => void>();
 const navigation = {
   navigate: jest.fn(),
+  replace: jest.fn(),
   goBack: jest.fn(),
   canGoBack: jest.fn(),
   getState: jest.fn(),
@@ -599,7 +600,11 @@ describe("ListScreen", () => {
         "Add lines automatically",
         "Uncheck all",
         "Clear checked lines",
+        "Duplicate",
+        "Save as template",
+        "Send as text",
         "Move to folder",
+        "Archive",
         "Delete list",
       ]);
       expect(dismissKeyboard).toHaveBeenCalled();
@@ -625,7 +630,10 @@ describe("ListScreen", () => {
         "Sort",
         "Checked lines",
         "Add lines automatically",
+        "Duplicate",
+        "Save as template",
         "Move to folder",
+        "Archive",
         "Delete list",
       ]);
     });
@@ -781,35 +789,83 @@ describe("ListScreen", () => {
       expect(savedList("packing")!.updatedAt).toBe(at);
     });
 
-    it("asks before deleting, and keeps the list on Cancel", async () => {
+    it("moves the list to Recently deleted without asking, and goes back", async () => {
       await openList("chores");
 
       await choose("Delete list");
-
-      expect(alert).toHaveBeenCalledWith(
-        "Delete this list?",
-        "Its lines are deleted too. Lines pulled in from other lists stay in those lists.",
-        [expect.objectContaining({ text: "Cancel", style: "cancel" }), expect.objectContaining({ text: "Delete", style: "destructive" })],
-      );
-      expect(savedList("chores")).toBeDefined();
-      expect(navigation.goBack).not.toHaveBeenCalled();
-    });
-
-    it("deletes the list and its lines once that's confirmed, and goes back", async () => {
-      await openList("chores");
-
-      await choose("Delete list");
-      const buttons = alert.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
-      await act(async () => {
-        buttons.find((button) => button.text === "Delete")!.onPress!();
-      });
       await waitFor(() => expect(navigation.goBack).toHaveBeenCalledTimes(1));
 
+      expect(alert).not.toHaveBeenCalled();
       expect(savedList("chores")).toBeUndefined();
+      expect(trove().deletedItems.map((item) => item.id)).toEqual(["chores"]);
+      // Its lines are out of sight with it, and other lists keep theirs.
       expect(linesOf("chores")).toEqual([]);
       expect(ownLines("today")).toEqual(["Call mum"]);
       // The page is blank while it closes, not an apology for a missing list.
       expect(screen.queryByText("This list isn't here any more.")).toBeNull();
+    });
+
+    it("puts a deleted list back with its lines", async () => {
+      await openList("chores");
+      await choose("Delete list");
+
+      await act(async () => {
+        trove().restoreItem("chores");
+      });
+
+      expect(savedList("chores")).toBeDefined();
+      expect(ownLines("chores")).toEqual(["Mow the lawn", "Clean gutters", "Water plants"]);
+      expect(trove().deletedItems).toEqual([]);
+    });
+
+    it("archives the list, which stays readable but leaves Home", async () => {
+      await openList("chores");
+
+      await choose("Archive");
+      await waitFor(() => expect(navigation.goBack).toHaveBeenCalledTimes(1));
+
+      expect(savedList("chores")).toBeUndefined();
+      expect(trove().archivedItems.map((item) => item.id)).toEqual(["chores"]);
+      expect(caption("Archived · 1 of 3 done")).toBeTruthy();
+
+      await choose("Unarchive");
+      expect(savedList("chores")).toBeDefined();
+    });
+
+    it("duplicates the list with its lines and opens the copy", async () => {
+      await openList("chores");
+
+      await choose("Duplicate");
+
+      const copy = trove().items.find((item) => item.title === "Chores copy")!;
+      expect(copy.folderId).toBe(savedList("chores")!.folderId);
+      expect(ownLines(copy.id)).toEqual(["Mow the lawn", "Clean gutters", "Water plants"]);
+      expect(linesOf(copy.id).map((entry) => entry.checked)).toEqual(linesOf("chores").map((entry) => entry.checked));
+      expect(navigation.replace).toHaveBeenCalledWith("List", { listId: copy.id });
+    });
+
+    it("saves the list as a template, unchecked and off Home", async () => {
+      await openList("chores");
+
+      await choose("Save as template");
+
+      expect(screen.getByText("Saved as a template")).toBeTruthy();
+      const template = trove().templates[0];
+      expect(template.title).toBe("Chores");
+      expect(trove().items.some((item) => item.id === template.id)).toBe(false);
+      expect(linesOf(template.id).map((entry) => entry.checked)).toEqual([false, false, false]);
+    });
+
+    it("sends the list as text", async () => {
+      const share = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+      await openList("chores");
+
+      await choose("Send as text");
+
+      expect(share.mock.calls[0][0]).toEqual({
+        message: ["Chores", "- [ ] Mow the lawn", "- [x] Clean gutters", "- [ ] Water plants"].join("\n"),
+      });
+      share.mockRestore();
     });
   });
 
@@ -1210,7 +1266,7 @@ describe("ListScreen", () => {
       expect(screen.queryByLabelText(ADD_LINE)).toBeNull();
 
       await openMenu();
-      expect(menuActions()).toEqual(["Sort", "Checked lines"]);
+      expect(menuActions()).toEqual(["Sort", "Checked lines", "Duplicate", "Save as template", "Send as text"]);
     });
 
     it("isn't thrown away for being empty when a viewer leaves it", async () => {

@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import {
   Keyboard,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -34,6 +35,7 @@ import {
   CircleCheck,
   CornerUpRight,
   FolderInput,
+  Globe,
   ImagePlus,
   Info,
   Link2,
@@ -62,6 +64,7 @@ import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { pickLineImages } from "../media/lineImages";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
+import { extractLinks } from "../utils/links";
 import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -1289,6 +1292,9 @@ const EntryRow = ({
   }, [carried, dragActive, shift]);
 
   const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes;
+  // Web links in the line, each offered as a button under it: the line itself
+  // is a text field, so tapping it edits rather than opens.
+  const links = useMemo(() => extractLinks(entry.text), [entry.text]);
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
   // Photos start as thumbnails beside the text; a bigger one shows under it.
@@ -1418,6 +1424,25 @@ const EntryRow = ({
           {thumbs.map(imageView)}
         </View>
         {expanded.length > 0 && <View style={styles.photos}>{expanded.map(imageView)}</View>}
+        {links.length > 0 && !selecting && (
+          <View style={styles.linkRow}>
+            {links.map((link) => (
+              <Pressable
+                key={link.url}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${link.label}`}
+                hitSlop={6}
+                onPress={() => void Linking.openURL(link.url).catch(() => undefined)}
+                style={({ pressed }) => [styles.linkChip, pressed && styles.markerPressed]}
+              >
+                <Globe size={12} color={colors.accentDark} />
+                <Text numberOfLines={1} style={styles.linkText}>
+                  {link.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         {(!!caption || hasMeta) && (
           <Pressable
             accessibilityRole="button"
@@ -1753,6 +1778,28 @@ const createStyles = (colors: ThemeColors) =>
       flexWrap: "wrap",
       gap: spacing.sm,
       marginTop: 2,
+    },
+    linkRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: 4,
+    },
+    linkChip: {
+      alignItems: "center",
+      backgroundColor: withAlpha(colors.accent, 0.12),
+      borderRadius: 999,
+      flexDirection: "row",
+      flexShrink: 1,
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+    },
+    linkText: {
+      color: colors.accentDark,
+      flexShrink: 1,
+      fontSize: 13,
+      fontWeight: "600",
     },
     metaItem: {
       alignItems: "center",
