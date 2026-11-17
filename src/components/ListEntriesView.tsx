@@ -43,6 +43,7 @@ import {
   ListIndentDecrease,
   ListIndentIncrease,
   ListPlus,
+  Repeat,
   Trash2,
   Undo2,
 } from "lucide-react-native";
@@ -65,6 +66,7 @@ import { pickLineImages } from "../media/lineImages";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { extractLinks } from "../utils/links";
+import { formatTime, repeatLabels } from "../utils/schedule";
 import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -77,7 +79,10 @@ import {
 } from "../utils/listView";
 
 export type EntryUpdates = Partial<
-  Pick<ListEntry, "text" | "kind" | "bold" | "images" | "dueDate" | "notes" | "tagOptionIds" | "indentLevel">
+  Pick<
+    ListEntry,
+    "text" | "kind" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "notes" | "tagOptionIds" | "indentLevel"
+  >
 >;
 
 // A line to add: its text, plus how it is marked when that is already known.
@@ -1462,7 +1467,12 @@ const EntryRow = ({
             {!!due && (
               <View style={styles.metaItem}>
                 <CalendarDays size={12} color={dueToneColor(due.tone, colors)} />
-                <Text style={[styles.metaText, { color: dueToneColor(due.tone, colors) }]}>{due.label}</Text>
+                <Text style={[styles.metaText, { color: dueToneColor(due.tone, colors) }]}>
+                  {entry.dueTime ? `${due.label}, ${formatTime(entry.dueTime)}` : due.label}
+                </Text>
+                {!!entry.repeat && (
+                  <Repeat size={12} color={dueToneColor(due.tone, colors)} accessibilityLabel={repeatLabels[entry.repeat]} />
+                )}
               </View>
             )}
             {[...(priority ? [priority] : []), ...tags].map((tag) => (

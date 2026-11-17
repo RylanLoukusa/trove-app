@@ -13,6 +13,7 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
+import { useReminders } from "./src/reminders/useReminders";
 import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
@@ -77,6 +78,7 @@ function AppNavigator() {
   const themeColors = useThemeColors();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
+  useReminders(!!session && !isPasswordRecovery);
 
   // Something shared into Trove from another app becomes a line on the Inbox
   // list of the folder that was picked (or of the top level).

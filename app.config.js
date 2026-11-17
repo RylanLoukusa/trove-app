@@ -38,6 +38,7 @@ module.exports = {
       ],
       "expo-apple-authentication",
       "expo-video",
+      ["expo-notifications", { color: "#173F2A" }],
       googleIosUrlScheme
         ? ["@react-native-google-signin/google-signin", { iosUrlScheme: googleIosUrlScheme }]
         : "@react-native-google-signin/google-signin",

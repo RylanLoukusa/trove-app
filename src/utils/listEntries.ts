@@ -1,4 +1,5 @@
 import type { LineImage, LineImageSize, ListEntry, SavedItem, SavedListItem } from "../types/models";
+import { isRepeatRule, isResetRule, isValidTime } from "./schedule";
 
 // ---------------------------------------------------------------------------
 // Position keys (fractional indexing)
@@ -155,8 +156,13 @@ export const withLineImageSize = (image: LineImage, size: LineImageSize): LineIm
   return next;
 };
 
+// A line's time and repeat travel as tags too: `fmt:time:HH:MM` and
+// `fmt:repeat:<rule>`.
+const TIME_TAG_PREFIX = `${FORMAT_TAG_PREFIX}time:`;
+const REPEAT_TAG_PREFIX = `${FORMAT_TAG_PREFIX}repeat:`;
+
 export const encodeEntryFormat = (
-  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images">,
+  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images" | "dueTime" | "repeat">,
 ): { kind: "check" | "bullet"; tags: string[] } => ({
   kind: entry.kind === "check" ? "check" : "bullet",
   tags: [
@@ -164,6 +170,8 @@ export const encodeEntryFormat = (
     ...(entry.kind === "text" ? [PLAIN_LINE_TAG] : []),
     ...(entry.bold ? [BOLD_LINE_TAG] : []),
     ...(entry.images ?? []).map(encodeLineImage),
+    ...(isValidTime(entry.dueTime) ? [`${TIME_TAG_PREFIX}${entry.dueTime}`] : []),
+    ...(isRepeatRule(entry.repeat) ? [`${REPEAT_TAG_PREFIX}${entry.repeat}`] : []),
   ],
 });
 
@@ -180,10 +188,20 @@ const DELETED_FOLDER_PREFIX = `${FORMAT_TAG_PREFIX}delfolder:`;
 const ARCHIVED_LIST_PREFIX = `${FORMAT_TAG_PREFIX}archived:`;
 const ARCHIVED_FOLDER_PREFIX = `${FORMAT_TAG_PREFIX}arcfolder:`;
 const TEMPLATE_LIST_TAG = `${FORMAT_TAG_PREFIX}template`;
+const RESET_RULE_PREFIX = `${FORMAT_TAG_PREFIX}reset:`;
+const RESET_AT_PREFIX = `${FORMAT_TAG_PREFIX}resetat:`;
 
 type ListTagFields = Pick<
   SavedItem,
-  "pinned" | "ruleTagId" | "deletedAt" | "deletedWithFolderId" | "archivedAt" | "archivedWithFolderId" | "isTemplate"
+  | "pinned"
+  | "ruleTagId"
+  | "deletedAt"
+  | "deletedWithFolderId"
+  | "archivedAt"
+  | "archivedWithFolderId"
+  | "isTemplate"
+  | "resetRule"
+  | "resetAt"
 >;
 
 export const encodeListTags = (list: ListTagFields & Pick<SavedItem, "tagOptionIds">): string[] => [
@@ -195,6 +213,8 @@ export const encodeListTags = (list: ListTagFields & Pick<SavedItem, "tagOptionI
   ...(list.archivedAt ? [`${ARCHIVED_LIST_PREFIX}${list.archivedAt}`] : []),
   ...(list.archivedAt && list.archivedWithFolderId ? [`${ARCHIVED_FOLDER_PREFIX}${list.archivedWithFolderId}`] : []),
   ...(list.isTemplate ? [TEMPLATE_LIST_TAG] : []),
+  ...(isResetRule(list.resetRule) ? [`${RESET_RULE_PREFIX}${list.resetRule}`] : []),
+  ...(isResetRule(list.resetRule) && list.resetAt ? [`${RESET_AT_PREFIX}${list.resetAt}`] : []),
 ];
 
 export const decodeListTags = (
@@ -206,6 +226,8 @@ export const decodeListTags = (
   const deletedWithFolderId = deletedAt ? valueOf(DELETED_FOLDER_PREFIX) : undefined;
   const archivedAt = valueOf(ARCHIVED_LIST_PREFIX);
   const archivedWithFolderId = archivedAt ? valueOf(ARCHIVED_FOLDER_PREFIX) : undefined;
+  const resetRule = valueOf(RESET_RULE_PREFIX);
+  const resetAt = isResetRule(resetRule) ? valueOf(RESET_AT_PREFIX) : undefined;
   return {
     tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
     ...(tags.includes(PINNED_LIST_TAG) ? { pinned: true as const } : {}),
@@ -215,22 +237,28 @@ export const decodeListTags = (
     ...(archivedAt ? { archivedAt } : {}),
     ...(archivedWithFolderId ? { archivedWithFolderId } : {}),
     ...(tags.includes(TEMPLATE_LIST_TAG) ? { isTemplate: true as const } : {}),
+    ...(isResetRule(resetRule) ? { resetRule } : {}),
+    ...(resetAt ? { resetAt } : {}),
   };
 };
 
 export const decodeEntryFormat = (
   kind: unknown,
   tags: string[],
-): Pick<ListEntry, "kind" | "tagOptionIds" | "images"> & { bold?: true } => {
+): Pick<ListEntry, "kind" | "tagOptionIds" | "images" | "dueTime" | "repeat"> & { bold?: true } => {
   const images = tags
     .filter((tag) => tag.startsWith(IMAGE_TAG_PREFIX))
     .map(decodeLineImage)
     .filter((image): image is LineImage => !!image);
+  const dueTime = tags.find((tag) => tag.startsWith(TIME_TAG_PREFIX))?.slice(TIME_TAG_PREFIX.length);
+  const repeat = tags.find((tag) => tag.startsWith(REPEAT_TAG_PREFIX))?.slice(REPEAT_TAG_PREFIX.length);
   return {
     kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
     tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
     ...(tags.includes(BOLD_LINE_TAG) ? { bold: true as const } : {}),
     ...(images.length > 0 ? { images } : {}),
+    ...(isValidTime(dueTime) ? { dueTime } : {}),
+    ...(isRepeatRule(repeat) ? { repeat } : {}),
   };
 };
 

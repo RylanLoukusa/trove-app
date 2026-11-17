@@ -8,6 +8,10 @@ export type AccessRole = "owner" | "editor" | "viewer";
 export type ShareScope = "folder_only" | "folder_and_subfolders";
 export type CommentTargetType = "item" | "folder";
 export type CommentReactionType = string;
+// How often a line comes back once it is checked off.
+export type RepeatRule = "daily" | "weekdays" | "weekly" | "monthly" | "yearly";
+// How often a list unchecks all its lines by itself.
+export type ResetRule = "daily" | "weekly" | "monthly";
 // Smart focus lists pull in every line matching their rule.
 export type FocusRule = "due_today" | "due_week" | "due_weekend" | "high_priority";
 
@@ -80,6 +84,12 @@ export type ListEntry = {
   position: string;
   notes?: string;
   dueDate?: string; // YYYY-MM-DD
+  // A time on the due date ("HH:MM", 24-hour, the person's local time). A
+  // line with a time sends a reminder then.
+  dueTime?: string;
+  // Checking off a repeating line moves its due date to the next time
+  // instead of leaving it done.
+  repeat?: RepeatRule;
   completedAt?: string;
   tagOptionIds: string[];
   // Set on a line that shows a line from another list (a "pulled" line). Its
@@ -146,6 +156,10 @@ export type SavedItem = {
   archivedWithFolderId?: string;
   // A template: a list kept only to start new lists from.
   isTemplate?: boolean;
+  // The list unchecks every line by itself each day, week or month.
+  // `resetAt` is when it last did.
+  resetRule?: ResetRule;
+  resetAt?: string;
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];

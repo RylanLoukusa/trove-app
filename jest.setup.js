@@ -18,3 +18,18 @@ jest.mock("@sentry/react-native", () => ({
   captureException: jest.fn(),
   wrap: (component) => component,
 }));
+
+// Local notifications for reminders: nothing is scheduled in tests.
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve(null)),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: "undetermined" })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  getAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve([])),
+  cancelScheduledNotificationAsync: jest.fn(() => Promise.resolve()),
+  scheduleNotificationAsync: jest.fn(() => Promise.resolve("id")),
+  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { HIGH: 4 },
+  SchedulableTriggerInputTypes: { DATE: "date" },
+}));

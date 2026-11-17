@@ -48,6 +48,7 @@ import {
 import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { copyEntriesForList, copyTitle, isPastKeeping, SetAsideFolder, sortByLifecycle } from "../utils/listLifecycle";
+import { isResetDue, nextDueDate } from "../utils/schedule";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
@@ -137,7 +138,17 @@ type TroveContextValue = TroveData & {
     updates: Partial<
       Pick<
         ListEntry,
-        "text" | "checked" | "kind" | "bold" | "images" | "indentLevel" | "notes" | "dueDate" | "tagOptionIds"
+        | "text"
+        | "checked"
+        | "kind"
+        | "bold"
+        | "images"
+        | "indentLevel"
+        | "notes"
+        | "dueDate"
+        | "dueTime"
+        | "repeat"
+        | "tagOptionIds"
       >
     >,
   ) => boolean;
@@ -221,6 +232,18 @@ export const loadTroveData = async (userId?: string | null): Promise<TroveData> 
 export const saveTroveData = async (data: TroveData, userId?: string | null): Promise<void> => {
   await AsyncStorage.setItem(storageKeyForUser(userId), JSON.stringify(data));
 };
+
+// Checking off a repeating line doesn't leave it done: it comes back open,
+// due the next time. Its completedAt says when it was last done.
+const checkOff = (before: ListEntry, checkedEntry: ListEntry, timestamp: string): ListEntry =>
+  checkedEntry.repeat && checkedEntry.kind === "check"
+    ? {
+        ...checkedEntry,
+        checked: false,
+        completedAt: timestamp,
+        dueDate: nextDueDate(checkedEntry.repeat, before.dueDate ?? checkedEntry.dueDate),
+      }
+    : checkedEntry;
 
 const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
@@ -885,9 +908,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         const next: ListEntry = { ...candidate, ...sourceUpdates, updatedAt: timestamp };
         if (!next.bold) delete next.bold;
         if (!next.images?.length) delete next.images;
+        if (!next.dueTime || !next.dueDate) delete next.dueTime;
+        if (!next.repeat) delete next.repeat;
         if (next.kind !== "check") next.checked = false;
         if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
-        return next;
+        return next.checked && !candidate.checked ? checkOff(candidate, next, timestamp) : next;
       }),
     }));
     markLocalChangePending();
@@ -909,11 +934,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
     const timestamp = new Date().toISOString();
     setData((current) => ({
       ...current,
-      listEntries: current.listEntries.map((candidate) =>
-        targetIds.has(candidate.id)
-          ? { ...candidate, checked, completedAt: checked ? timestamp : undefined, updatedAt: timestamp }
-          : candidate,
-      ),
+      listEntries: current.listEntries.map((candidate) => {
+        if (!targetIds.has(candidate.id)) return candidate;
+        const next = { ...candidate, checked, completedAt: checked ? timestamp : undefined, updatedAt: timestamp };
+        return checked ? checkOff(candidate, next, timestamp) : next;
+      }),
     }));
     markLocalChangePending();
     return targetIds.size;
@@ -1801,6 +1826,38 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       listEntries: current.listEntries.filter((entry) => !goneListIds.has(entry.listId)),
     };
   }, []);
+
+  // Lists set to start over each day, week or month uncheck their own lines
+  // once a new one has begun. Checked when data changes and when the app
+  // comes back to the front.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") setClock(Date.now());
+    });
+    return () => subscription.remove();
+  }, []);
+  useEffect(() => {
+    if (!isReady) return;
+    const now = new Date(clock);
+    const { active } = sortByLifecycle(data.items, data.folders);
+    const due = active.filter(
+      (list) => list.resetRule && isResetDue(list.resetRule, list.resetAt, now) && canEditListRecord(list.id),
+    );
+    if (due.length === 0) return;
+    const timestamp = now.toISOString();
+    const dueIds = new Set(due.map((list) => list.id));
+    setData((current) => ({
+      ...current,
+      items: current.items.map((item) => (dueIds.has(item.id) ? { ...item, resetAt: timestamp, updatedAt: timestamp } : item)),
+      listEntries: current.listEntries.map((entry) =>
+        dueIds.has(entry.listId) && !entry.refEntryId && entry.kind === "check" && entry.checked
+          ? { ...entry, checked: false, completedAt: undefined, updatedAt: timestamp }
+          : entry,
+      ),
+    }));
+    markLocalChangePending();
+  }, [canEditListRecord, clock, data.folders, data.items, isReady, markLocalChangePending, setData]);
 
   // What has waited its 30 days in Recently deleted goes for good. Only the
   // owner's device does this, so a shared list isn't removed from under them.

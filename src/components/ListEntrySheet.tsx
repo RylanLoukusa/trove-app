@@ -3,8 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import type { ListEntry, TagOption } from "../types/models";
-import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, withPriority } from "../utils/listView";
+import { askForReminderPermission } from "../reminders/notifications";
+import type { ListEntry, RepeatRule, TagOption } from "../types/models";
+import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, toDateKey, withPriority } from "../utils/listView";
+import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
+
+type Details = Pick<ListEntry, "text" | "dueDate" | "dueTime" | "repeat" | "notes" | "tagOptionIds">;
 
 type Props = {
   entry: ListEntry | null;
@@ -19,12 +23,13 @@ type Props = {
   // Other lists this line also shows on; tapping one takes it off that list.
   alsoOnLists?: Array<{ id: string; title: string }>;
   onRemoveFromList?: (listId: string) => void;
-  onSave: (updates: Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds">>) => void;
+  onSave: (updates: Partial<Details>) => void;
   onDelete: () => void;
   onClose: () => void;
 };
 
-// Details for one list line: due date, priority, other tags and notes.
+// Details for one list line: due date and time, repeat, priority, other tags
+// and notes.
 export const ListEntrySheet = ({
   entry,
   priorityOptions,
@@ -43,6 +48,10 @@ export const ListEntrySheet = ({
   const [text, setText] = useState("");
   const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [dueDraft, setDueDraft] = useState("");
+  const [dueTime, setDueTime] = useState<string | undefined>(undefined);
+  const [timeDraft, setTimeDraft] = useState("");
+  const [repeat, setRepeat] = useState<RepeatRule | undefined>(undefined);
+  const [permissionNote, setPermissionNote] = useState("");
   const [priorityId, setPriorityId] = useState<string | null>(null);
   // The line's tags outside Priority.
   const otherSections = useMemo(() => {
@@ -61,6 +70,10 @@ export const ListEntrySheet = ({
     setText(entry.text);
     setDueDate(entry.dueDate);
     setDueDraft(entry.dueDate ?? "");
+    setDueTime(entry.dueTime);
+    setTimeDraft(entry.dueTime ? formatTime(entry.dueTime) : "");
+    setRepeat(entry.repeat);
+    setPermissionNote("");
     setPriorityId(entryPriority(entry, priorityOptions)?.id ?? null);
     setTagIds(entry.tagOptionIds.filter((id) => otherTagIds.has(id)));
     setNotes(entry.notes ?? "");
@@ -71,13 +84,20 @@ export const ListEntrySheet = ({
   const quickDates = useMemo(() => quickDueDates(), [entry?.id]);
   const dueDraftInvalid = dueDraft.trim() !== "" && !parseDateKey(dueDraft);
   const dueDescription = dueDate ? describeDueDate(dueDate) : null;
+  const timeDraftInvalid = timeDraft.trim() !== "" && !parseTimeInput(timeDraft) && timeDraft !== formatTime(dueTime ?? "");
+  const isCheck = entry?.kind === "check";
 
   const close = () => {
     if (entry && canEdit) {
-      const updates: Partial<Pick<ListEntry, "text" | "dueDate" | "notes" | "tagOptionIds">> = {};
+      const updates: Partial<Details> = {};
       const trimmed = text.trim();
       if (trimmed && trimmed !== entry.text) updates.text = trimmed;
       if (dueDate !== entry.dueDate) updates.dueDate = dueDate;
+      // A time only means something on a day.
+      const nextTime = dueDate ? dueTime : undefined;
+      if (nextTime !== entry.dueTime) updates.dueTime = nextTime;
+      const nextRepeat = isCheck ? repeat : undefined;
+      if (nextRepeat !== entry.repeat) updates.repeat = nextRepeat;
       const nextNotes = notes.trim() || undefined;
       if (nextNotes !== entry.notes) updates.notes = nextNotes;
       const nextTags = [
@@ -103,6 +123,25 @@ export const ListEntrySheet = ({
   const setDue = (value: string | undefined) => {
     setDueDate(value);
     setDueDraft(value ?? "");
+  };
+
+  // The first time a line gets a time, the phone asks whether Trove may
+  // send reminders.
+  const setTime = (value: string | undefined) => {
+    setDueTime(value);
+    setTimeDraft(value ? formatTime(value) : "");
+    if (!value) return;
+    void askForReminderPermission().then((permission) => {
+      setPermissionNote(
+        permission === "denied" ? "Reminders are off for Trove. Turn on notifications in your phone's Settings." : "",
+      );
+    });
+  };
+
+  // A repeating line needs a day to repeat from.
+  const setRepeatRule = (value: RepeatRule | undefined) => {
+    setRepeat(value);
+    if (value && !dueDate) setDue(toDateKey(new Date()));
   };
 
   return (
@@ -164,6 +203,76 @@ export const ListEntrySheet = ({
         <Text style={[styles.hint, dueDraftInvalid && styles.hintError]}>
           {dueDraftInvalid ? "Use a date like 2026-12-01." : dueDescription ? `Due ${dueDescription.label.toLowerCase()}` : "No due date"}
         </Text>
+
+        {!!dueDate && (
+          <>
+            <Text style={styles.label}>Time</Text>
+            <View style={styles.chipRow}>
+              {quickTimes.map((time) => (
+                <Chip
+                  key={time}
+                  label={formatTime(time)}
+                  selected={dueTime === time}
+                  disabled={!canEdit}
+                  onPress={() => setTime(dueTime === time ? undefined : time)}
+                  styles={styles}
+                />
+              ))}
+              {!!dueTime && (
+                <Chip label="No time" selected={false} disabled={!canEdit} onPress={() => setTime(undefined)} styles={styles} />
+              )}
+            </View>
+            <TextInput
+              accessibilityLabel="Time"
+              editable={canEdit}
+              value={timeDraft}
+              onChangeText={(value) => {
+                setTimeDraft(value);
+                if (!value.trim()) setDueTime(undefined);
+                else {
+                  const parsed = parseTimeInput(value);
+                  if (parsed) setDueTime(parsed);
+                }
+              }}
+              onEndEditing={() => {
+                const parsed = parseTimeInput(timeDraft);
+                if (parsed) setTime(parsed);
+              }}
+              placeholder="e.g. 7:30 pm"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.input, timeDraftInvalid && styles.inputInvalid]}
+            />
+            <Text style={[styles.hint, (timeDraftInvalid || !!permissionNote) && styles.hintError]}>
+              {timeDraftInvalid
+                ? "Use a time like 9:30 or 7 pm."
+                : permissionNote || (dueTime ? `Reminds you at ${formatTime(dueTime)}` : "Add a time to get a reminder")}
+            </Text>
+          </>
+        )}
+
+        {isCheck && (
+          <>
+            <Text style={styles.label}>Repeat</Text>
+            <View style={styles.chipRow}>
+              {REPEAT_RULES.map((rule) => (
+                <Chip
+                  key={rule}
+                  label={repeatLabels[rule]}
+                  accessibilityLabel={`Repeat: ${repeatLabels[rule]}`}
+                  selected={repeat === rule}
+                  disabled={!canEdit}
+                  onPress={() => setRepeatRule(repeat === rule ? undefined : rule)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+            <Text style={styles.hint}>
+              {repeat ? "Checking it off moves it to the next date." : "Doesn't repeat"}
+            </Text>
+          </>
+        )}
 
         {priorityOptions.length > 0 && (
           <>
