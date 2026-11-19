@@ -6,6 +6,7 @@ import { Archive, Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lu
 import { SkeletonBlock, SkeletonText } from "../../components";
 import { CommentThread } from "../../components/CommentThread";
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
+import { useNewListActions } from "../../components/newListActions";
 import { NavBar, NavIconButton } from "../../components/NavBar";
 import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader } from "../../components/Rows";
 import { useListRowActions } from "../../components/useListRowActions";
@@ -64,6 +65,15 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     const list = createItem({ folderId, title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
     if (list) navigation.navigate("List", { listId: list.id, isNew: true });
   }, [createItem, folderId, navigation]);
+
+  // The New list button asks: a blank list, or one from a template.
+  const [newListOpen, setNewListOpen] = useState(false);
+  const newListActions = useNewListActions({
+    folderId: folderId,
+    onBlank: onNewList,
+    onOpen: useCallback((listId: string) => navigation.navigate("List", { listId }), [navigation]),
+    onBrowse: useCallback(() => navigation.navigate("Templates"), [navigation]),
+  });
 
   const shareAsText = useCallback(async (): Promise<void> => {
     if (!folder) return;
@@ -251,9 +261,10 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {canEditContent && <ComposeButton onPress={onNewList} />}
+      {canEditContent && <ComposeButton onPress={() => setNewListOpen(true)} />}
 
       <MenuSheet visible={menuOpen} title={folder.name} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      <MenuSheet visible={newListOpen} title="New list" actions={newListActions} onClose={() => setNewListOpen(false)} />
       {overlays}
     </View>
   );

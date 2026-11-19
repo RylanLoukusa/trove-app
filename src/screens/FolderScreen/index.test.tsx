@@ -269,11 +269,14 @@ describe("FolderScreen", () => {
   });
 
   describe("starting a list", () => {
-    it("creates a list in this folder with one tap and opens it ready to type", async () => {
+    it("creates a list in this folder as a blank list and opens it ready to type", async () => {
       createItem.mockReturnValue(makeList({ id: "new-list", title: UNTITLED_LIST_TITLE }));
       await renderFolderScreen();
 
       await fireEvent.press(screen.getByLabelText("New list"));
+      // It asks: blank, or from a template.
+      expect(screen.getByLabelText("From a template")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Blank list"));
 
       expect(createItem).toHaveBeenCalledWith({ folderId: "trips", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
       expect(navigation.navigate).toHaveBeenCalledWith("List", { listId: "new-list", isNew: true });

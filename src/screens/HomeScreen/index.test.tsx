@@ -137,7 +137,7 @@ type Setup = {
   isEntitlementLoading?: boolean;
   isReady?: boolean;
   showWelcome?: boolean;
-  trove?: { folders?: Folder[]; items?: SavedItem[]; listEntries?: ListEntry[] };
+  trove?: { folders?: Folder[]; items?: SavedItem[]; listEntries?: ListEntry[]; templates?: SavedItem[] };
 };
 
 const renderHomeScreen = async ({
@@ -163,6 +163,7 @@ const renderHomeScreen = async ({
     setItemArchived,
     copyItem,
     canEditItem,
+    templates: trove.templates ?? [],
   });
   mockUseEntitlement.mockReturnValue({
     isPro,
@@ -297,15 +298,32 @@ describe("HomeScreen", () => {
   });
 
   describe("starting a list", () => {
-    it("creates a list with one tap and opens it ready to type", async () => {
+    it("creates a list as a blank list and opens it ready to type", async () => {
       createItem.mockReturnValue(makeList({ id: "new-list", title: UNTITLED_LIST_TITLE }));
       await renderHomeScreen();
 
       await fireEvent.press(screen.getByLabelText("New list"));
+      // It asks: blank, or from a template.
+      expect(screen.getByLabelText("From a template")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Blank list"));
 
       expect(createItem).toHaveBeenCalledTimes(1);
       expect(createItem).toHaveBeenCalledWith({ folderId: "", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
       expect(navigation.navigate).toHaveBeenCalledWith("List", { listId: "new-list", isNew: true });
+    });
+
+    it("starts a list from one of the person's templates, or opens all of them", async () => {
+      copyItem.mockReturnValue(makeList({ id: "from-template", title: "Packing" }));
+      await renderHomeScreen({ trove: { templates: [makeList({ id: "packing-template", title: "Packing", isTemplate: true })] } });
+
+      await fireEvent.press(screen.getByLabelText("New list"));
+      await fireEvent.press(screen.getByLabelText("Packing"));
+      expect(copyItem).toHaveBeenCalledWith("packing-template", { title: "Packing", fresh: true });
+      expect(navigation.navigate).toHaveBeenCalledWith("List", { listId: "from-template" });
+
+      await fireEvent.press(screen.getByLabelText("New list"));
+      await fireEvent.press(screen.getByLabelText("More templates"));
+      expect(navigation.navigate).toHaveBeenCalledWith("Templates");
     });
 
     it("stays on Home when the list could not be created", async () => {

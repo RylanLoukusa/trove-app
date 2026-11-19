@@ -6,6 +6,7 @@ import { Archive, Ellipsis, LayoutTemplate, LogIn, LogOut, Search, Settings, Spa
 
 import { SkeletonBlock, SkeletonText } from "../../components";
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
+import { useNewListActions } from "../../components/newListActions";
 import { NavBar, NavIconButton } from "../../components/NavBar";
 import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader, SectionLink } from "../../components/Rows";
 import { useListRowActions } from "../../components/useListRowActions";
@@ -70,6 +71,15 @@ export const HomeScreen = ({ navigation }: Props) => {
     const list = createItem({ folderId: "", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
     if (list) navigation.navigate("List", { listId: list.id, isNew: true });
   }, [createItem, navigation]);
+
+  // The New list button asks: a blank list, or one from a template.
+  const [newListOpen, setNewListOpen] = useState(false);
+  const newListActions = useNewListActions({
+    folderId: undefined,
+    onBlank: onNewList,
+    onOpen: useCallback((listId: string) => navigation.navigate("List", { listId }), [navigation]),
+    onBrowse: useCallback(() => navigation.navigate("Templates"), [navigation]),
+  });
 
   const renderListRow = (list: (typeof lists)[number]) => (
     <ListRow
@@ -264,9 +274,10 @@ export const HomeScreen = ({ navigation }: Props) => {
         )}
       </ScrollView>
 
-      {isReady && <ComposeButton onPress={onNewList} />}
+      {isReady && <ComposeButton onPress={() => setNewListOpen(true)} />}
 
       <MenuSheet visible={menuOpen} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      <MenuSheet visible={newListOpen} title="New list" actions={newListActions} onClose={() => setNewListOpen(false)} />
       {overlays}
     </View>
   );

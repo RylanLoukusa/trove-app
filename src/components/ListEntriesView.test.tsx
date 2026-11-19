@@ -979,6 +979,9 @@ describe("ListEntriesView", () => {
       await openDetails("Cake");
       expect(screen.getByText("Line details")).toBeTruthy();
       await fireEvent.press(screen.getByText("Tomorrow"));
+      // Priority is behind its "+" button until the line has one.
+      expect(screen.queryByText("High")).toBeNull();
+      await fireEvent.press(screen.getByLabelText("Add Priority"));
       await fireEvent.press(screen.getByText("High"));
       await fireEvent.changeText(screen.getByLabelText("Notes"), "Chocolate");
       await fireEvent.press(screen.getByText("Done"));
@@ -1012,8 +1015,11 @@ describe("ListEntriesView", () => {
         await renderList([entry("Cake", { tagOptionIds: ["high", "home"] })], { tagSections: sections });
 
         await openDetails("Cake");
-        expect(screen.getByText("Errands")).toBeTruthy();
+        // A group the line already has a tag in shows; the others wait behind "+".
         expect(screen.getByLabelText("Where: Home").props.accessibilityState.selected).toBe(true);
+        expect(screen.queryByLabelText("Errands: Store")).toBeNull();
+        await fireEvent.press(screen.getByLabelText("Add Errands"));
+        expect(screen.getByText("Errands")).toBeTruthy();
         await fireEvent.press(screen.getByLabelText("Errands: Store"));
         await fireEvent.press(screen.getByLabelText("Errands: Pharmacy"));
         await fireEvent.press(screen.getByLabelText("Where: Work"));
@@ -1043,6 +1049,7 @@ describe("ListEntriesView", () => {
       await renderList([entry("Lamp")]);
 
       await openDetails("Lamp");
+      for (const field of ["Quantity", "Price", "Rating", "Link"]) await fireEvent.press(screen.getByLabelText(`Add ${field}`));
       await fireEvent.changeText(screen.getByLabelText("Quantity"), "2x");
       await fireEvent.changeText(screen.getByLabelText("Price"), "$12,50");
       await fireEvent.press(screen.getByLabelText("4 stars"));
@@ -1711,6 +1718,7 @@ describe("lines given to people on a shared list", () => {
 
     expect(screen.getByLabelText("For Me")).toBeTruthy();
     await openDetails("Cake");
+    await fireEvent.press(screen.getByLabelText("Assign to someone"));
     expect(screen.getByLabelText("Assign to Me")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Assign to Sam Lee"));
     await fireEvent.press(screen.getByText("Done"));
