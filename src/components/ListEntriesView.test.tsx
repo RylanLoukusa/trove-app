@@ -247,6 +247,36 @@ describe("ListEntriesView", () => {
       expect(screen.getByLabelText(ADD_LINE).props.value).toBe("");
     });
 
+    it("reads a date, a time and a priority out of a typed line, with Undo", async () => {
+      await renderList([entry("Cake")]);
+
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Call mom tomorrow 6pm !high\n");
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+        {
+          text: "Call mom",
+          checked: false,
+          indentLevel: 0,
+          kind: "check",
+          dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          dueTime: "18:00",
+          tagOptionIds: ["high"],
+        },
+      ]);
+      expect(screen.getByText(/^Tomorrow .* · High$/)).toBeTruthy();
+
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("new-0", expect.objectContaining({ text: "Call mom tomorrow 6pm !high", dueDate: undefined }));
+    });
+
+    it("leaves a typed line as it is when smart text is off", async () => {
+      await renderList([entry("Cake")], { smartText: false });
+
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Call mom tomorrow\n");
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [{ text: "Call mom tomorrow", checked: false, indentLevel: 0, kind: "check" }]);
+    });
+
     it("carries on like the last line: same mark, same indent", async () => {
       await renderList([entry("Cake"), entry("Chocolate", { kind: "bullet", indentLevel: 2 })]);
 

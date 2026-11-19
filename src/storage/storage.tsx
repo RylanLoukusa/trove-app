@@ -50,7 +50,8 @@ import {
 import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { copyEntriesForList, copyTitle, isPastKeeping, SetAsideFolder, sortByLifecycle } from "../utils/listLifecycle";
-import { isResetDue, nextDueDate } from "../utils/schedule";
+import { isRepeatRule, isResetDue, isValidTime, nextDueDate } from "../utils/schedule";
+import { parseDateKey } from "../utils/listView";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
@@ -169,7 +170,15 @@ type TroveContextValue = TroveData & {
   insertListEntries: (
     listId: string,
     afterEntryId: string | null,
-    inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel" | "bold" | "images">>>,
+    inputs: Array<
+      Pick<ListEntry, "text"> &
+        Partial<
+          Pick<
+            ListEntry,
+            "kind" | "checked" | "indentLevel" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "price" | "quantity" | "tagOptionIds"
+          >
+        >
+    >,
   ) => ListEntry[];
   // Moves lines to other lists. A line pulled in from another list moves
   // that original. Without a position a line goes to the end of its new
@@ -1014,8 +1023,14 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         indentLevel: Math.max(0, Math.min(input.indentLevel ?? 0, MAX_ENTRY_INDENT)),
         ...(input.bold ? { bold: true } : {}),
         ...(input.images?.length ? { images: input.images } : {}),
+        // What smart text in quick add picked out of the words.
+        ...(input.dueDate && parseDateKey(input.dueDate) ? { dueDate: input.dueDate } : {}),
+        ...(input.dueDate && isValidTime(input.dueTime) ? { dueTime: input.dueTime } : {}),
+        ...(kind === "check" && isRepeatRule(input.repeat) ? { repeat: input.repeat } : {}),
+        ...(isPrice(input.price) ? { price: input.price } : {}),
+        ...(isQuantity(input.quantity) ? { quantity: input.quantity } : {}),
         position: positions[index],
-        tagOptionIds: [],
+        tagOptionIds: input.tagOptionIds ? [...new Set(input.tagOptionIds)] : [],
         ownerId: list.ownerId ?? activeUserId ?? undefined,
         createdBy: activeUserId ?? undefined,
         createdAt: timestamp,

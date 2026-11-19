@@ -68,7 +68,8 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
-import { formatRating, linkHost } from "../utils/fields";
+import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
+import { parseSmartText, SmartFields } from "../utils/smartText";
 import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -88,7 +89,7 @@ export type EntryUpdates = Partial<
 >;
 
 // A line to add: its text, plus how it is marked when that is already known.
-export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean; images?: LineImage[] };
+export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean; images?: LineImage[] } & SmartFields;
 
 export type ListEntriesViewHandle = {
   showToast: (message: string, undo?: () => void) => void;
@@ -158,6 +159,9 @@ type Props = {
   focusAddSignal?: number;
   // "gallery" shows the lines as cards (a Collection) instead of rows.
   layout?: "lines" | "gallery";
+  // Reads dates, times, priority, tags, price and quantity out of a typed
+  // line (on unless turned off).
+  smartText?: boolean;
 };
 
 // Index the dragged row should land on, given how far it has moved and the
@@ -238,6 +242,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     emptyText = "Nothing on this list yet.",
     focusAddSignal,
     layout = "lines",
+    smartText = true,
   },
   ref,
 ) {
@@ -540,6 +545,52 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     ...(addFormatRef.current.bold ? { bold: true } : {}),
   });
 
+  // Smart text: a typed line such as "Call mom tomorrow 6pm !high" is added
+  // as "Call mom" with its date, time and priority, and a message says what
+  // was picked up, with an Undo that keeps the words as typed.
+  const allTagOptions = useMemo(() => (tagSections ?? []).flatMap((section) => section.options), [tagSections]);
+  const smartLine = (line: NewLine): { line: NewLine; summary: string | null } => {
+    if (!smartText) return { line, summary: null };
+    const { text, fields } = parseSmartText(line.text, { priorityOptions, tagOptions: allTagOptions });
+    if (Object.keys(fields).length === 0) return { line, summary: null };
+    const due = fields.dueDate ? describeDueDate(fields.dueDate)?.label : undefined;
+    const names = (fields.tagOptionIds ?? [])
+      .map((id) => allTagOptions.find((option) => option.id === id)?.name ?? priorityOptions.find((option) => option.id === id)?.name)
+      .filter(Boolean);
+    const summary = [
+      [due, fields.dueTime ? formatTime(fields.dueTime) : ""].filter(Boolean).join(" "),
+      fields.repeat ? repeatLabels[fields.repeat] : "",
+      ...names,
+      fields.price !== undefined ? formatPrice(fields.price) : "",
+      fields.quantity ? `×${formatQuantity(fields.quantity)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return { line: { ...line, ...fields, text }, summary };
+  };
+
+  // Adds one typed line from the bottom row, reading smart text in it.
+  const addTypedLine = (line: NewLine) => {
+    const { line: smart, summary } = smartLine(line);
+    const [id] = onInsertEntries(null, [smart]);
+    if (summary && id) {
+      showToast(summary, () =>
+        onUpdateEntry(id, {
+          text: line.text,
+          dueDate: undefined,
+          dueTime: undefined,
+          repeat: undefined,
+          price: undefined,
+          quantity: undefined,
+          tagOptionIds: [],
+        }),
+      );
+    }
+  };
+
+  const addTypedLineRef = useRef(addTypedLine);
+  addTypedLineRef.current = addTypedLine;
+
   // Return or a paste in the bottom line.
   const changeAddDraft = (next: string) => {
     if (!/[\r\n]/.test(next)) {
@@ -557,6 +608,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       else Keyboard.dismiss();
       return;
     }
+    if (!isPaste && lines.length === 1) {
+      addTypedLine(lines[0]);
+      setAddOverride(null);
+      return;
+    }
     const ids = onInsertEntries(null, lines);
     // The next line carries on like the one just added, minus the bold.
     setAddOverride(null);
@@ -566,19 +622,17 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const commitAddDraft = useCallback((): boolean => {
     const text = draftRef.current.trim();
     if (!text) return false;
-    onInsertEntries(null, [
-      {
-        text,
-        checked: false,
-        indentLevel: addFormatRef.current.indentLevel,
-        kind: addFormatRef.current.kind,
-        ...(addFormatRef.current.bold ? { bold: true } : {}),
-      },
-    ]);
+    addTypedLineRef.current({
+      text,
+      checked: false,
+      indentLevel: addFormatRef.current.indentLevel,
+      kind: addFormatRef.current.kind,
+      ...(addFormatRef.current.bold ? { bold: true } : {}),
+    });
     setDraft("");
     setAddOverride(null);
     return true;
-  }, [onInsertEntries, setDraft]);
+  }, [setDraft]);
 
   useImperativeHandle(ref, () => ({ showToast, flush: commitAddDraft }), [commitAddDraft, showToast]);
 
