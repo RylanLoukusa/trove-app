@@ -96,6 +96,12 @@ class TroveWidgetProvider : AppWidgetProvider() {
       } catch (error: Exception) {
         null
       }
+      val appearance = try {
+        json?.let { JSONObject(it).optString("appearance", "system") } ?: "system"
+      } catch (error: Exception) {
+        "system"
+      }
+      applyAppearance(views, appearance)
       val first = lists?.optJSONObject(0)
       val second = lists?.optJSONObject(1)
       val tall = manager.getAppWidgetOptions(widgetId)
@@ -128,6 +134,31 @@ class TroveWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(SECOND.root, View.GONE)
       }
       return views
+    }
+
+    private class Colors(val background: Int, val brand: Int, val ink: Int, val muted: Int, val rule: Int)
+
+    private val LIGHT = Colors(R.drawable.trove_widget_background_light, 0xFF2F4A37.toInt(), 0xFF1D1B18.toInt(), 0xFF6B655C.toInt(), 0xFFE6DFD4.toInt())
+    private val DARK = Colors(R.drawable.trove_widget_background_dark, 0xFF9FC2A3.toInt(), 0xFFF3EDE3.toInt(), 0xFFB3AB9F.toInt(), 0xFF3A342B.toInt())
+
+    // Trove set to Light or Dark rather than System: the widget follows it.
+    // With System, the colors come from values and values-night.
+    private fun applyAppearance(views: RemoteViews, appearance: String) {
+      val colors = when (appearance) {
+        "light" -> LIGHT
+        "dark" -> DARK
+        else -> return
+      }
+      views.setInt(R.id.trove_widget_root, "setBackgroundResource", colors.background)
+      views.setTextColor(R.id.trove_widget_brand, colors.brand)
+      views.setInt(R.id.trove_widget_divider, "setBackgroundColor", colors.rule)
+      listOf(FIRST, SECOND).forEach { section ->
+        views.setTextColor(section.title, colors.ink)
+        views.setTextColor(section.count, colors.brand)
+        views.setTextColor(section.note, colors.muted)
+        views.setTextColor(section.more, colors.muted)
+        section.lines.forEach { views.setTextColor(it, colors.ink) }
+      }
     }
 
     private fun fill(context: Context, views: RemoteViews, section: Section, list: JSONObject, limit: Int) {
