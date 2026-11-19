@@ -3,6 +3,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import type { AppStateStatus } from "react-native";
 import { Alert, AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
+import { isPrice, isQuantity, isRating } from "../utils/fields";
 import { getSupabase } from "../lib/supabase";
 import { leaveSharedList as leaveSharedListOnServer } from "../collaboration/listSharing";
 import { syncShareExtensionFolders } from "../share/sharedImport";
@@ -149,6 +150,10 @@ type TroveContextValue = TroveData & {
         | "dueDate"
         | "dueTime"
         | "repeat"
+        | "quantity"
+        | "price"
+        | "rating"
+        | "link"
         | "tagOptionIds"
       >
     >,
@@ -914,6 +919,10 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         if (!next.images?.length) delete next.images;
         if (!next.dueTime || !next.dueDate) delete next.dueTime;
         if (!next.repeat) delete next.repeat;
+        if (!isQuantity(next.quantity)) delete next.quantity;
+        if (!isPrice(next.price)) delete next.price;
+        if (!isRating(next.rating)) delete next.rating;
+        if (!next.link) delete next.link;
         if (next.kind !== "check") next.checked = false;
         if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
         return next.checked && !candidate.checked ? checkOff(candidate, next, timestamp) : next;

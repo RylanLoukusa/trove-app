@@ -1281,6 +1281,7 @@ const itemConflictFields = (local: SavedItem, remote: SavedItem): SyncConflictFi
     "isTemplate",
     "resetRule",
     "resetAt",
+    "viewMode",
   ]);
 
 const tagGroupConflictFields = (local: TagGroup, remote: TagGroup): SyncConflictField[] =>
@@ -1313,6 +1314,10 @@ const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConfl
     "dueDate",
     "dueTime",
     "repeat",
+    "quantity",
+    "price",
+    "rating",
+    "link",
     "completedAt",
     "tagOptionIds",
     "refEntryId",

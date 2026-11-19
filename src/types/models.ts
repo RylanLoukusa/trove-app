@@ -90,6 +90,12 @@ export type ListEntry = {
   // Checking off a repeating line moves its due date to the next time
   // instead of leaving it done.
   repeat?: RepeatRule;
+  // Light fields (see utils/fields): how many, what one costs, a rating out
+  // of five and a web link.
+  quantity?: number;
+  price?: number;
+  rating?: number;
+  link?: string;
   completedAt?: string;
   tagOptionIds: string[];
   // Set on a line that shows a line from another list (a "pulled" line). Its
@@ -160,6 +166,9 @@ export type SavedItem = {
   // `resetAt` is when it last did.
   resetRule?: ResetRule;
   resetAt?: string;
+  // "gallery" shows the list as a Collection: a grid of cards with each
+  // line's photo and fields, instead of lines.
+  viewMode?: "gallery";
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];

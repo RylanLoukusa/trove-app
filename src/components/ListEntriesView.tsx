@@ -48,6 +48,7 @@ import {
   Undo2,
 } from "lucide-react-native";
 
+import { CollectionGrid } from "./CollectionGrid";
 import { LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
 import {
@@ -67,6 +68,7 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
+import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
 import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -81,7 +83,7 @@ import {
 export type EntryUpdates = Partial<
   Pick<
     ListEntry,
-    "text" | "kind" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "notes" | "tagOptionIds" | "indentLevel"
+    "text" | "kind" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link" | "notes" | "tagOptionIds" | "indentLevel"
   >
 >;
 
@@ -154,6 +156,8 @@ type Props = {
   emptyText?: string;
   // Bump to put the cursor in the bottom line (e.g. after the list's title).
   focusAddSignal?: number;
+  // "gallery" shows the lines as cards (a Collection) instead of rows.
+  layout?: "lines" | "gallery";
 };
 
 // Index the dragged row should land on, given how far it has moved and the
@@ -233,6 +237,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     footer,
     emptyText = "Nothing on this list yet.",
     focusAddSignal,
+    layout = "lines",
   },
   ref,
 ) {
@@ -632,6 +637,16 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     }
   };
 
+  // Adds photos to a card that has none yet.
+  const addPhotosTo = async (id: string) => {
+    if (pickingForRef.current) return;
+    pickingForRef.current = id;
+    const images = await pickPhotos();
+    pickingForRef.current = null;
+    const latest = entriesRef.current.find((entry) => entry.id === id);
+    if (latest && images.length > 0) onUpdateEntry(id, { images: [...(latest.images ?? []), ...images] });
+  };
+
   // Adds photos to the line with the cursor, or puts them on a new line with
   // whatever was typed in the bottom row.
   const addPhotos = async () => {
@@ -846,7 +861,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     : [];
 
   const addPlaceholder =
-    entries.length === 0 ? "Start typing" : addFormat.kind === "text" ? "New line" : "New item";
+    entries.length === 0 ? "Start typing" : layout === "gallery" ? "Add to the collection" : addFormat.kind === "text" ? "New line" : "New item";
 
   return (
     <View style={styles.root}>
@@ -866,7 +881,20 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         <View ref={contentRef} collapsable={false} style={styles.contentInner}>
           {header}
 
-          {visibleEntries.map((entry, index) => (
+          {layout === "gallery" && (
+            <CollectionGrid
+              entries={visibleEntries}
+              canEdit={canEdit}
+              selecting={selecting}
+              selectedIds={selectedIds}
+              onOpen={openDetails}
+              onToggle={onToggleEntry}
+              onToggleSelect={toggleSelected}
+              onAddPhoto={(id) => void addPhotosTo(id)}
+            />
+          )}
+
+          {layout === "lines" && visibleEntries.map((entry, index) => (
             <EntryRow
               key={entry.id}
               entry={entry}
@@ -1296,10 +1324,19 @@ const EntryRow = ({
     return { transform: [{ translateY: withTiming(shift, { duration: 140 }) }], zIndex: 0 };
   }, [carried, dragActive, shift]);
 
-  const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes;
+  const fieldLabels = [
+    ...(entry.quantity ? [`×${formatQuantity(entry.quantity)}`] : []),
+    ...(entry.price !== undefined ? [formatPrice(entry.price)] : []),
+  ];
+  const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes || fieldLabels.length > 0 || !!entry.rating;
   // Web links in the line, each offered as a button under it: the line itself
-  // is a text field, so tapping it edits rather than opens.
-  const links = useMemo(() => extractLinks(entry.text), [entry.text]);
+  // is a text field, so tapping it edits rather than opens. A link kept in the
+  // line's details comes first.
+  const links = useMemo(() => {
+    const inText = extractLinks(entry.text);
+    if (!entry.link || inText.some((link) => link.url === entry.link)) return inText;
+    return [{ url: entry.link, label: linkHost(entry.link) }, ...inText];
+  }, [entry.link, entry.text]);
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
   // Photos start as thumbnails beside the text; a bigger one shows under it.
@@ -1474,6 +1511,14 @@ const EntryRow = ({
                   <Repeat size={12} color={dueToneColor(due.tone, colors)} accessibilityLabel={repeatLabels[entry.repeat]} />
                 )}
               </View>
+            )}
+            {fieldLabels.length > 0 && (
+              <Text style={styles.metaText}>{fieldLabels.join(" · ")}</Text>
+            )}
+            {!!entry.rating && (
+              <Text accessibilityLabel={`Rated ${entry.rating} of 5`} style={[styles.metaText, { color: colors.accent }]}>
+                {formatRating(entry.rating)}
+              </Text>
             )}
             {[...(priority ? [priority] : []), ...tags].map((tag) => (
               <View key={tag.id} style={styles.metaItem}>

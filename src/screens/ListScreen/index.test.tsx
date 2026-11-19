@@ -595,6 +595,7 @@ describe("ListScreen", () => {
         "Select lines",
         "Add lines from another list",
         "Pin to Home",
+        "Show as",
         "Sort",
         "Checked lines",
         "Uncheck all by itself",
@@ -629,6 +630,7 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual([
         "Pin to Home",
+        "Show as",
         "Sort",
         "Checked lines",
         "Uncheck all by itself",
@@ -721,6 +723,34 @@ describe("ListScreen", () => {
 
       await choose("Unpin from Home");
       expect(savedList("chores")!.pinned).toBeFalsy();
+    });
+
+    it("shows the list as a collection of cards, and as lines again", async () => {
+      await openList("chores");
+
+      await openMenu();
+      await pick("Show as", "Collection (cards with photos)");
+      await closeMenu();
+      expect(savedList("chores")!.viewMode).toBe("gallery");
+      expect(shownLines()).toEqual([]);
+      expect(screen.getByTestId("collection-grid")).toBeTruthy();
+
+      await openMenu();
+      await pick("Show as", "Lines");
+      await closeMenu();
+      expect(savedList("chores")!.viewMode).toBeUndefined();
+      expect(shownLines().length).toBeGreaterThan(0);
+    });
+
+    it("adds up what the priced lines cost under the title", async () => {
+      await openList("chores");
+      const [first, second] = linesOf("chores");
+      await act(async () => {
+        trove().updateListEntry(first.id, { price: 4, quantity: 3 });
+        trove().updateListEntry(second.id, { price: 1.5 });
+      });
+
+      expect(screen.getByText(/Total 13\.50/)).toBeTruthy();
     });
 
     it("unchecks every line at once, and checks them again on Undo", async () => {

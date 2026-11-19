@@ -12,6 +12,7 @@ import {
   Eraser,
   FilePlus2,
   FolderInput,
+  LayoutGrid,
   LayoutTemplate,
   ListPlus,
   LogOut,
@@ -42,6 +43,7 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import type { FocusRule, ListEntry, ResetRule, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { listToText } from "../../utils/exportData";
+import { formatPrice, listTotal } from "../../utils/fields";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import {
   canListBorrowLines,
@@ -636,11 +638,27 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
+    ...(canEdit && !isTemplate
+      ? [
+          {
+            key: "view",
+            label: "Show as",
+            icon: <LayoutGrid size={20} color={iconTone} />,
+            separated: true,
+            choices: [
+              { value: "lines", label: "Lines" },
+              { value: "gallery", label: "Collection (cards with photos)" },
+            ],
+            selectedValue: item.viewMode ?? "lines",
+            onChoose: (value: string) => updateItem(item.id, { viewMode: value === "gallery" ? "gallery" : undefined }),
+          },
+        ]
+      : []),
     {
       key: "sort",
       label: "Sort",
       icon: <ArrowUpDown size={20} color={iconTone} />,
-      separated: true,
+      separated: !canEdit || isTemplate,
       choices: sortChoices,
       selectedValue: settings.sortMode,
       onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
@@ -800,10 +818,13 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   ];
 
   // --- Page ----------------------------------------------------------------
+  // What the priced lines come to.
+  const total = listTotal(entries);
   const caption = [
     isTemplate ? "Template" : "",
     isArchived ? "Archived" : "",
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
+    total ? `Total ${formatPrice(total.total)}` : "",
     rule ? ruleCaptions[rule] : ruleTag ? `Adds lines tagged ${ruleTag.name}` : "",
     item.resetRule && !isTemplate ? resetCaptions[item.resetRule] : "",
     sortCaptions[settings.sortMode],
@@ -922,6 +943,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           }
           emptyText={rule || ruleTagId ? "Nothing matches this list's rule right now." : "Nothing on this list yet."}
           focusAddSignal={focusAddSignal}
+          layout={item.viewMode === "gallery" ? "gallery" : "lines"}
         />
       </KeyboardAvoidingView>
 

@@ -978,6 +978,46 @@ describe("ListEntriesView", () => {
       });
     });
 
+    it("sets how many, the price, a rating and a link", async () => {
+      await renderList([entry("Lamp")]);
+
+      await openDetails("Lamp");
+      await fireEvent.changeText(screen.getByLabelText("Quantity"), "2x");
+      await fireEvent.changeText(screen.getByLabelText("Price"), "$12,50");
+      await fireEvent.press(screen.getByLabelText("4 stars"));
+      await fireEvent.changeText(screen.getByLabelText("Link"), "shop.example.com/lamp");
+      await fireEvent.press(screen.getByText("Done"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Lamp", {
+        quantity: 2,
+        price: 12.5,
+        rating: 4,
+        link: "https://shop.example.com/lamp",
+      });
+    });
+
+    it("clears a field left blank and keeps one that can't be read", async () => {
+      await renderList([entry("Lamp", { quantity: 3, price: 9, rating: 2 })]);
+
+      await openDetails("Lamp");
+      await fireEvent.changeText(screen.getByLabelText("Quantity"), "");
+      await fireEvent.changeText(screen.getByLabelText("Price"), "lots");
+      expect(screen.getByText("Use a price like 4.99.")).toBeTruthy();
+      // Tapping the rating it has takes it off.
+      await fireEvent.press(screen.getByLabelText("2 stars"));
+      await fireEvent.press(screen.getByText("Done"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Lamp", { quantity: undefined, rating: undefined });
+    });
+
+    it("shows a line's fields under it", async () => {
+      await renderList([entry("Lamp", { quantity: 2, price: 12.5, rating: 3 })]);
+
+      const details = screen.getByLabelText("Details for Lamp");
+      expect(within(details).getByText("×2 · 12.50")).toBeTruthy();
+      expect(within(details).getByLabelText("Rated 3 of 5")).toBeTruthy();
+    });
+
     it("opens from the details shown under a line", async () => {
       await renderList([entry("Cake", { notes: "Chocolate" })]);
 
@@ -1456,5 +1496,56 @@ describe("targetIndexFor", () => {
       expect(openURL).toHaveBeenCalledWith("https://www.shop.co.uk");
       openURL.mockRestore();
     });
+  });
+});
+
+describe("as a collection", () => {
+  beforeEach(() => jest.clearAllMocks());
+  const showGrid = async () => {
+    await fireEvent(screen.getByTestId("collection-grid"), "layout", { nativeEvent: { layout: { width: 390, height: 800 } } });
+  };
+  const photo: LineImage = { id: "p1", width: 400, height: 300 };
+
+  it("shows each line as a card with its fields, under its heading", async () => {
+    await renderList(
+      [
+        entry("Living room", { kind: "text" }),
+        entry("Lamp", { kind: "bullet", price: 40, quantity: 2, rating: 4, images: [photo] }),
+        entry("Rug", { kind: "bullet" }),
+      ],
+      { layout: "gallery" },
+    );
+    await showGrid();
+
+    expect(screen.queryAllByTestId("list-line-input")).toHaveLength(0);
+    expect(screen.getByText("Living room")).toBeTruthy();
+    expect(screen.getByLabelText("Lamp, 40.00 · ×2, rated 4 of 5")).toBeTruthy();
+    expect(screen.getByText("★★★★☆")).toBeTruthy();
+    expect(screen.getByLabelText("Rug")).toBeTruthy();
+  });
+
+  it("opens a card's details, checks one off and adds a photo to one without", async () => {
+    mockPick.mockResolvedValueOnce([photo]);
+    await renderList([entry("Lamp"), entry("Rug", { kind: "bullet" })], { layout: "gallery" });
+    await showGrid();
+
+    await fireEvent.press(screen.getByLabelText("Check off"));
+    expect(handlers.onToggleEntry).toHaveBeenCalledWith(expect.objectContaining({ id: "Lamp" }));
+
+    await fireEvent.press(screen.getAllByLabelText("Add a photo")[1]);
+    await waitFor(() => expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Rug", { images: [photo] }));
+
+    await fireEvent.press(screen.getByLabelText("Rug"));
+    expect(screen.getByText("Line details")).toBeTruthy();
+  });
+
+  it("selects cards while selecting", async () => {
+    await renderList([entry("Lamp"), entry("Rug")], { layout: "gallery", selecting: true });
+    await showGrid();
+
+    await fireEvent.press(screen.getByLabelText("Rug"));
+
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect(screen.queryByText("Line details")).toBeNull();
   });
 });

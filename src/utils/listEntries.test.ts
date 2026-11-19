@@ -535,6 +535,35 @@ describe("plain and bold lines", () => {
     expect(decodeListTags(["tag-a"])).toEqual({ tagOptionIds: ["tag-a"] });
   });
 
+  it("syncs a line's fields as tags, and drops ones that don't make sense", () => {
+    const encoded = encodeEntryFormat({
+      kind: "check",
+      tagOptionIds: ["tag-a"],
+      quantity: 2,
+      price: 12.5,
+      rating: 4,
+      link: "https://example.com/lamp",
+    });
+    expect(encoded.tags).toEqual(["tag-a", "fmt:qty:2", "fmt:price:12.5", "fmt:rating:4", "fmt:link:https://example.com/lamp"]);
+    expect(decodeEntryFormat(encoded.kind, encoded.tags)).toEqual({
+      kind: "check",
+      tagOptionIds: ["tag-a"],
+      quantity: 2,
+      price: 12.5,
+      rating: 4,
+      link: "https://example.com/lamp",
+    });
+    expect(
+      decodeEntryFormat("check", ["fmt:qty:0", "fmt:price:-1", "fmt:rating:9", "fmt:link:nope", "fmt:qty:"]),
+    ).toEqual({ kind: "check", tagOptionIds: [] });
+  });
+
+  it("syncs a list shown as a collection", () => {
+    expect(encodeListTags({ tagOptionIds: [], viewMode: "gallery" })).toEqual(["fmt:view:gallery"]);
+    expect(decodeListTags(["fmt:view:gallery"])).toEqual({ tagOptionIds: [], viewMode: "gallery" });
+    expect(decodeListTags(["fmt:view:something-new"])).toEqual({ tagOptionIds: [] });
+  });
+
   it("never treats a format tag as one of the person's tags", () => {
     expect(decodeEntryFormat("check", ["fmt:text", "fmt:bold", "tag-high"])).toEqual({
       kind: "check",
