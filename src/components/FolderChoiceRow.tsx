@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Folder } from "../types/models";
 import { radius, spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
+import { FolderIcon } from "./FolderIcon";
 
 type Props = {
   folder: Folder;
@@ -29,9 +30,7 @@ export const FolderChoiceRow = ({ folder, depth = 0, isSelected, onPress, detail
       ]}
     >
       {depth > 0 && <View style={styles.branch} />}
-      <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
-        <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
-      </View>
+      <FolderIcon icon={folder.icon} color={folder.color} size={34} />
       <View style={styles.copy}>
         <Text style={[styles.name, isSelected && styles.selectedName]} numberOfLines={1}>
           {prefix ? `${prefix}: ` : ""}

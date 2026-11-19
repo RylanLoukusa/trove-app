@@ -24,6 +24,7 @@ import {
   Sparkles,
   Trash2,
   Users,
+  Settings2,
 } from "lucide-react-native";
 
 import { CommentThread } from "../../components/CommentThread";
@@ -163,6 +164,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const [settings, updateSettings] = useListViewSettings(item.id);
   const [selecting, setSelecting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheet, setSheet] = useState<"pull" | "folder" | null>(null);
   const [keyboardUp, setKeyboardUp] = useState(false);
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId || undefined);
@@ -620,62 +622,21 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const isArchived = !!item.archivedAt;
   // Pinning is the owner's own choice, so a list shared with them can't be.
   const canPin = canEdit && !isSharedAccess(item) && !isTemplate && !isArchived;
-  const menuActions: MenuAction[] = [
-    ...(canEdit && entries.length > 0
-      ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
-      : []),
-    ...(canBorrow && pickerLists.length > 0
-      ? [
-          {
-            key: "pull",
-            label: "Add lines from another list",
-            icon: <ListPlus size={20} color={iconTone} />,
-            onPress: () => setSheet("pull"),
-          },
-        ]
-      : []),
-    ...(canPin
-      ? [
-          {
-            key: "pin",
-            label: item.pinned ? "Unpin from Home" : "Pin to Home",
-            icon: item.pinned ? <PinOff size={20} color={iconTone} /> : <Pin size={20} color={iconTone} />,
-            onPress: () => updateItem(item.id, { pinned: !item.pinned }),
-          },
-        ]
-      : []),
+  // The menu keeps what people do every day; settings that are set once
+  // live under List settings.
+  const settingsActions: MenuAction[] = [
     ...(canEdit && !isTemplate
       ? [
           {
             key: "view",
             label: "Show as",
             icon: <LayoutGrid size={20} color={iconTone} />,
-            separated: true,
             choices: [
               { value: "lines", label: "Lines" },
               { value: "gallery", label: "Collection (cards with photos)" },
             ],
             selectedValue: item.viewMode ?? "lines",
             onChoose: (value: string) => updateItem(item.id, { viewMode: value === "gallery" ? "gallery" : undefined }),
-          },
-        ]
-      : []),
-    {
-      key: "sort",
-      label: "Sort",
-      icon: <ArrowUpDown size={20} color={iconTone} />,
-      separated: !canEdit || isTemplate,
-      choices: sortChoices,
-      selectedValue: settings.sortMode,
-      onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
-    },
-    ...((settings.collapsedIds?.length ?? 0) > 0
-      ? [
-          {
-            key: "unfold",
-            label: "Unfold everything",
-            icon: <ChevronsUpDown size={20} color={iconTone} />,
-            onPress: () => updateSettings({ collapsedIds: undefined }),
           },
         ]
       : []),
@@ -739,6 +700,74 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
+    ...(canBorrow && pickerLists.length > 0
+      ? [
+          {
+            key: "pull",
+            label: "Add lines from another list",
+            icon: <ListPlus size={20} color={iconTone} />,
+            onPress: () => setSheet("pull"),
+          },
+        ]
+      : []),
+    ...(!isTemplate
+      ? [
+          {
+            key: "template",
+            label: "Save as template",
+            icon: <LayoutTemplate size={20} color={iconTone} />,
+            separated: true,
+            onPress: saveAsTemplate,
+          },
+        ]
+      : []),
+    ...(entries.length > 0
+      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
+      : []),
+  ];
+  const menuActions: MenuAction[] = [
+    ...(!isTemplate && (sharedWithMe || !isSharedAccess(item))
+      ? [
+          {
+            key: "share",
+            label: sharedWithMe ? "People on this list" : "Share list",
+            detail: !sharedWithMe && item.sharedWith ? peopleLabel(item.sharedWith) : undefined,
+            icon: <Users size={20} color={iconTone} />,
+            onPress: () => navigation.navigate("ShareList", { listId: item.id }),
+          },
+        ]
+      : []),
+    ...(canEdit && entries.length > 0
+      ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
+      : []),
+    ...(canPin
+      ? [
+          {
+            key: "pin",
+            label: item.pinned ? "Unpin from Home" : "Pin to Home",
+            icon: item.pinned ? <PinOff size={20} color={iconTone} /> : <Pin size={20} color={iconTone} />,
+            onPress: () => updateItem(item.id, { pinned: !item.pinned }),
+          },
+        ]
+      : []),
+    {
+      key: "sort",
+      label: "Sort",
+      icon: <ArrowUpDown size={20} color={iconTone} />,
+      choices: sortChoices,
+      selectedValue: settings.sortMode,
+      onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
+    },
+    ...((settings.collapsedIds?.length ?? 0) > 0
+      ? [
+          {
+            key: "unfold",
+            label: "Unfold everything",
+            icon: <ChevronsUpDown size={20} color={iconTone} />,
+            onPress: () => updateSettings({ collapsedIds: undefined }),
+          },
+        ]
+      : []),
     ...(canEdit && doneLines.length > 0
       ? [
           {
@@ -769,24 +798,14 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             separated: true,
             onPress: duplicate,
           },
-          {
-            key: "template",
-            label: "Save as template",
-            icon: <LayoutTemplate size={20} color={iconTone} />,
-            onPress: saveAsTemplate,
-          },
         ]),
-    ...(entries.length > 0
-      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
-      : []),
-    ...(!isTemplate && (sharedWithMe || !isSharedAccess(item))
+    ...(settingsActions.length > 0
       ? [
           {
-            key: "share",
-            label: sharedWithMe ? "People on this list" : "Share list",
-            detail: !sharedWithMe && item.sharedWith ? peopleLabel(item.sharedWith) : undefined,
-            icon: <Users size={20} color={iconTone} />,
-            onPress: () => navigation.navigate("ShareList", { listId: item.id }),
+            key: "settings",
+            label: "List settings",
+            icon: <Settings2 size={20} color={iconTone} />,
+            onPress: () => setSettingsOpen(true),
           },
         ]
       : []),
@@ -831,6 +850,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
+
   ];
 
   // --- Page ----------------------------------------------------------------
@@ -966,6 +986,12 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       </KeyboardAvoidingView>
 
       <MenuSheet visible={menuOpen} title={titleOf(item)} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      <MenuSheet
+        visible={settingsOpen}
+        title="List settings"
+        actions={settingsActions}
+        onClose={() => setSettingsOpen(false)}
+      />
       <FocusListPicker
         visible={sheet === "pull"}
         focusListTitle={titleOf(item)}

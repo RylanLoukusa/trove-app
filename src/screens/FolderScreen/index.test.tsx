@@ -184,7 +184,7 @@ describe("FolderScreen", () => {
     it("doesn't repeat the folder's own name under each list", async () => {
       await renderFolderScreen();
 
-      expect(screen.queryByText("✈️ Trips")).toBeNull();
+      expect(screen.queryByText("in Trips")).toBeNull();
       expect(within(screen.getByLabelText("Budget")).queryByText(/Trips/)).toBeNull();
     });
 
@@ -269,11 +269,14 @@ describe("FolderScreen", () => {
   });
 
   describe("starting a list", () => {
-    it("creates a list in this folder with one tap and opens it ready to type", async () => {
+    it("creates a list in this folder as a blank list and opens it ready to type", async () => {
       createItem.mockReturnValue(makeList({ id: "new-list", title: UNTITLED_LIST_TITLE }));
       await renderFolderScreen();
 
       await fireEvent.press(screen.getByLabelText("New list"));
+      // It asks: blank, or from a template.
+      expect(screen.getByLabelText("From a template")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Blank list"));
 
       expect(createItem).toHaveBeenCalledWith({ folderId: "trips", title: UNTITLED_LIST_TITLE, type: "list", tagOptionIds: [] });
       expect(navigation.navigate).toHaveBeenCalledWith("List", { listId: "new-list", isNew: true });
@@ -406,7 +409,7 @@ describe("FolderScreen", () => {
 
       await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
       expect(shareSpy.mock.calls[0][0].message).toBe(
-        ["✈️ Trips", "Places to go", "Folders:\n- 🍝 Italy\n- 📁 Japan", "Lists:\n- Budget\n- Bucket list"].join("\n\n"),
+        ["Trips", "Places to go", "Folders:\n- Italy\n- Japan", "Lists:\n- Budget\n- Bucket list"].join("\n\n"),
       );
     });
 

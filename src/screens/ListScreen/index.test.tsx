@@ -261,9 +261,18 @@ const openMenu = async () => {
   await fireEvent.press(screen.getByLabelText("List options"));
 };
 
+// Settings set once live under List settings: goes there when the open
+// menu doesn't have what's wanted.
+const reach = async (label: string) => {
+  if (!screen.queryByLabelText(label) && screen.queryByLabelText("List settings")) {
+    await fireEvent.press(screen.getByLabelText("List settings"));
+  }
+};
+
 // Opens the menu and picks one of its actions.
 const choose = async (action: string) => {
   await openMenu();
+  await reach(action);
   await fireEvent.press(screen.getByLabelText(action));
 };
 
@@ -284,7 +293,8 @@ const menuActions = () => {
 };
 
 // The option picked for one of the menu's settings.
-const pickedIn = (setting: string) => {
+const pickedIn = async (setting: string) => {
+  await reach(setting);
   const picked = within(screen.getByLabelText(setting))
     .getAllByRole("radio")
     .filter((choice) => choice.props.accessibilityState?.selected);
@@ -293,6 +303,7 @@ const pickedIn = (setting: string) => {
 
 // Picks an option for one of the menu's settings. The menu stays open.
 const pick = async (setting: string, option: string) => {
+  await reach(`${setting}: ${option}`);
   await fireEvent.press(screen.getByLabelText(`${setting}: ${option}`));
 };
 
@@ -592,23 +603,29 @@ describe("ListScreen", () => {
       await openMenu();
 
       expect(menuActions()).toEqual([
+        "Share list",
         "Select lines",
-        "Add lines from another list",
         "Pin to Home",
-        "Show as",
         "Sort",
-        "Checked lines",
-        "Uncheck all by itself",
-        "Add lines automatically",
         "Uncheck all",
         "Clear checked lines",
         "Duplicate",
-        "Save as template",
-        "Send as text",
-        "Share list",
+        "List settings",
         "Move to folder",
         "Archive",
         "Delete list",
+      ]);
+
+      // What's set once is a step further in.
+      await fireEvent.press(screen.getByLabelText("List settings"));
+      expect(menuActions()).toEqual([
+        "Show as",
+        "Checked lines",
+        "Uncheck all by itself",
+        "Add lines automatically",
+        "Add lines from another list",
+        "Save as template",
+        "Send as text",
       ]);
       expect(dismissKeyboard).toHaveBeenCalled();
     });
@@ -617,10 +634,10 @@ describe("ListScreen", () => {
       await openList("packing");
       await openMenu();
 
-      expect(pickedIn("Sort")).toEqual(["My order"]);
-      expect(pickedIn("Checked lines")).toEqual(["Keep in place"]);
-      expect(pickedIn("Add lines automatically")).toEqual(["Off"]);
+      expect(await pickedIn("Sort")).toEqual(["My order"]);
       expect(within(screen.getByLabelText("Move to folder")).getByText("Trips")).toBeTruthy();
+      expect(await pickedIn("Checked lines")).toEqual(["Keep in place"]);
+      expect(await pickedIn("Add lines automatically")).toEqual(["Off"]);
     });
 
     it("leaves out what there is nothing to do with", async () => {
@@ -628,20 +645,9 @@ describe("ListScreen", () => {
       await openList("empty");
       await openMenu();
 
-      expect(menuActions()).toEqual([
-        "Pin to Home",
-        "Show as",
-        "Sort",
-        "Checked lines",
-        "Uncheck all by itself",
-        "Add lines automatically",
-        "Duplicate",
-        "Save as template",
-        "Share list",
-        "Move to folder",
-        "Archive",
-        "Delete list",
-      ]);
+      expect(menuActions()).toEqual(["Share list", "Pin to Home", "Sort", "Duplicate", "List settings", "Move to folder", "Archive", "Delete list"]);
+      await fireEvent.press(screen.getByLabelText("List settings"));
+      expect(menuActions()).toEqual(["Show as", "Checked lines", "Uncheck all by itself", "Add lines automatically", "Save as template"]);
     });
 
     it("closes when the page behind it is tapped", async () => {
@@ -658,7 +664,7 @@ describe("ListScreen", () => {
 
       await openMenu();
       await pick("Sort", "A to Z");
-      expect(pickedIn("Sort")).toEqual(["A to Z"]);
+      expect(await pickedIn("Sort")).toEqual(["A to Z"]);
       await closeMenu();
 
       expect(shownLines()).toEqual(["Clean gutters", "Mow the lawn", "Water plants"]);
@@ -700,12 +706,12 @@ describe("ListScreen", () => {
       await openMenu();
 
       await pick("Sort", "A to Z");
+      expect(await pickedIn("Sort")).toEqual(["A to Z"]);
       await pick("Checked lines", "Move to bottom");
       await pick("Add lines automatically", "Next 7 days");
 
-      expect(pickedIn("Sort")).toEqual(["A to Z"]);
-      expect(pickedIn("Checked lines")).toEqual(["Move to bottom"]);
-      expect(pickedIn("Add lines automatically")).toEqual(["Next 7 days"]);
+      expect(await pickedIn("Checked lines")).toEqual(["Move to bottom"]);
+      expect(await pickedIn("Add lines automatically")).toEqual(["Next 7 days"]);
       expect(savedList("chores")).toMatchObject({ listMode: "focus", focusRule: "due_week" });
 
       await closeMenu();
@@ -1050,7 +1056,7 @@ describe("ListScreen", () => {
       expect(pulledInto("today")).toEqual(["Pinned"]);
 
       await openMenu();
-      expect(pickedIn("Add lines automatically")).toEqual(["Due today"]);
+      expect(await pickedIn("Add lines automatically")).toEqual(["Due today"]);
     });
 
     it("keeps a line it added where that line is dragged to", async () => {
@@ -1157,9 +1163,10 @@ describe("ListScreen", () => {
         await openList("today");
 
         await openMenu();
+        await fireEvent.press(screen.getByLabelText("List settings"));
         expect(screen.getByText("Errands")).toBeTruthy();
         await pick("Add lines automatically", "Errands Store");
-        expect(pickedIn("Add lines automatically")).toEqual(["Errands Store"]);
+        expect(await pickedIn("Add lines automatically")).toEqual(["Errands Store"]);
         await closeMenu();
 
         expect(savedList("today")).toMatchObject({ listMode: "focus", ruleTagId: "store" });
@@ -1300,7 +1307,9 @@ describe("ListScreen", () => {
       expect(screen.queryByLabelText(ADD_LINE)).toBeNull();
 
       await openMenu();
-      expect(menuActions()).toEqual(["Sort", "Checked lines", "Duplicate", "Save as template", "Send as text"]);
+      expect(menuActions()).toEqual(["Sort", "Duplicate", "List settings"]);
+      await fireEvent.press(screen.getByLabelText("List settings"));
+      expect(menuActions()).toEqual(["Checked lines", "Save as template", "Send as text"]);
     });
 
     it("isn't thrown away for being empty when a viewer leaves it", async () => {

@@ -185,7 +185,7 @@ describe("SearchScreen", () => {
 
       await search("garden beds");
 
-      expect(within(screen.getByLabelText("Garden beds")).getByText("🌱 Garden")).toBeTruthy();
+      expect(within(screen.getByLabelText("Garden beds")).getByText("in Garden")).toBeTruthy();
     });
 
     it("shows a found line with the match picked out and the list it is on", async () => {

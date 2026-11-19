@@ -82,6 +82,30 @@ export const createStyles = (colors: ThemeColors) =>
       fontWeight: "900",
       marginLeft: spacing.sm,
     },
+    lineIconGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    lineIconButton: {
+      borderColor: "transparent",
+      borderRadius: 14,
+      borderWidth: 2,
+      padding: 3,
+    },
+    lineIconButtonSelected: {
+      borderColor: colors.accent,
+    },
+    emojiToggle: {
+      alignSelf: "flex-start",
+      paddingVertical: spacing.sm,
+    },
+    emojiToggleText: {
+      color: colors.accentDark,
+      fontSize: 15,
+      fontWeight: "600",
+    },
     iconPicker: {
       backgroundColor: colors.surface,
       borderColor: colors.border,

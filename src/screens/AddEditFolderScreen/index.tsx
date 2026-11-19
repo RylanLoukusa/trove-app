@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Maximize2, Minimize2 } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { FolderChoiceRow } from "../../components/FolderChoiceRow";
+import { DEFAULT_FOLDER_ICON, FOLDER_ICONS, FolderIcon, folderIconKey, FOLDER_ICON_PREFIX, resolveFolderIcon } from "../../components/FolderIcon";
 import { emojiCategories } from "../../data/emojiPalette";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { HOME_LABEL } from "../../navigation/backLabel";
@@ -51,7 +52,8 @@ const isSingleEmoji = (value: string): boolean => {
   return /^(?:\p{Extended_Pictographic}\uFE0F?)(?:\u200D\p{Extended_Pictographic}\uFE0F?)*$/u.test(trimmed);
 };
 
-const normalizeFolderIcon = (value: string): string => (isSingleEmoji(value) ? value.trim() : "📁");
+const normalizeFolderIcon = (value: string): string =>
+  value.startsWith(FOLDER_ICON_PREFIX) || isSingleEmoji(value) ? value.trim() : DEFAULT_FOLDER_ICON;
 
 export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const colors = useThemeColors();
@@ -61,7 +63,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
 
   const [name, setName] = useState(editing?.name ?? "");
   const [purpose, setPurpose] = useState(editing?.purpose ?? "");
-  const [icon, setIcon] = useState(editing?.icon ?? "📁");
+  const [icon, setIcon] = useState(editing?.icon && editing.icon !== "📁" ? editing.icon : DEFAULT_FOLDER_ICON);
+  // Emoji are there for anyone who wants one; line icons come first.
+  const [emojiOpen, setEmojiOpen] = useState(() => resolveFolderIcon(editing?.icon).kind === "emoji");
   const [color, setColor] = useState(editing?.color ?? "#D8C7AA");
   const [parentFolderId, setParentFolderId] = useState<string | null>(
     editing?.parentFolderId ?? route.params?.parentFolderId ?? null,
@@ -251,16 +255,49 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             pressed && styles.iconSummaryPressed,
           ]}
         >
-          <View style={[styles.iconPreview, { backgroundColor: color }]}>
-            <Text style={styles.iconPreviewEmoji}>{normalizeFolderIcon(icon)}</Text>
-          </View>
+          <FolderIcon icon={normalizeFolderIcon(icon)} color={color} size={44} />
           <View style={styles.iconSummaryCopy}>
-            <Text style={styles.iconSummaryMeta}>Tap to choose an emoji</Text>
+            <Text style={styles.iconSummaryMeta}>Tap to choose an icon</Text>
           </View>
           <Text style={styles.iconSummaryAction}>{iconPickerOpen ? "Close" : "Change"}</Text>
         </Pressable>
 
         {iconPickerOpen && (
+          <View style={styles.lineIconGrid}>
+            {FOLDER_ICONS.map(({ key, label }) => {
+              const value = folderIconKey(key);
+              const isSelected = icon === value;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityLabel={`Use the ${label} icon`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => setIcon(value)}
+                  style={({ pressed }) => [
+                    styles.lineIconButton,
+                    isSelected && styles.lineIconButtonSelected,
+                    pressed && styles.iconPickerPressed,
+                  ]}
+                >
+                  <FolderIcon icon={value} color={color} size={38} />
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {iconPickerOpen && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setEmojiOpen((current) => !current)}
+            style={({ pressed }) => [styles.emojiToggle, pressed && styles.iconPickerPressed]}
+          >
+            <Text style={styles.emojiToggleText}>{emojiOpen ? "Hide emoji" : "Use an emoji instead"}</Text>
+          </Pressable>
+        )}
+
+        {iconPickerOpen && emojiOpen && (
           <View style={[styles.iconPicker, isIconPickerExpanded && styles.iconPickerExpanded]}>
             <View style={styles.iconPickerHeader}>
               <Pressable
@@ -372,9 +409,13 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             pressed && styles.parentSummaryPressed,
           ]}
         >
-          <View style={[styles.parentSummaryIcon, selectedParentFolder?.color ? { backgroundColor: selectedParentFolder.color } : undefined]}>
-            <Text style={styles.parentSummaryIconText}>{selectedParentFolder?.icon ?? "⌂"}</Text>
-          </View>
+          {selectedParentFolder ? (
+            <FolderIcon icon={selectedParentFolder.icon} color={selectedParentFolder.color} size={36} />
+          ) : (
+            <View style={styles.parentSummaryIcon}>
+              <Text style={styles.parentSummaryIconText}>⌂</Text>
+            </View>
+          )}
           <View style={styles.parentSummaryCopy}>
             <Text style={styles.parentSummaryTitle}>{selectedParentFolder?.name ?? HOME_LABEL}</Text>
             <Text style={styles.parentSummaryMeta}>

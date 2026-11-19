@@ -6,6 +6,7 @@ import { Archive, Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lu
 import { SkeletonBlock, SkeletonText } from "../../components";
 import { CommentThread } from "../../components/CommentThread";
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
+import { useNewListActions } from "../../components/newListActions";
 import { NavBar, NavIconButton } from "../../components/NavBar";
 import { ComposeButton, FolderStrip, ListRow, RowGroup, SectionHeader } from "../../components/Rows";
 import { useListRowActions } from "../../components/useListRowActions";
@@ -18,6 +19,7 @@ import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { canAddChildFolder, getChildFolders, getDescendantFolderIds, getFolderById } from "../../utils/folderTree";
 import { listActivityTimes, listDisplayTitle, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
+import { FolderIcon } from "../../components/FolderIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
 
@@ -64,12 +66,21 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     if (list) navigation.navigate("List", { listId: list.id, isNew: true });
   }, [createItem, folderId, navigation]);
 
+  // The New list button asks: a blank list, or one from a template.
+  const [newListOpen, setNewListOpen] = useState(false);
+  const newListActions = useNewListActions({
+    folderId: folderId,
+    onBlank: onNewList,
+    onOpen: useCallback((listId: string) => navigation.navigate("List", { listId }), [navigation]),
+    onBrowse: useCallback(() => navigation.navigate("Templates"), [navigation]),
+  });
+
   const shareAsText = useCallback(async (): Promise<void> => {
     if (!folder) return;
     const sections = [
-      `${folder.icon ?? "📁"} ${folder.name}`,
+      folder.name,
       folder.purpose ?? "",
-      subfolders.length ? `Folders:\n${subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`).join("\n")}` : "",
+      subfolders.length ? `Folders:\n${subfolders.map((child) => `- ${child.name}`).join("\n")}` : "",
       lists.length ? `Lists:\n${lists.map((list) => `- ${listDisplayTitle(list, list.listItems)}`).join("\n")}` : "",
     ].filter(Boolean);
 
@@ -200,9 +211,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
       <KeyboardAvoidingView style={styles.scroll} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.titleRow}>
-            <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
-              <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
-            </View>
+            <FolderIcon icon={folder.icon} color={folder.color} size={38} />
             <Text accessibilityRole="header" style={styles.title}>
               {folder.name}
             </Text>
@@ -252,9 +261,10 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {canEditContent && <ComposeButton onPress={onNewList} />}
+      {canEditContent && <ComposeButton onPress={() => setNewListOpen(true)} />}
 
       <MenuSheet visible={menuOpen} title={folder.name} actions={menuActions} onClose={() => setMenuOpen(false)} />
+      <MenuSheet visible={newListOpen} title="New list" actions={newListActions} onClose={() => setNewListOpen(false)} />
       {overlays}
     </View>
   );

@@ -46,8 +46,9 @@ type Props = {
   onClose: () => void;
 };
 
-// Details for one list line: due date and time, repeat, priority, other tags
-// and notes.
+// Details for one list line. The due date and notes are always there; the
+// rest (repeat, priority, tags, quantity, price, rating, link, who it's for)
+// shows once the line has it or it's added with its "+" button.
 export const ListEntrySheet = ({
   entry,
   priorityOptions,
@@ -88,6 +89,10 @@ export const ListEntrySheet = ({
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [linkDraft, setLinkDraft] = useState("");
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
+  // Beyond the due date and notes, a field shows once the line has it or
+  // it's added with its "+" button, so a plain line opens short.
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [pickingDate, setPickingDate] = useState(false);
 
   useEffect(() => {
     if (!entry) return;
@@ -106,11 +111,39 @@ export const ListEntrySheet = ({
     setRating(entry.rating);
     setLinkDraft(entry.link ?? "");
     setAssigneeId(entry.assigneeId);
+    const filled = new Set<string>();
+    if (entry.repeat) filled.add("repeat");
+    if (entryPriority(entry, priorityOptions)) filled.add("priority");
+    if (entry.assigneeId) filled.add("assignee");
+    otherSections.forEach((section) => {
+      if (section.options.some((option) => entry.tagOptionIds.includes(option.id))) filled.add(`tag:${section.group.id}`);
+    });
+    if (entry.quantity) filled.add("quantity");
+    if (entry.price !== undefined) filled.add("price");
+    if (entry.rating) filled.add("rating");
+    if (entry.link) filled.add("link");
+    setOpened(filled);
+    setPickingDate(false);
     // Only reset when a different entry opens, not on every background sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry?.id]);
 
   const quickDates = useMemo(() => quickDueDates(), [entry?.id]);
+  const extras: Array<{ key: string; label: string; a11y?: string }> = [
+    ...(isCheckEntry(entry) ? [{ key: "repeat", label: "Repeat" }] : []),
+    ...(priorityOptions.length > 0 ? [{ key: "priority", label: "Priority" }] : []),
+    ...(people.length > 0 || entry?.assigneeId ? [{ key: "assignee", label: "Assign", a11y: "Assign to someone" }] : []),
+    ...otherSections.map((section) => ({ key: `tag:${section.group.id}`, label: section.group.name })),
+    { key: "quantity", label: "Quantity" },
+    { key: "price", label: "Price" },
+    { key: "rating", label: "Rating" },
+    { key: "link", label: "Link" },
+  ];
+  const shows = (key: string) => opened.has(key);
+  const open = (key: string) => setOpened((current) => new Set(current).add(key));
+  const unopened = extras.filter((extra) => !opened.has(extra.key));
+  // The typed date shows for a date that isn't one of the quick ones.
+  const showDateInput = pickingDate || (!!dueDate && !quickDates.some((quick) => quick.value === dueDate));
   const dueDraftInvalid = dueDraft.trim() !== "" && !parseDateKey(dueDraft);
   const dueDescription = dueDate ? describeDueDate(dueDate) : null;
   const timeDraftInvalid = timeDraft.trim() !== "" && !parseTimeInput(timeDraft) && timeDraft !== formatTime(dueTime ?? "");
@@ -227,8 +260,12 @@ export const ListEntrySheet = ({
               styles={styles}
             />
           ))}
+          {!showDateInput && canEdit && (
+            <Chip label="Pick a date…" selected={false} disabled={!canEdit} onPress={() => setPickingDate(true)} styles={styles} />
+          )}
           {!!dueDate && <Chip label="Clear" selected={false} disabled={!canEdit} onPress={() => setDue(undefined)} styles={styles} />}
         </View>
+        {showDateInput && (
         <TextInput
           accessibilityLabel="Due date, as year-month-day"
           editable={canEdit}
@@ -244,6 +281,7 @@ export const ListEntrySheet = ({
           autoCorrect={false}
           style={[styles.input, dueDraftInvalid && styles.inputInvalid]}
         />
+        )}
         <Text style={[styles.hint, dueDraftInvalid && styles.hintError]}>
           {dueDraftInvalid ? "Use a date like 2026-12-01." : dueDescription ? `Due ${dueDescription.label.toLowerCase()}` : "No due date"}
         </Text>
@@ -296,7 +334,19 @@ export const ListEntrySheet = ({
           </>
         )}
 
-        {isCheck && (
+        <Text style={styles.label}>Notes</Text>
+        <TextInput
+          accessibilityLabel="Notes"
+          editable={canEdit}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          placeholder="Add details"
+          placeholderTextColor={colors.muted}
+          style={[styles.input, styles.notes]}
+        />
+
+        {isCheck && shows("repeat") && (
           <>
             <Text style={styles.label}>Repeat</Text>
             <View style={styles.chipRow}>
@@ -318,7 +368,7 @@ export const ListEntrySheet = ({
           </>
         )}
 
-        {priorityOptions.length > 0 && (
+        {priorityOptions.length > 0 && shows("priority") && (
           <>
             <Text style={styles.label}>Priority</Text>
             <View style={styles.chipRow}>
@@ -337,7 +387,7 @@ export const ListEntrySheet = ({
           </>
         )}
 
-        {(people.length > 0 || !!entry?.assigneeId) && (
+        {(people.length > 0 || !!entry?.assigneeId) && shows("assignee") && (
           <>
             <Text style={styles.label}>Assigned to</Text>
             <View style={styles.chipRow}>
@@ -366,7 +416,7 @@ export const ListEntrySheet = ({
           </>
         )}
 
-        {otherSections.map((section) => (
+        {otherSections.filter((section) => shows(`tag:${section.group.id}`)).map((section) => (
           <React.Fragment key={section.group.id}>
             <Text style={styles.label}>{section.group.name}</Text>
             <View style={styles.chipRow}>
@@ -386,10 +436,9 @@ export const ListEntrySheet = ({
           </React.Fragment>
         ))}
 
-        <Text style={styles.label}>Details</Text>
-        <View style={styles.fieldRow}>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Quantity</Text>
+        {shows("quantity") && (
+          <>
+            <Text style={styles.label}>Quantity</Text>
             <TextInput
               accessibilityLabel="Quantity"
               editable={canEdit}
@@ -398,11 +447,14 @@ export const ListEntrySheet = ({
               keyboardType="decimal-pad"
               placeholder="1"
               placeholderTextColor={colors.muted}
-              style={[styles.input, styles.fieldInput, quantityInvalid && styles.inputInvalid]}
+              style={[styles.input, quantityInvalid && styles.inputInvalid]}
             />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Price</Text>
+            {quantityInvalid && <Text style={[styles.hint, styles.hintError]}>Use a number like 2 or 1.5.</Text>}
+          </>
+        )}
+        {shows("price") && (
+          <>
+            <Text style={styles.label}>Price</Text>
             <TextInput
               accessibilityLabel="Price"
               editable={canEdit}
@@ -415,58 +467,70 @@ export const ListEntrySheet = ({
               keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor={colors.muted}
-              style={[styles.input, styles.fieldInput, priceInvalid && styles.inputInvalid]}
+              style={[styles.input, priceInvalid && styles.inputInvalid]}
             />
-          </View>
-        </View>
-        {(quantityInvalid || priceInvalid) && (
-          <Text style={[styles.hint, styles.hintError]}>
-            {quantityInvalid ? "Use a number like 2 or 1.5 for the quantity." : "Use a price like 4.99."}
-          </Text>
+            {priceInvalid && <Text style={[styles.hint, styles.hintError]}>Use a price like 4.99.</Text>}
+          </>
         )}
-        <Text style={styles.fieldLabel}>Rating</Text>
-        <View style={styles.stars}>
-          {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => (
-            <Pressable
-              key={value}
-              accessibilityRole="button"
-              accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
-              accessibilityState={{ selected: (rating ?? 0) >= value, disabled: !canEdit }}
-              disabled={!canEdit}
-              hitSlop={4}
-              // Tapping the rating it already has clears it.
-              onPress={() => setRating(rating === value ? undefined : value)}
-            >
-              <Text style={[styles.star, (rating ?? 0) >= value && styles.starOn]}>{(rating ?? 0) >= value ? "★" : "☆"}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={styles.fieldLabel}>Link</Text>
-        <TextInput
-          accessibilityLabel="Link"
-          editable={canEdit}
-          value={linkDraft}
-          onChangeText={setLinkDraft}
-          placeholder="example.com/item"
-          placeholderTextColor={colors.muted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          style={[styles.input, linkInvalid && styles.inputInvalid]}
-        />
-        {linkInvalid && <Text style={[styles.hint, styles.hintError]}>Use a web address like example.com.</Text>}
+        {shows("rating") && (
+          <>
+            <Text style={styles.label}>Rating</Text>
+            <View style={styles.stars}>
+              {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
+                  accessibilityState={{ selected: (rating ?? 0) >= value, disabled: !canEdit }}
+                  disabled={!canEdit}
+                  hitSlop={4}
+                  // Tapping the rating it already has clears it.
+                  onPress={() => setRating(rating === value ? undefined : value)}
+                >
+                  <Text style={[styles.star, (rating ?? 0) >= value && styles.starOn]}>{(rating ?? 0) >= value ? "★" : "☆"}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
+        {shows("link") && (
+          <>
+            <Text style={styles.label}>Link</Text>
+            <TextInput
+              accessibilityLabel="Link"
+              editable={canEdit}
+              value={linkDraft}
+              onChangeText={setLinkDraft}
+              placeholder="example.com/item"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={[styles.input, linkInvalid && styles.inputInvalid]}
+            />
+            {linkInvalid && <Text style={[styles.hint, styles.hintError]}>Use a web address like example.com.</Text>}
+          </>
+        )}
 
-        <Text style={styles.label}>Notes</Text>
-        <TextInput
-          accessibilityLabel="Notes"
-          editable={canEdit}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          placeholder="Add details"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.notes]}
-        />
+        {canEdit && unopened.length > 0 && (
+          <>
+            <Text style={styles.label}>Add more</Text>
+            <View style={styles.chipRow}>
+              {unopened.map((extra) => (
+                <Pressable
+                  key={extra.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={extra.a11y ?? `Add ${extra.label}`}
+                  onPress={() => open(extra.key)}
+                  style={({ pressed }) => [styles.addChip, pressed && styles.chipPressed]}
+                >
+                  <Text style={styles.addChipText}>+ {extra.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
+
 
         {!!alsoOnLists?.length && (
           <>
@@ -502,6 +566,8 @@ export const ListEntrySheet = ({
     </Modal>
   );
 };
+
+const isCheckEntry = (entry: ListEntry | null) => entry?.kind === "check";
 
 const Chip = ({
   label,
@@ -605,6 +671,21 @@ const createStyles = (colors: ThemeColors) =>
     },
     chipPressed: {
       opacity: 0.7,
+    },
+    addChip: {
+      alignItems: "center",
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderStyle: "dashed",
+      borderWidth: 1.5,
+      justifyContent: "center",
+      minHeight: 36,
+      paddingHorizontal: 14,
+    },
+    addChipText: {
+      color: colors.muted,
+      fontSize: 14,
+      fontWeight: "700",
     },
     chipDot: {
       borderRadius: 5,

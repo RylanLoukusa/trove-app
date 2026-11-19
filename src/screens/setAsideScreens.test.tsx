@@ -79,7 +79,7 @@ describe("RecentlyDeletedScreen", () => {
   it("lists deleted folders and lists with how long each has left", async () => {
     await render();
 
-    expect(screen.getByLabelText("📁 Trips, 2 lists · 29 days left")).toBeTruthy();
+    expect(screen.getByLabelText("Trips, 2 lists · 29 days left")).toBeTruthy();
     expect(screen.getByLabelText("Chores, 20 days left")).toBeTruthy();
     // A list deleted with its folder comes back with the folder.
     expect(screen.queryByText("Packing")).toBeNull();
@@ -92,7 +92,7 @@ describe("RecentlyDeletedScreen", () => {
     await fireEvent.press(screen.getByLabelText("Put back"));
     expect(trove.restoreItem).toHaveBeenCalledWith("chores");
 
-    await fireEvent.press(screen.getByLabelText("📁 Trips, 2 lists · 29 days left"));
+    await fireEvent.press(screen.getByLabelText("Trips, 2 lists · 29 days left"));
     await fireEvent.press(screen.getByLabelText("Put back"));
     expect(trove.restoreFolder).toHaveBeenCalledWith("trips");
   });
@@ -146,7 +146,7 @@ describe("ArchivedScreen", () => {
     await fireEvent.press(screen.getByLabelText("Unarchive"));
     expect(trove.setItemArchived).toHaveBeenCalledWith("lisbon", false);
 
-    await fireEvent.press(screen.getByLabelText("📁 Trips, 1 list"));
+    await fireEvent.press(screen.getByLabelText("Trips, 1 list"));
     await fireEvent.press(screen.getByLabelText("Unarchive"));
     expect(trove.setFolderArchived).toHaveBeenCalledWith("trips", false);
   });

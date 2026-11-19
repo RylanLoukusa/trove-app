@@ -36,7 +36,7 @@ export const ArchivedScreen = ({ navigation }: Props) => {
   const [chosen, setChosen] = useState<Chosen | null>(null);
 
   const folderNames = useMemo(
-    () => new Map(archivedFolders.map(({ folder }) => [folder.id, `${folder.icon ?? "📁"} ${folder.name}`])),
+    () => new Map(archivedFolders.map(({ folder }) => [folder.id, folder.name])),
     [archivedFolders],
   );
   const lists = useMemo(

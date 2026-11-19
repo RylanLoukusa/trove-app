@@ -9,6 +9,7 @@ import { backLabelFor } from "../../navigation/backLabel";
 import { RootStackParamList } from "../../navigation/types";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { FolderIcon } from "../../components/FolderIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PublicFolderPreview">;
 
@@ -84,9 +85,7 @@ export const PublicFolderPreviewScreen = ({ navigation, route }: Props) => {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>{data.ownerName ? `Shared by ${data.ownerName}` : "Shared folder"}</Text>
         <View style={styles.titleRow}>
-          <View style={[styles.icon, { backgroundColor: activeFolder.color ?? colors.border }]}>
-            <Text style={styles.emoji}>{activeFolder.icon ?? "📁"}</Text>
-          </View>
+          <FolderIcon icon={activeFolder.icon} color={activeFolder.color} size={38} />
           <Text accessibilityRole="header" style={styles.title}>
             {activeFolder.name}
           </Text>
