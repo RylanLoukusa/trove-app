@@ -14,6 +14,7 @@ import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditFolder">;
 
@@ -195,7 +196,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         return;
       }
       updateFolder(editing.id, { name, purpose, icon: normalizedIcon, color, parentFolderId });
-      navigation.goBack();
+      leaveScreen(navigation);
       return;
     }
     if (parentFolderId && !canManageFolder(parentFolderId)) {

@@ -604,6 +604,7 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual([
         "Share list",
+        "Send as text",
         "Select lines",
         "Pin to Home",
         "Sort",
@@ -621,11 +622,10 @@ describe("ListScreen", () => {
       expect(menuActions()).toEqual([
         "Show as",
         "Checked lines",
-        "Uncheck all by itself",
+        "Uncheck automatically",
         "Add lines automatically",
         "Add lines from another list",
         "Save as template",
-        "Send as text",
       ]);
       expect(dismissKeyboard).toHaveBeenCalled();
     });
@@ -647,7 +647,7 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual(["Share list", "Pin to Home", "Sort", "Duplicate", "List settings", "Move to folder", "Archive", "Delete list"]);
       await fireEvent.press(screen.getByLabelText("List settings"));
-      expect(menuActions()).toEqual(["Show as", "Checked lines", "Uncheck all by itself", "Add lines automatically", "Save as template"]);
+      expect(menuActions()).toEqual(["Show as", "Checked lines", "Uncheck automatically", "Add lines automatically", "Save as template"]);
     });
 
     it("closes when the page behind it is tapped", async () => {
@@ -1307,9 +1307,9 @@ describe("ListScreen", () => {
       expect(screen.queryByLabelText(ADD_LINE)).toBeNull();
 
       await openMenu();
-      expect(menuActions()).toEqual(["Sort", "Duplicate", "List settings"]);
+      expect(menuActions()).toEqual(["Send as text", "Sort", "Duplicate", "List settings"]);
       await fireEvent.press(screen.getByLabelText("List settings"));
-      expect(menuActions()).toEqual(["Checked lines", "Save as template", "Send as text"]);
+      expect(menuActions()).toEqual(["Checked lines", "Save as template"]);
     });
 
     it("isn't thrown away for being empty when a viewer leaves it", async () => {

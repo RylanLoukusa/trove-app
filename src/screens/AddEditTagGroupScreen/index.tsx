@@ -12,6 +12,7 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import { TagGroupSelectionMode } from "../../types/models";
 import { createId } from "../../utils/id";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditTagGroup">;
 type ScreenStyles = ReturnType<typeof createStyles>;
@@ -247,7 +248,7 @@ export const AddEditTagGroupScreen = ({ navigation, route }: Props) => {
 
   const onPressSave = useCallback(() => {
     if (handleSave()) {
-      navigation.goBack();
+      leaveScreen(navigation);
     }
   }, [handleSave, navigation]);
 
@@ -285,7 +286,7 @@ export const AddEditTagGroupScreen = ({ navigation, route }: Props) => {
           style: "destructive",
           onPress: () => {
             deleteTagGroup(existingGroup.id);
-            navigation.goBack();
+            leaveScreen(navigation);
           },
         },
       ],
