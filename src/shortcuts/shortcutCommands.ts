@@ -8,12 +8,42 @@ import { listDisplayTitle } from "../utils/listEntries";
 //     trove://open?list=Groceries            opens a list
 //   (also https://trovecollections.app/add and /open).
 // - On iOS 16 and later, the app's own "Add to Trove" and "Open a Trove list"
-//   actions, which Siri runs by voice. They leave the command for the app,
-//   which carries it out the next time it is active.
+//   actions, which Siri runs by voice. Siri asks which list, from the lists
+//   the app last told it about (see shortcutListIndex). They leave the
+//   command for the app, which carries it out the next time it is active.
 
+// `listId` is the list Siri picked, when it picked one; `list` is its name.
 export type ShortcutCommand =
-  | { id?: string; action: "add"; text: string; list?: string }
-  | { id?: string; action: "open"; list: string };
+  | { id?: string; action: "add"; text: string; list?: string; listId?: string }
+  | { id?: string; action: "open"; list: string; listId?: string };
+
+// What stands for the Inbox in Siri's choice of lists when there's no Inbox
+// list yet: adding to it makes one.
+export const SHORTCUT_INBOX_ID = "inbox";
+export const SHORTCUT_LIST_COUNT = 200;
+
+export type ShortcutListChoice = { id: string; title: string };
+
+// The lists Siri offers: the ones this person can add to, pinned first and
+// then the ones changed most recently, with the Inbox always there.
+export const shortcutListIndex = (
+  items: SavedItem[],
+  canEditItem: (itemId: string) => boolean,
+  inboxTitle: string,
+): ShortcutListChoice[] => {
+  const lists = items
+    .filter((item) => item.type === "list" && !item.isTemplate && canEditItem(item.id))
+    .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt.localeCompare(a.updatedAt))
+    .map((item) => ({
+      id: item.id,
+      title: listDisplayTitle(item, item.listItems).trim(),
+    }))
+    .filter((choice) => !!choice.title);
+  const hasInbox = items.some(
+    (item) => item.type === "list" && !item.folderId && item.title === inboxTitle && canEditItem(item.id),
+  );
+  return [...lists.slice(0, SHORTCUT_LIST_COUNT), ...(hasInbox ? [] : [{ id: SHORTCUT_INBOX_ID, title: inboxTitle }])];
+};
 
 const LINK_HOSTS = new Set(["trovecollections.app", "www.trovecollections.app"]);
 
@@ -72,10 +102,12 @@ export const findListByName = (
   if (!wanted) return null;
   const candidates = lists
     .filter((list) => list.type === "list" && !list.isTemplate && canUse(list))
-    .map((list) => ({ list, title: normalize(listDisplayTitle(list, list.listItems)) }))
+    .map((list) => ({
+      list,
+      title: normalize(listDisplayTitle(list, list.listItems)),
+    }))
     .sort(
-      (a, b) =>
-        Number(!!b.list.pinned) - Number(!!a.list.pinned) || b.list.updatedAt.localeCompare(a.list.updatedAt),
+      (a, b) => Number(!!b.list.pinned) - Number(!!a.list.pinned) || b.list.updatedAt.localeCompare(a.list.updatedAt),
     );
   return (
     candidates.find((candidate) => candidate.title === wanted)?.list ??
@@ -101,18 +133,30 @@ export type ShortcutOutcome =
 
 // Carries out a command against the person's lists.
 export const runShortcutCommand = (command: ShortcutCommand, deps: ShortcutDeps): ShortcutOutcome => {
+  const canUse = (list: SavedItem) => deps.canEditItem(list.id);
+  // The list Siri picked, if it's still there (and can be added to).
+  const picked = (usable: (list: SavedItem) => boolean) =>
+    command.listId && command.listId !== SHORTCUT_INBOX_ID
+      ? (deps.items.find((item) => item.id === command.listId && item.type === "list" && usable(item)) ?? null)
+      : null;
   if (command.action === "open") {
-    const list = findListByName(deps.items, command.list);
-    return list ? { ok: true, listId: list.id, added: 0, created: false } : { ok: false, error: `There's no list called "${command.list}".` };
+    const list = picked(() => true) ?? findListByName(deps.items, command.list);
+    return list
+      ? { ok: true, listId: list.id, added: 0, created: false }
+      : { ok: false, error: `There's no list called "${command.list}".` };
   }
   const lines = shortcutLines(command.text);
   if (lines.length === 0) return { ok: false, error: "There was nothing to add." };
-  const name = command.list ?? deps.inboxTitle;
-  const canUse = (list: SavedItem) => deps.canEditItem(list.id);
+  const toInbox = !command.list || command.listId === SHORTCUT_INBOX_ID;
+  const name = toInbox ? deps.inboxTitle : command.list!;
   // The Inbox is the top-level one; a named list can be anywhere.
-  const existing = command.list
-    ? findListByName(deps.items, name, canUse)
-    : deps.items.find((list) => list.type === "list" && !list.folderId && list.title === deps.inboxTitle && canUse(list)) ?? null;
+  const existing =
+    picked(canUse) ??
+    (!toInbox
+      ? findListByName(deps.items, name, canUse)
+      : (deps.items.find(
+          (list) => list.type === "list" && !list.folderId && list.title === deps.inboxTitle && canUse(list),
+        ) ?? null));
   if (!existing) {
     const created = deps.createList(name.trim(), lines);
     return created
@@ -120,5 +164,7 @@ export const runShortcutCommand = (command: ShortcutCommand, deps: ShortcutDeps)
       : { ok: false, error: `Couldn't make a list called "${name}".` };
   }
   const added = deps.addLines(existing.id, lines);
-  return added > 0 ? { ok: true, listId: existing.id, added, created: false } : { ok: false, error: "Couldn't add to that list." };
+  return added > 0
+    ? { ok: true, listId: existing.id, added, created: false }
+    : { ok: false, error: "Couldn't add to that list." };
 };

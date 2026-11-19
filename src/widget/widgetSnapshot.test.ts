@@ -1,4 +1,4 @@
-import type { SavedItem, SavedListItem } from "../types/models";
+import type { ListEntry, SavedItem, SavedListItem } from "../types/models";
 import { buildWidgetSnapshot, widgetSnapshotKey, WIDGET_LINE_COUNT } from "./widgetSnapshot";
 
 const line = (text: string, extra: Partial<SavedListItem> = {}): SavedListItem => ({
@@ -42,13 +42,15 @@ describe("buildWidgetSnapshot", () => {
     );
 
     expect(snapshot).toEqual({
-      version: 1,
+      version: 2,
       updatedAt: now.toISOString(),
+      day: "2026-11-17",
       source: "pinned",
       lists: [
         {
           id: "Groceries",
           title: "Groceries",
+          role: "list",
           open: 3,
           done: 1,
           lines: [
@@ -100,10 +102,73 @@ describe("buildWidgetSnapshot", () => {
     expect(snapshot.lists[0].pending).toBe(30);
   });
 
-  it("ignores the time when telling whether anything changed", () => {
+  it("ignores the time when telling whether anything changed, but not the day", () => {
     const lists = [list("A", "2026-11-16T00:00:00.000Z", { listItems: [line("x")] })];
-    expect(widgetSnapshotKey(buildWidgetSnapshot(lists, [], now))).toBe(
-      widgetSnapshotKey(buildWidgetSnapshot(lists, [], new Date("2026-11-18T00:00:00.000Z"))),
+    const morning = new Date(2026, 10, 17, 8);
+    expect(widgetSnapshotKey(buildWidgetSnapshot(lists, [], morning))).toBe(
+      widgetSnapshotKey(buildWidgetSnapshot(lists, [], new Date(2026, 10, 17, 21))),
     );
+    expect(widgetSnapshotKey(buildWidgetSnapshot(lists, [], morning))).not.toBe(
+      widgetSnapshotKey(buildWidgetSnapshot(lists, [], new Date(2026, 10, 18, 8))),
+    );
+  });
+
+  it("puts Today first and This week second, with the lines they pull in from other lists", () => {
+    const today = new Date(2026, 10, 17, 9);
+    const entry = (id: string, listId: string, extra: Partial<ListEntry> = {}): ListEntry =>
+      ({
+        id,
+        listId,
+        kind: "check",
+        text: id,
+        checked: false,
+        indentLevel: 0,
+        position: id,
+        tagOptionIds: [],
+        createdAt: "2026-11-01T00:00:00.000Z",
+        updatedAt: "2026-11-01T00:00:00.000Z",
+        ...extra,
+      }) as ListEntry;
+    const snapshot = buildWidgetSnapshot(
+      [
+        list("Groceries", "2026-11-16T00:00:00.000Z", { pinned: true }),
+        list("week", "2026-11-01T00:00:00.000Z", {
+          title: "This week",
+          listMode: "focus",
+          focusRule: "due_week",
+          pinned: true,
+        }),
+        list("today", "2026-11-01T00:00:00.000Z", {
+          title: "Today",
+          listMode: "focus",
+          focusRule: "due_today",
+          pinned: true,
+        }),
+        list("Chores", "2026-11-02T00:00:00.000Z"),
+      ],
+      [
+        entry("Typed on Today", "today"),
+        entry("Pay rent", "Chores", { dueDate: "2026-11-17" }),
+        entry("Overdue", "Chores", { dueDate: "2026-11-10" }),
+        entry("Friday", "Chores", { dueDate: "2026-11-20" }),
+        entry("Next month", "Chores", { dueDate: "2026-12-20" }),
+        entry("Done yesterday", "Chores", {
+          dueDate: "2026-11-16",
+          checked: true,
+          completedAt: "2026-11-16T10:00:00.000Z",
+        }),
+      ],
+      today,
+    );
+
+    expect(snapshot.lists.map((item) => [item.id, item.role])).toEqual([
+      ["today", "today"],
+      ["week", "week"],
+      ["Groceries", "list"],
+    ]);
+    expect(snapshot.lists[0].lines.map((item) => item.text)).toEqual(["Typed on Today", "Overdue", "Pay rent"]);
+    expect(snapshot.lists[0].lines[1]).toMatchObject({ due: "2026-11-10" });
+    expect(snapshot.lists[1].lines.map((item) => item.text)).toEqual(["Overdue", "Pay rent", "Friday"]);
+    expect(snapshot.source).toBe("pinned");
   });
 });

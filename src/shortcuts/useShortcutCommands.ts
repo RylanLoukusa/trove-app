@@ -7,8 +7,8 @@ import { useTrove } from "../storage/storage";
 import { createId } from "../utils/id";
 import { parseSmartText } from "../utils/smartText";
 import { priorityOptionsFor } from "../utils/listView";
-import { parseShortcutUrl, runShortcutCommand, ShortcutCommand } from "./shortcutCommands";
-import { takePendingShortcutCommands } from "./shortcutsBridge";
+import { parseShortcutUrl, runShortcutCommand, ShortcutCommand, shortcutListIndex } from "./shortcutCommands";
+import { saveShortcutLists, takePendingShortcutCommands } from "./shortcutsBridge";
 
 // Carries out what Siri, the Shortcuts app or a trove://add or trove://open
 // link asks for, once the person is signed in and their lists have loaded.
@@ -86,6 +86,28 @@ export const useShortcutCommands = (enabled: boolean): void => {
     const subscription = Linking.addEventListener("url", ({ url }) => take(url));
     return () => subscription.remove();
   }, [run]);
+
+  // Siri asks "Which list?" with the person's lists: keep its copy current.
+  const savedLists = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const handle = setTimeout(() => {
+      const index = shortcutListIndex(items, canEditItem, SHARED_INBOX_TITLE);
+      const key = JSON.stringify(index);
+      if (key === savedLists.current) return;
+      void saveShortcutLists(index).then((saved) => {
+        if (saved) savedLists.current = key;
+      });
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [ready, items, canEditItem]);
+
+  // Signed out: Siri stops offering this person's lists.
+  useEffect(() => {
+    if (enabled || savedLists.current === null) return;
+    savedLists.current = null;
+    void saveShortcutLists([]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!ready) return;

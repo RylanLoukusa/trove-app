@@ -624,10 +624,14 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   // as "Call mom" with its date, time and priority, and a message says what
   // was picked up, with an Undo that keeps the words as typed.
   const allTagOptions = useMemo(() => (tagSections ?? []).flatMap((section) => section.options), [tagSections]);
+  const readSmart = (text: string) => parseSmartText(text, { priorityOptions, tagOptions: allTagOptions, people });
   const smartLine = (line: NewLine): { line: NewLine; summary: string | null } => {
     if (!smartText) return { line, summary: null };
-    const { text, fields } = parseSmartText(line.text, { priorityOptions, tagOptions: allTagOptions, people });
+    const { text, fields } = readSmart(line.text);
     if (Object.keys(fields).length === 0) return { line, summary: null };
+    return { line: { ...line, ...fields, text }, summary: smartSummary(fields) };
+  };
+  const smartSummary = (fields: SmartFields): string => {
     const due = fields.dueDate ? describeDueDate(fields.dueDate)?.label : undefined;
     const names = (fields.tagOptionIds ?? [])
       .map((id) => allTagOptions.find((option) => option.id === id)?.name ?? priorityOptions.find((option) => option.id === id)?.name)
@@ -643,7 +647,42 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     ]
       .filter(Boolean)
       .join(" · ");
-    return { line: { ...line, ...fields, text }, summary };
+    return summary;
+  };
+
+  // Smart text in a line typed into somewhere other than the bottom row
+  // (a new line made with Return, or words added to a line), once it's
+  // finished. Only words typed this time count: a line that already said
+  // "Notes from monday" isn't given a date for it now.
+  const finishTyping = (entry: ListEntry, before: string, after: string): string | null => {
+    if (!smartText || before.trim() === after.trim() || isHeading(entry)) return null;
+    const now = readSmart(after);
+    const keys = Object.keys(now.fields) as Array<keyof SmartFields>;
+    if (keys.length === 0) return null;
+    const was = readSmart(before).fields;
+    if (keys.every((key) => key in was)) return null;
+    const { tagOptionIds: newTags = [], ...fields } = now.fields;
+    const priorityIds = new Set(priorityOptions.map((option) => option.id));
+    const settingPriority = newTags.some((id) => priorityIds.has(id));
+    const tags = [
+      ...entry.tagOptionIds.filter((id) => !(settingPriority && priorityIds.has(id)) && !newTags.includes(id)),
+      ...newTags,
+    ];
+    onUpdateEntry(entry.id, { ...fields, text: now.text, ...(newTags.length ? { tagOptionIds: tags } : {}) });
+    showToast(smartSummary(now.fields), () =>
+      onUpdateEntry(entry.id, {
+        text: after,
+        dueDate: entry.dueDate,
+        dueTime: entry.dueTime,
+        repeat: entry.repeat,
+        price: entry.price,
+        quantity: entry.quantity,
+        assigneeId: entry.assigneeId,
+        assigneeName: entry.assigneeName,
+        tagOptionIds: entry.tagOptionIds,
+      }),
+    );
+    return now.text;
   };
 
   // Adds one typed line from the bottom row, reading smart text in it.
@@ -1114,6 +1153,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onCommitText={(text) => {
                 if (text !== entry.text) onUpdateEntry(entry.id, { text });
               }}
+              onFinishText={(before, after) => finishTyping(entry, before, after)}
               onSplit={(previous, next) => splitLine(entry, previous, next)}
               onBackspaceEmpty={() => backspaceEmpty(entry)}
               onFocusLine={() => {
@@ -1400,6 +1440,9 @@ type EntryRowProps = {
   onDragEnd: () => void;
   registerInput: (input: TextInput | null) => void;
   onCommitText: (text: string) => void;
+  // A line typed into and finished (Return, or leaving it): reads smart
+  // text in what was typed, and gives back the line's new text if it did.
+  onFinishText?: (before: string, after: string) => string | null;
   // Text with a line break in it (Return or a paste); returns what stays.
   onSplit: (previous: string, next: string) => string;
   onBackspaceEmpty: () => void;
@@ -1451,6 +1494,7 @@ const EntryRow = ({
   onDragEnd,
   registerInput,
   onCommitText,
+  onFinishText,
   onSplit,
   onBackspaceEmpty,
   onFocusLine,
@@ -1476,6 +1520,8 @@ const EntryRow = ({
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitTextRef = useRef(onCommitText);
   commitTextRef.current = onCommitText;
+  // The text when typing started, to tell what was typed since.
+  const startTextRef = useRef(entry.text);
 
   // Follow changes from elsewhere (sync, the details sheet) unless typing.
   useEffect(() => {
@@ -1500,11 +1546,24 @@ const EntryRow = ({
     if (trimmed) onCommitText(trimmed);
   };
 
+  // Smart text in a finished line. Returns the text the line has now.
+  const finishText = (text: string): string => {
+    const smart = onFinishText ? onFinishText(startTextRef.current, text) : null;
+    startTextRef.current = smart ?? text;
+    if (smart === null) return text;
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = null;
+    setDraft(smart);
+    return smart;
+  };
+
   const changeText = (next: string) => {
     if (commitTimer.current) clearTimeout(commitTimer.current);
     commitTimer.current = null;
     if (/[\r\n]/.test(next)) {
-      setDraft(onSplit(draft, next).trim());
+      const kept = onSplit(draft, next).trim();
+      setDraft(kept);
+      if (kept) finishText(kept);
       return;
     }
     setDraft(next);
@@ -1653,11 +1712,14 @@ const EntryRow = ({
                 onChangeText={changeText}
                 onFocus={() => {
                   focusedRef.current = true;
+                  startTextRef.current = entry.text;
                   onFocusLine();
                 }}
                 onBlur={() => {
                   focusedRef.current = false;
-                  if (draft.trim()) commit(draft);
+                  if (draft.trim()) {
+                    if (finishText(draft.trim()) === draft.trim()) commit(draft);
+                  }
                   else {
                     if (commitTimer.current) clearTimeout(commitTimer.current);
                     commitTimer.current = null;

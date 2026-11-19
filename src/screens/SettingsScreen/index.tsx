@@ -292,6 +292,6 @@ const showShortcutsHelp = () =>
   Alert.alert(
     "Siri and Shortcuts",
     Platform.OS === "ios"
-      ? 'Say "Hey Siri, add to Trove" and Siri asks what to add and to which list. Without a list, it goes to your Inbox. "Open a Trove list" opens one by name.\n\nIn the Shortcuts app, Trove\'s "Add to Trove" and "Open a Trove list" actions do the same. Lines show up the next time Trove opens.\n\nA link works too: trove://add?list=Groceries&text=Milk'
+      ? 'Say "Hey Siri, add to Groceries in Trove" (or any list\'s name), or "Hey Siri, add to Trove" and Siri asks which list. "Open Groceries in Trove" opens one.\n\nIn the Shortcuts app, Trove\'s "Add to Trove" and "Open a Trove list" actions do the same. Lines show up the next time Trove opens.\n\nA link works too: trove://add?list=Groceries&text=Milk'
       : "Shortcuts and automation apps can add to a list with a link such as trove://add?list=Groceries&text=Milk, or open one with trove://open?list=Groceries.",
   );
