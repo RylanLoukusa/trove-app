@@ -167,10 +167,13 @@ const QUANTITY_TAG_PREFIX = `${FORMAT_TAG_PREFIX}qty:`;
 const PRICE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}price:`;
 const RATING_TAG_PREFIX = `${FORMAT_TAG_PREFIX}rating:`;
 const LINK_TAG_PREFIX = `${FORMAT_TAG_PREFIX}link:`;
+// Who a line is for: `fmt:assignee:<user id>` and `fmt:assigneename:<name>`.
+const ASSIGNEE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}assignee:`;
+const ASSIGNEE_NAME_TAG_PREFIX = `${FORMAT_TAG_PREFIX}assigneename:`;
 
 export const encodeEntryFormat = (
   entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images" | "dueTime" | "repeat"> &
-    Partial<Pick<ListEntry, "quantity" | "price" | "rating" | "link">>,
+    Partial<Pick<ListEntry, "quantity" | "price" | "rating" | "link" | "assigneeId" | "assigneeName">>,
 ): { kind: "check" | "bullet"; tags: string[] } => ({
   kind: entry.kind === "check" ? "check" : "bullet",
   tags: [
@@ -184,6 +187,8 @@ export const encodeEntryFormat = (
     ...(isPrice(entry.price) ? [`${PRICE_TAG_PREFIX}${entry.price}`] : []),
     ...(isRating(entry.rating) ? [`${RATING_TAG_PREFIX}${entry.rating}`] : []),
     ...(entry.link && normalizeLink(entry.link) ? [`${LINK_TAG_PREFIX}${entry.link}`] : []),
+    ...(entry.assigneeId ? [`${ASSIGNEE_TAG_PREFIX}${entry.assigneeId}`] : []),
+    ...(entry.assigneeId && entry.assigneeName ? [`${ASSIGNEE_NAME_TAG_PREFIX}${entry.assigneeName}`] : []),
   ],
 });
 
@@ -262,7 +267,7 @@ export const decodeListTags = (
 export const decodeEntryFormat = (
   kind: unknown,
   tags: string[],
-): Pick<ListEntry, "kind" | "tagOptionIds" | "images" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link"> & {
+): Pick<ListEntry, "kind" | "tagOptionIds" | "images" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link" | "assigneeId" | "assigneeName"> & {
   bold?: true;
 } => {
   const images = tags
@@ -279,6 +284,10 @@ export const decodeEntryFormat = (
   const price = numberAfter(PRICE_TAG_PREFIX);
   const rating = numberAfter(RATING_TAG_PREFIX);
   const link = tags.find((tag) => tag.startsWith(LINK_TAG_PREFIX))?.slice(LINK_TAG_PREFIX.length);
+  const assigneeId = tags.find((tag) => tag.startsWith(ASSIGNEE_TAG_PREFIX))?.slice(ASSIGNEE_TAG_PREFIX.length) || undefined;
+  const assigneeName = assigneeId
+    ? tags.find((tag) => tag.startsWith(ASSIGNEE_NAME_TAG_PREFIX))?.slice(ASSIGNEE_NAME_TAG_PREFIX.length) || undefined
+    : undefined;
   return {
     kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
     tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
@@ -290,6 +299,8 @@ export const decodeEntryFormat = (
     ...(isPrice(price) ? { price } : {}),
     ...(isRating(rating) ? { rating } : {}),
     ...(link && normalizeLink(link) ? { link } : {}),
+    ...(assigneeId ? { assigneeId } : {}),
+    ...(assigneeName ? { assigneeName } : {}),
   };
 };
 

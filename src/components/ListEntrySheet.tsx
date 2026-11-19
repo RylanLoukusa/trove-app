@@ -7,11 +7,23 @@ import { askForReminderPermission } from "../reminders/notifications";
 import type { ListEntry, RepeatRule, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, toDateKey, withPriority } from "../utils/listView";
 import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
+import { ListPerson, personLabel } from "../collaboration/listPeople";
 import { formatPrice, formatQuantity, MAX_RATING, normalizeLink, parsePrice, parseQuantity } from "../utils/fields";
 
 type Details = Pick<
   ListEntry,
-  "text" | "dueDate" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link" | "notes" | "tagOptionIds"
+  | "text"
+  | "dueDate"
+  | "dueTime"
+  | "repeat"
+  | "quantity"
+  | "price"
+  | "rating"
+  | "link"
+  | "notes"
+  | "tagOptionIds"
+  | "assigneeId"
+  | "assigneeName"
 >;
 
 type Props = {
@@ -27,6 +39,8 @@ type Props = {
   // Other lists this line also shows on; tapping one takes it off that list.
   alsoOnLists?: Array<{ id: string; title: string }>;
   onRemoveFromList?: (listId: string) => void;
+  // People a line can be given to, on a shared list.
+  people?: ListPerson[];
   onSave: (updates: Partial<Details>) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -43,6 +57,7 @@ export const ListEntrySheet = ({
   fromRule = false,
   alsoOnLists,
   onRemoveFromList,
+  people = [],
   onSave,
   onDelete,
   onClose,
@@ -72,6 +87,7 @@ export const ListEntrySheet = ({
   const [priceDraft, setPriceDraft] = useState("");
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [linkDraft, setLinkDraft] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!entry) return;
@@ -89,6 +105,7 @@ export const ListEntrySheet = ({
     setPriceDraft(entry.price !== undefined ? formatPrice(entry.price) : "");
     setRating(entry.rating);
     setLinkDraft(entry.link ?? "");
+    setAssigneeId(entry.assigneeId);
     // Only reset when a different entry opens, not on every background sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry?.id]);
@@ -121,6 +138,10 @@ export const ListEntrySheet = ({
       if (rating !== entry.rating) updates.rating = rating;
       const nextLink = linkDraft.trim() ? normalizeLink(linkDraft) ?? entry.link : undefined;
       if (nextLink !== entry.link) updates.link = nextLink;
+      if (assigneeId !== entry.assigneeId) {
+        updates.assigneeId = assigneeId;
+        updates.assigneeName = people.find((person) => person.id === assigneeId)?.name;
+      }
       const nextNotes = notes.trim() || undefined;
       if (nextNotes !== entry.notes) updates.notes = nextNotes;
       const nextTags = [
@@ -312,6 +333,35 @@ export const ListEntrySheet = ({
                   styles={styles}
                 />
               ))}
+            </View>
+          </>
+        )}
+
+        {(people.length > 0 || !!entry?.assigneeId) && (
+          <>
+            <Text style={styles.label}>Assigned to</Text>
+            <View style={styles.chipRow}>
+              {people.map((person) => (
+                <Chip
+                  key={person.id}
+                  label={personLabel(person)}
+                  accessibilityLabel={`Assign to ${personLabel(person)}`}
+                  selected={assigneeId === person.id}
+                  disabled={!canEdit}
+                  onPress={() => setAssigneeId(assigneeId === person.id ? undefined : person.id)}
+                  styles={styles}
+                />
+              ))}
+              {/* Someone who no longer has the list keeps the line until it is given to someone else. */}
+              {!!entry?.assigneeId && !people.some((person) => person.id === entry.assigneeId) && assigneeId === entry.assigneeId && (
+                <Chip
+                  label={entry.assigneeName ?? "Someone"}
+                  selected
+                  disabled={!canEdit}
+                  onPress={() => setAssigneeId(undefined)}
+                  styles={styles}
+                />
+              )}
             </View>
           </>
         )}

@@ -1318,6 +1318,8 @@ const listEntryConflictFields = (local: ListEntry, remote: ListEntry): SyncConfl
     "price",
     "rating",
     "link",
+    "assigneeId",
+    "assigneeName",
     "completedAt",
     "tagOptionIds",
     "refEntryId",

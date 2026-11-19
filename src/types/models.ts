@@ -96,6 +96,10 @@ export type ListEntry = {
   price?: number;
   rating?: number;
   link?: string;
+  // Who the line is for, on a shared list: their user id, and their name as
+  // it was when the line was given to them (shown until names load).
+  assigneeId?: string;
+  assigneeName?: string;
   completedAt?: string;
   tagOptionIds: string[];
   // Set on a line that shows a line from another list (a "pulled" line). Its

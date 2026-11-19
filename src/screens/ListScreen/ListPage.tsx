@@ -33,7 +33,9 @@ import { EntryUpdates, ListEntriesView, ListEntriesViewHandle, NewLine } from ".
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
+import { useAuth } from "../../auth/AuthContext";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
 import { HOME_LABEL } from "../../navigation/backLabel";
 import type { RootStackParamList } from "../../navigation/types";
@@ -165,6 +167,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const [keyboardUp, setKeyboardUp] = useState(false);
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId || undefined);
   const showComments = isSharedAccess(item) || isFolderSharedByOwner || !!item.sharedWith;
+  const { session } = useAuth();
+  // On a shared list, lines can be given to the people who have it.
+  const people = useListPeople(item.id, item.folderId || undefined, showComments);
 
   // Photos added while offline go up once a list is opened again.
   useEffect(() => {
@@ -955,6 +960,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           emptyText={rule || ruleTagId ? "Nothing matches this list's rule right now." : "Nothing on this list yet."}
           focusAddSignal={focusAddSignal}
           layout={item.viewMode === "gallery" ? "gallery" : "lines"}
+          people={people}
+          myUserId={session?.user?.id}
         />
       </KeyboardAvoidingView>
 

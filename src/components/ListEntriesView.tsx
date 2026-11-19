@@ -48,6 +48,7 @@ import {
   ListPlus,
   Repeat,
   Trash2,
+  UserRound,
   Undo2,
 } from "lucide-react-native";
 
@@ -74,6 +75,7 @@ import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
 import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
 import { parseSmartText, SmartFields } from "../utils/smartText";
+import { assigneeLabel, ListPerson, personLabel } from "../collaboration/listPeople";
 import { collapsibleEnd, lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -89,7 +91,22 @@ import {
 export type EntryUpdates = Partial<
   Pick<
     ListEntry,
-    "text" | "kind" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link" | "notes" | "tagOptionIds" | "indentLevel"
+    | "text"
+    | "kind"
+    | "bold"
+    | "images"
+    | "dueDate"
+    | "dueTime"
+    | "repeat"
+    | "quantity"
+    | "price"
+    | "rating"
+    | "link"
+    | "assigneeId"
+    | "assigneeName"
+    | "notes"
+    | "tagOptionIds"
+    | "indentLevel"
   >
 >;
 
@@ -167,6 +184,9 @@ type Props = {
   // Reads dates, times, priority, tags, price and quantity out of a typed
   // line (on unless turned off).
   smartText?: boolean;
+  // On a shared list: the people a line can be given to, and who "Me" is.
+  people?: ListPerson[];
+  myUserId?: string;
 };
 
 // Index the dragged row should land on, given how far it has moved and the
@@ -248,6 +268,8 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     focusAddSignal,
     layout = "lines",
     smartText = true,
+    people = [],
+    myUserId,
   },
   ref,
 ) {
@@ -604,13 +626,15 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const allTagOptions = useMemo(() => (tagSections ?? []).flatMap((section) => section.options), [tagSections]);
   const smartLine = (line: NewLine): { line: NewLine; summary: string | null } => {
     if (!smartText) return { line, summary: null };
-    const { text, fields } = parseSmartText(line.text, { priorityOptions, tagOptions: allTagOptions });
+    const { text, fields } = parseSmartText(line.text, { priorityOptions, tagOptions: allTagOptions, people });
     if (Object.keys(fields).length === 0) return { line, summary: null };
     const due = fields.dueDate ? describeDueDate(fields.dueDate)?.label : undefined;
     const names = (fields.tagOptionIds ?? [])
       .map((id) => allTagOptions.find((option) => option.id === id)?.name ?? priorityOptions.find((option) => option.id === id)?.name)
       .filter(Boolean);
+    const assignee = fields.assigneeId ? people.find((person) => person.id === fields.assigneeId) : undefined;
     const summary = [
+      assignee ? `For ${personLabel(assignee)}` : "",
       [due, fields.dueTime ? formatTime(fields.dueTime) : ""].filter(Boolean).join(" "),
       fields.repeat ? repeatLabels[fields.repeat] : "",
       ...names,
@@ -636,6 +660,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           repeat: undefined,
           price: undefined,
           quantity: undefined,
+          assigneeId: undefined,
           tagOptionIds: [],
         }),
       );
@@ -1068,6 +1093,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               priority={entryPriority(entry, priorityOptions)}
               tags={entry.tagOptionIds.map((id) => otherTags.get(id)).filter((option): option is TagOption => !!option)}
               caption={captions?.[entry.id]}
+              assignee={assigneeLabel(entry, people, myUserId)}
               borrowed={!!referenceSources?.[entry.id]}
               showIndent={manualOrder}
               spaceAbove={index > 0 && isHeading(entry) && entry.indentLevel === 0}
@@ -1316,6 +1342,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         sourceListTitle={openEntry ? referenceSources?.[openEntry.id] : undefined}
         fromRule={!!openEntry && !!ruleEntryIds?.has(openEntry.id)}
         alsoOnLists={openEntryLists}
+        people={people}
         onRemoveFromList={(listId) => {
           if (!openEntry) return;
           const result = onLinkEntries?.([openEntry.id], listId);
@@ -1347,6 +1374,8 @@ type EntryRowProps = {
   // The line's other tags.
   tags: TagOption[];
   caption?: string;
+  // Who the line is for, on a shared list.
+  assignee?: string | null;
   // The line lives on another list and is only shown here.
   borrowed: boolean;
   showIndent: boolean;
@@ -1402,6 +1431,7 @@ const EntryRow = ({
   priority,
   tags,
   caption,
+  assignee,
   borrowed,
   showIndent,
   spaceAbove,
@@ -1527,7 +1557,8 @@ const EntryRow = ({
   }, [carried, dragActive, shift]);
 
   const fieldLabels = cardFieldsLabel(entry) ? [cardFieldsLabel(entry)] : [];
-  const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes || fieldLabels.length > 0 || !!entry.rating;
+  const hasMeta =
+    !!due || !!priority || tags.length > 0 || !!entry.notes || fieldLabels.length > 0 || !!entry.rating || !!assignee;
   // Web links in the line, each offered as a button under it: the line itself
   // is a text field, so tapping it edits rather than opens. A link kept in the
   // line's details comes first.
@@ -1697,6 +1728,14 @@ const EntryRow = ({
                 <Link2 size={12} color={colors.muted} />
                 <Text numberOfLines={1} style={styles.metaText}>
                   {caption}
+                </Text>
+              </View>
+            )}
+            {!!assignee && (
+              <View style={styles.metaItem} accessibilityLabel={`For ${assignee}`}>
+                <UserRound size={12} color={colors.accentDark} />
+                <Text numberOfLines={1} style={[styles.metaText, { color: colors.accentDark }]}>
+                  {assignee}
                 </Text>
               </View>
             )}

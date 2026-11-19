@@ -155,6 +155,8 @@ type TroveContextValue = TroveData & {
         | "price"
         | "rating"
         | "link"
+        | "assigneeId"
+        | "assigneeName"
         | "tagOptionIds"
       >
     >,
@@ -175,7 +177,19 @@ type TroveContextValue = TroveData & {
         Partial<
           Pick<
             ListEntry,
-            "kind" | "checked" | "indentLevel" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "price" | "quantity" | "tagOptionIds"
+            | "kind"
+            | "checked"
+            | "indentLevel"
+            | "bold"
+            | "images"
+            | "dueDate"
+            | "dueTime"
+            | "repeat"
+            | "price"
+            | "quantity"
+            | "assigneeId"
+            | "assigneeName"
+            | "tagOptionIds"
           >
         >
     >,
@@ -932,6 +946,11 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         if (!isPrice(next.price)) delete next.price;
         if (!isRating(next.rating)) delete next.rating;
         if (!next.link) delete next.link;
+        if (!next.assigneeId) {
+          delete next.assigneeId;
+          delete next.assigneeName;
+        }
+        if (!next.assigneeName) delete next.assigneeName;
         if (next.kind !== "check") next.checked = false;
         if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
         return next.checked && !candidate.checked ? checkOff(candidate, next, timestamp) : next;
@@ -1029,6 +1048,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         ...(kind === "check" && isRepeatRule(input.repeat) ? { repeat: input.repeat } : {}),
         ...(isPrice(input.price) ? { price: input.price } : {}),
         ...(isQuantity(input.quantity) ? { quantity: input.quantity } : {}),
+        ...(input.assigneeId ? { assigneeId: input.assigneeId, ...(input.assigneeName ? { assigneeName: input.assigneeName } : {}) } : {}),
         position: positions[index],
         tagOptionIds: input.tagOptionIds ? [...new Set(input.tagOptionIds)] : [],
         ownerId: list.ownerId ?? activeUserId ?? undefined,

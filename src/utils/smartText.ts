@@ -8,7 +8,9 @@ import { parseTimeInput } from "./schedule";
 // clearly mean a date, time, repeat, priority, tag, price or quantity are
 // taken out, and only when some words are left for the line itself.
 
-export type SmartFields = Partial<Pick<ListEntry, "dueDate" | "dueTime" | "repeat" | "price" | "quantity">> & {
+export type SmartFields = Partial<
+  Pick<ListEntry, "dueDate" | "dueTime" | "repeat" | "price" | "quantity" | "assigneeId" | "assigneeName">
+> & {
   tagOptionIds?: string[];
 };
 
@@ -175,7 +177,14 @@ export const parseSmartText = (
     today = new Date(),
     priorityOptions = [],
     tagOptions = [],
-  }: { today?: Date; priorityOptions?: TagOption[]; tagOptions?: TagOption[] } = {},
+    people = [],
+  }: {
+    today?: Date;
+    priorityOptions?: TagOption[];
+    tagOptions?: TagOption[];
+    // On a shared list, "@sam" gives the line to Sam (and "@me" to me).
+    people?: Array<{ id: string; name: string; isMe: boolean }>;
+  } = {},
 ): SmartResult => {
   let text = ` ${input} `;
   const fields: SmartFields = {};
@@ -216,6 +225,20 @@ export const parseSmartText = (
     cut(match);
   }
   text = text.replace(/\u0000/g, "#");
+
+  const mention = /(?:^|\s)@([\p{L}\p{N}._-]+)(?=\s|$)/u.exec(text);
+  if (mention && people.length > 0) {
+    const word = mention[1].toLowerCase();
+    const person =
+      (word === "me" ? people.find((candidate) => candidate.isMe) : undefined) ??
+      people.find((candidate) => squash(candidate.name) === squash(word)) ??
+      people.find((candidate) => candidate.name.toLowerCase().split(/[\s@.]+/)[0] === word);
+    if (person) {
+      fields.assigneeId = person.id;
+      fields.assigneeName = person.name;
+      cut(mention);
+    }
+  }
 
   const cleaned = text
     .replace(/\s+/g, " ")

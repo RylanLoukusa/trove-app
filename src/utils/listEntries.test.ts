@@ -558,6 +558,13 @@ describe("plain and bold lines", () => {
     ).toEqual({ kind: "check", tagOptionIds: [] });
   });
 
+  it("syncs who a line is for", () => {
+    const encoded = encodeEntryFormat({ kind: "check", tagOptionIds: [], assigneeId: "user-1", assigneeName: "Sam: Lee" });
+    expect(encoded.tags).toEqual(["fmt:assignee:user-1", "fmt:assigneename:Sam: Lee"]);
+    expect(decodeEntryFormat("check", encoded.tags)).toEqual({ kind: "check", tagOptionIds: [], assigneeId: "user-1", assigneeName: "Sam: Lee" });
+    expect(decodeEntryFormat("check", ["fmt:assigneename:Orphan"])).toEqual({ kind: "check", tagOptionIds: [] });
+  });
+
   it("syncs a list shown as a collection", () => {
     expect(encodeListTags({ tagOptionIds: [], viewMode: "gallery" })).toEqual(["fmt:view:gallery"]);
     expect(decodeListTags(["fmt:view:gallery"])).toEqual({ tagOptionIds: [], viewMode: "gallery" });

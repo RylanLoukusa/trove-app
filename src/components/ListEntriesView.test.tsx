@@ -1667,3 +1667,47 @@ describe("folding", () => {
     expect(visibleTexts()).toEqual(["Kitchen", "Plates"]);
   });
 });
+
+describe("lines given to people on a shared list", () => {
+  const people = [
+    { id: "me", name: "Rae", isMe: true },
+    { id: "sam", name: "Sam Lee", isMe: false },
+  ];
+  beforeEach(() => jest.clearAllMocks());
+
+  it("gives a line to someone in its details, and shows who it's for", async () => {
+    await renderList([entry("Cake"), entry("Venue", { assigneeId: "me", assigneeName: "Rae" })], { people, myUserId: "me" });
+
+    expect(screen.getByLabelText("For Me")).toBeTruthy();
+    await openDetails("Cake");
+    expect(screen.getByLabelText("Assign to Me")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Assign to Sam Lee"));
+    await fireEvent.press(screen.getByText("Done"));
+
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { assigneeId: "sam", assigneeName: "Sam Lee" });
+  });
+
+  it("keeps the name a line was given under when that person has left", async () => {
+    await renderList([entry("Cake", { assigneeId: "gone", assigneeName: "Ann" })], { people, myUserId: "me" });
+
+    expect(screen.getByLabelText("For Ann")).toBeTruthy();
+  });
+
+  it("gives a typed line to someone with @", async () => {
+    await renderList([entry("Cake")], { people, myUserId: "me" });
+
+    await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Balloons @sam\n");
+
+    expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+      expect.objectContaining({ text: "Balloons", assigneeId: "sam", assigneeName: "Sam Lee" }),
+    ]);
+    expect(screen.getByText("For Sam Lee")).toBeTruthy();
+  });
+
+  it("offers no one to give a line to on a list nobody else has", async () => {
+    await renderList([entry("Cake")]);
+
+    await openDetails("Cake");
+    expect(screen.queryByText("Assigned to")).toBeNull();
+  });
+});
