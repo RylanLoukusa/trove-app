@@ -18,6 +18,7 @@ import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { canAddChildFolder, getChildFolders, getDescendantFolderIds, getFolderById } from "../../utils/folderTree";
 import { listActivityTimes, listDisplayTitle, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
+import { FolderIcon } from "../../components/FolderIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
 
@@ -67,9 +68,9 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   const shareAsText = useCallback(async (): Promise<void> => {
     if (!folder) return;
     const sections = [
-      `${folder.icon ?? "📁"} ${folder.name}`,
+      folder.name,
       folder.purpose ?? "",
-      subfolders.length ? `Folders:\n${subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`).join("\n")}` : "",
+      subfolders.length ? `Folders:\n${subfolders.map((child) => `- ${child.name}`).join("\n")}` : "",
       lists.length ? `Lists:\n${lists.map((list) => `- ${listDisplayTitle(list, list.listItems)}`).join("\n")}` : "",
     ].filter(Boolean);
 
@@ -200,9 +201,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
       <KeyboardAvoidingView style={styles.scroll} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.titleRow}>
-            <View style={[styles.icon, { backgroundColor: folder.color ?? colors.border }]}>
-              <Text style={styles.emoji}>{folder.icon ?? "📁"}</Text>
-            </View>
+            <FolderIcon icon={folder.icon} color={folder.color} size={38} />
             <Text accessibilityRole="header" style={styles.title}>
               {folder.name}
             </Text>

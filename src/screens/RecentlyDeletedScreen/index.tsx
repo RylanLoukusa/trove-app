@@ -108,7 +108,7 @@ export const RecentlyDeletedScreen = ({ navigation }: Props) => {
               {deletedFolders.map(({ folder, at, listCount }) => (
                 <DetailRow
                   key={folder.id}
-                  title={`${folder.icon ?? "📁"} ${folder.name}`}
+                  title={folder.name}
                   detail={`${countLabel(listCount)} · ${purgeLabel(at)}`}
                   hint="Offers to put it back or delete it for good"
                   onPress={() => setChosen({ kind: "folder", id: folder.id, title: folder.name })}

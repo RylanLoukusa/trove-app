@@ -227,9 +227,9 @@ describe("HomeScreen", () => {
     it("says which folder a list is kept in", async () => {
       await renderHomeScreen();
 
-      expect(within(screen.getByLabelText("Packing")).getByText("📁 Japan")).toBeTruthy();
-      expect(within(screen.getByLabelText("Itinerary")).getByText("✈️ Trips")).toBeTruthy();
-      expect(within(screen.getByLabelText("Groceries")).queryByText(/📁/)).toBeNull();
+      expect(within(screen.getByLabelText("Packing")).getByText("in Japan")).toBeTruthy();
+      expect(within(screen.getByLabelText("Itinerary")).getByText("in Trips")).toBeTruthy();
+      expect(within(screen.getByLabelText("Groceries")).queryByText(/^in /)).toBeNull();
     });
 
     it("opens a list when its row is pressed", async () => {
@@ -258,7 +258,7 @@ describe("HomeScreen", () => {
 
       expect(headers()).toEqual(["Trove", "Folders", "Pinned", "Lists"]);
       expect(listRowTitles()).toEqual(["Chores", "Call the plumber", "Packing", "Groceries"]);
-      expect(within(screen.getByLabelText("Chores")).getByText("📁 Home")).toBeTruthy();
+      expect(within(screen.getByLabelText("Chores")).getByText("in Home")).toBeTruthy();
     });
 
     it("leave the section out when nothing is pinned", async () => {

@@ -692,7 +692,7 @@ export const ShareFolderScreen = ({ navigation, route }: Props) => {
         }
       >
         <Text style={styles.eyebrow}>Folder access</Text>
-        <Text style={styles.title}>{folder.icon ?? "📁"} {folder.name}</Text>
+        <Text style={styles.title}>{folder.name}</Text>
         <Text style={styles.path}>{folderPath}</Text>
 
         {canManageAccess && (

@@ -9,6 +9,7 @@ import type { Folder, SavedItem, SavedListItem } from "../types/models";
 import { isSharedAccess } from "../utils/access";
 import { listDisplayTitle } from "../utils/listEntries";
 import { formatListDate } from "../utils/listView";
+import { FolderIcon } from "./FolderIcon";
 
 // Small caps heading above a group of rows, with an optional action.
 export const SectionHeader = ({ title, action }: { title: string; action?: ReactNode }) => {
@@ -87,9 +88,7 @@ export const FolderStrip = ({
             onPress={() => onOpen(folder.id)}
             style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
           >
-            <View style={[styles.chipIcon, { backgroundColor: folder.color ?? colors.border }]}>
-              <Text style={styles.chipEmoji}>{folder.icon ?? "📁"}</Text>
-            </View>
+            <FolderIcon icon={folder.icon} color={folder.color} size={30} />
             <Text numberOfLines={1} style={styles.chipName}>
               {folder.name}
             </Text>
@@ -148,7 +147,7 @@ export const ListRow = ({
           <Text style={styles.listDate}>{date}</Text>
           {!!folderLabel && (
             <Text numberOfLines={1} style={styles.listFolder}>
-              {folderLabel}
+              in {folderLabel}
             </Text>
           )}
         </View>

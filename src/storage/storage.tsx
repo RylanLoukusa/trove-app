@@ -71,6 +71,7 @@ import {
   sortEntries,
   UNTITLED_LIST_TITLE,
 } from "../utils/listEntries";
+import { DEFAULT_FOLDER_ICON } from "../utils/folderIcon";
 
 const STORAGE_KEY_PREFIX = "trove:data:v1";
 const emptyData: TroveData = { folders: [], items: [], listEntries: [], tagGroups: [], tagOptions: [] };
@@ -613,7 +614,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       id: createId("folder"),
       name: input.name.trim() || "Untitled folder",
       parentFolderId: input.parentFolderId,
-      icon: input.icon || "📁",
+      icon: input.icon || DEFAULT_FOLDER_ICON,
       color: input.color || "#D8C7AA",
       purpose: cleanOptionalText(input.purpose),
       ownerId: activeUserId ?? undefined,

@@ -113,10 +113,23 @@ describe("AddEditFolderScreen", () => {
     );
   });
 
+  it("starts with the folder icon and offers line icons, with emoji for anyone who wants one", async () => {
+    await renderNewFolder();
+    await fireEvent.press(screen.getByText("Save folder"));
+    expect(createFolder).toHaveBeenLastCalledWith(expect.objectContaining({ icon: "icon:folder" }));
+
+    await fireEvent.press(screen.getByLabelText("Choose folder icon"));
+    await fireEvent.press(screen.getByLabelText("Use the Travel icon"));
+    await fireEvent.press(screen.getByText("Save folder"));
+    expect(createFolder).toHaveBeenLastCalledWith(expect.objectContaining({ icon: "icon:plane" }));
+  });
+
   it("updates the icon when an emoji is selected", async () => {
     await renderNewFolder();
 
     await fireEvent.press(screen.getByLabelText("Choose folder icon"));
+    expect(screen.queryByLabelText("Use 👍 as folder icon")).toBeNull();
+    await fireEvent.press(screen.getByText("Use an emoji instead"));
     await fireEvent.press(screen.getByLabelText("Use 👍 as folder icon"));
     await fireEvent.press(screen.getByText("Save folder"));
 

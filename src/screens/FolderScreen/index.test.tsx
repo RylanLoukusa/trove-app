@@ -184,7 +184,7 @@ describe("FolderScreen", () => {
     it("doesn't repeat the folder's own name under each list", async () => {
       await renderFolderScreen();
 
-      expect(screen.queryByText("✈️ Trips")).toBeNull();
+      expect(screen.queryByText("in Trips")).toBeNull();
       expect(within(screen.getByLabelText("Budget")).queryByText(/Trips/)).toBeNull();
     });
 
@@ -406,7 +406,7 @@ describe("FolderScreen", () => {
 
       await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
       expect(shareSpy.mock.calls[0][0].message).toBe(
-        ["✈️ Trips", "Places to go", "Folders:\n- 🍝 Italy\n- 📁 Japan", "Lists:\n- Budget\n- Bucket list"].join("\n\n"),
+        ["Trips", "Places to go", "Folders:\n- Italy\n- Japan", "Lists:\n- Budget\n- Bucket list"].join("\n\n"),
       );
     });
 

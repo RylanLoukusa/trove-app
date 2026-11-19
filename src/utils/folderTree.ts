@@ -66,11 +66,9 @@ export const getFolderPathLabel = (folders: Folder[], folderId?: string | null):
   return path.length > 0 ? path.map((folder) => folder.name).join(" > ") : "Trove";
 };
 
-// A folder's emoji and name, for a row that says where a list is kept.
-export const folderLabel = (folders: Folder[], folderId?: string | null): string | undefined => {
-  const folder = getFolderById(folders, folderId);
-  return folder ? `${folder.icon ?? "📁"} ${folder.name}` : undefined;
-};
+// A folder's name, for a row that says where a list is kept.
+export const folderLabel = (folders: Folder[], folderId?: string | null): string | undefined =>
+  getFolderById(folders, folderId)?.name;
 
 export const getFolderDepth = (folders: Folder[], folderId?: string | null): number => getFolderPath(folders, folderId).length;
 
