@@ -49,6 +49,8 @@ import {
   SHARED_INBOX_TITLE,
 } from "./src/share/sharedImport";
 import { createId } from "./src/utils/id";
+import { isShortcutUrl } from "./src/shortcuts/shortcutCommands";
+import { useShortcutCommands } from "./src/shortcuts/useShortcutCommands";
 
 initSentry();
 
@@ -56,6 +58,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ["https://trovecollections.app", "trove://"],
+  // Links that add to or open a list by name are carried out by
+  // useShortcutCommands rather than navigated to.
+  filter: (url) => !isShortcutUrl(url),
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
@@ -83,6 +88,7 @@ function AppNavigator() {
   const lastHandledInviteToken = React.useRef<string | null>(null);
   useReminders(!!session && !isPasswordRecovery);
   useWidgetSync(!!session && !isPasswordRecovery);
+  useShortcutCommands(!!session && !isPasswordRecovery);
 
   // Something shared into Trove from another app becomes a line on the Inbox
   // list of the folder that was picked (or of the top level).

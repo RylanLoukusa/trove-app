@@ -11,6 +11,8 @@
 		C1D2E3F4A5B6012345678906 /* TroveWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678905 /* TroveWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1D2E3F4A5B6012345678912 /* TroveWidgetModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */; };
 		C1D2E3F4A5B6012345678914 /* TroveWidgetModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */; };
+		D1E2F3A4B5C6012345678912 /* TroveShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6012345678911 /* TroveShortcuts.swift */; };
+		D1E2F3A4B5C6012345678914 /* TroveShortcutsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6012345678913 /* TroveShortcutsModuleBridge.m */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564BE3705816CC969827A2F2 /* ExpoModulesProvider.swift */; };
 		244BF043D225B92FCE868DA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C839FC8B01E4AF3ED6A6DA4B /* PrivacyInfo.xcprivacy */; };
@@ -63,6 +65,8 @@
 		C1D2E3F4A5B6012345678905 /* TroveWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TroveWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TroveWidgetModule.swift; path = Trove/TroveWidgetModule.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TroveWidgetModuleBridge.m; path = Trove/TroveWidgetModuleBridge.m; sourceTree = "<group>"; };
+		D1E2F3A4B5C6012345678911 /* TroveShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TroveShortcuts.swift; path = Trove/TroveShortcuts.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6012345678913 /* TroveShortcutsModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TroveShortcutsModuleBridge.m; path = Trove/TroveShortcutsModuleBridge.m; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Trove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Trove.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Trove/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Trove/Info.plist; sourceTree = "<group>"; };
@@ -128,6 +132,8 @@
 				A1B2C3D4E5F6012345678913 /* SharedImportModuleBridge.m */,
 				C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */,
 				C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */,
+				D1E2F3A4B5C6012345678911 /* TroveShortcuts.swift */,
+				D1E2F3A4B5C6012345678913 /* TroveShortcutsModuleBridge.m */,
 				F11748442D0722820044C1D9 /* Trove-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -522,6 +528,8 @@
 				A1B2C3D4E5F6012345678915 /* SharedImportModuleBridge.m in Sources */,
 				C1D2E3F4A5B6012345678912 /* TroveWidgetModule.swift in Sources */,
 				C1D2E3F4A5B6012345678914 /* TroveWidgetModuleBridge.m in Sources */,
+				D1E2F3A4B5C6012345678912 /* TroveShortcuts.swift in Sources */,
+				D1E2F3A4B5C6012345678914 /* TroveShortcutsModuleBridge.m in Sources */,
 				19EFECCE0448183B38B3C669 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
