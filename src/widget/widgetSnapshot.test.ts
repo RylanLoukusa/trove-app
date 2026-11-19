@@ -45,6 +45,7 @@ describe("buildWidgetSnapshot", () => {
       version: 2,
       updatedAt: now.toISOString(),
       day: "2026-11-17",
+      appearance: "system",
       source: "pinned",
       lists: [
         {
@@ -111,6 +112,11 @@ describe("buildWidgetSnapshot", () => {
     expect(widgetSnapshotKey(buildWidgetSnapshot(lists, [], morning))).not.toBe(
       widgetSnapshotKey(buildWidgetSnapshot(lists, [], new Date(2026, 10, 18, 8))),
     );
+  });
+
+  it("carries the app's Light or Dark setting", () => {
+    expect(buildWidgetSnapshot([], [], now, [], "dark").appearance).toBe("dark");
+    expect(buildWidgetSnapshot([], [], now).appearance).toBe("system");
   });
 
   it("puts Today first and This week second, with the lines they pull in from other lists", () => {

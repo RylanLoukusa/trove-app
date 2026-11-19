@@ -43,6 +43,8 @@ export type WidgetSnapshot = {
   updatedAt: string;
   // The day it was made for: Today and This week change at midnight.
   day: string;
+  // Light or dark, as chosen in Trove's settings, or "system" to follow the phone.
+  appearance?: "light" | "dark" | "system";
   // "pinned": lists pinned to Home. "recent": nothing is pinned, so the
   // lists changed most recently.
   source: "pinned" | "recent" | "none";
@@ -115,6 +117,7 @@ export const buildWidgetSnapshot = (
   entries: ListEntry[],
   now: Date = new Date(),
   priorityOptions: TagOption[] = [],
+  appearance: "light" | "dark" | "system" = "system",
 ): WidgetSnapshot => {
   const usable = lists.filter((list) => list.type === "list" && !list.isTemplate);
   const sorted = sortListsByActivity(usable, listActivityTimes(usable, entries));
@@ -144,6 +147,7 @@ export const buildWidgetSnapshot = (
     version: WIDGET_SNAPSHOT_VERSION,
     updatedAt: now.toISOString(),
     day: toDateKey(now),
+    appearance,
     source:
       chosen.length === 0
         ? "none"

@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-// The home screen widget. Today comes first (what's due today or overdue);
+// The home screen and Lock Screen widget. Today comes first (what's due today or overdue);
 // the medium and large sizes show This week beside or under it. Without
 // those lists it shows the lists pinned to Home, or the ones changed most
 // recently. Tapping a list opens it. The app writes what to show into the
@@ -34,6 +34,8 @@ struct WidgetSnapshot: Decodable {
   let version: Int
   // The day the app made it for.
   let day: String?
+  // "light", "dark" or "system", from Trove's settings.
+  let appearance: String?
   let source: String
   let lists: [WidgetList]
 
@@ -105,6 +107,7 @@ struct Provider: TimelineProvider {
   private static let sample = WidgetSnapshot(
     version: 2,
     day: nil,
+    appearance: nil,
     source: "pinned",
     lists: [
       WidgetList(
@@ -168,26 +171,49 @@ struct Provider: TimelineProvider {
   }
 }
 
-// Trove's colors, for light and dark.
-private func adaptive(light: UInt32, dark: UInt32) -> Color {
-  func color(_ hex: UInt32) -> UIColor {
-    UIColor(
-      red: CGFloat((hex >> 16) & 0xFF) / 255,
-      green: CGFloat((hex >> 8) & 0xFF) / 255,
-      blue: CGFloat(hex & 0xFF) / 255,
-      alpha: 1
+// Trove's colors. The widget follows the app's Light, Dark or System setting.
+struct Palette {
+  let brand: Color
+  let ink: Color
+  let muted: Color
+  let background: Color
+  let rule: Color
+
+  private static func hex(_ value: UInt32) -> Color {
+    Color(
+      red: Double((value >> 16) & 0xFF) / 255,
+      green: Double((value >> 8) & 0xFF) / 255,
+      blue: Double(value & 0xFF) / 255
     )
   }
-  return Color(UIColor { $0.userInterfaceStyle == .dark ? color(dark) : color(light) })
+
+  static let light = Palette(
+    brand: hex(0x2F4A37),
+    ink: hex(0x1D1B18),
+    muted: hex(0x6B655C),
+    background: hex(0xFBF8F3),
+    rule: hex(0xE6DFD4)
+  )
+  static let dark = Palette(
+    brand: hex(0x9FC2A3),
+    ink: hex(0xF3EDE3),
+    muted: hex(0xB3AB9F),
+    background: hex(0x1E1A15),
+    rule: hex(0x3A342B)
+  )
+
+  static func isDark(_ appearance: String?, system: ColorScheme) -> Bool {
+    switch appearance {
+    case "dark": return true
+    case "light": return false
+    default: return system == .dark
+    }
+  }
 }
 
-private let brand = adaptive(light: 0x2F4A37, dark: 0x9FC2A3)
-private let ink = adaptive(light: 0x1D1B18, dark: 0xF3EDE3)
-private let muted = adaptive(light: 0x6B655C, dark: 0xB3AB9F)
-private let widgetBackgroundColor = adaptive(light: 0xFBF8F3, dark: 0x1E1A15)
-private let rule = adaptive(light: 0xE6DFD4, dark: 0x3A342B)
-
 struct BrandHeader: View {
+  let palette: Palette
+
   var body: some View {
     HStack(spacing: 5) {
       Image("TroveMark")
@@ -196,7 +222,7 @@ struct BrandHeader: View {
         .accessibilityHidden(true)
       Text("Trove")
         .font(.system(size: 11, weight: .bold, design: .rounded))
-        .foregroundColor(brand)
+        .foregroundColor(palette.brand)
       Spacer(minLength: 0)
     }
   }
@@ -204,64 +230,68 @@ struct BrandHeader: View {
 
 struct LineRow: View {
   let line: WidgetLine
+  let palette: Palette
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       if line.kind == "check" {
         Image(systemName: "circle")
           .font(.system(size: 11, weight: .semibold))
-          .foregroundColor(muted)
+          .foregroundColor(palette.muted)
       } else if line.kind == "bullet" {
-        Text("•").foregroundColor(muted)
+        Text("•").foregroundColor(palette.muted)
       }
       Text(line.text)
         .font(.system(size: 13))
-        .foregroundColor(ink)
+        .foregroundColor(palette.ink)
         .lineLimit(1)
     }
     .padding(.leading, CGFloat(line.indent) * 10)
   }
 }
 
-struct ListSection: View {
-  let shown: ShownList
-  let lineLimit: Int
-
-  private var emptyText: String {
-    if shown.showCount && shown.list.done > 0 && shown.list.open == 0 { return "All done" }
-    switch shown.list.role {
+extension ShownList {
+  var emptyText: String {
+    if showCount && list.done > 0 && list.open == 0 { return "All done" }
+    switch list.role {
     case "today": return "Nothing due today"
     case "week": return "Nothing due this week"
     default: return "Nothing on this list yet"
     }
   }
+}
+
+struct ListSection: View {
+  let shown: ShownList
+  let lineLimit: Int
+  let palette: Palette
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline) {
         Text(shown.list.title)
           .font(.system(size: 15, weight: .bold))
-          .foregroundColor(ink)
+          .foregroundColor(palette.ink)
           .lineLimit(1)
         Spacer(minLength: 4)
         if shown.showCount && shown.list.open + shown.list.done > 0 {
           Text("\(shown.list.done)/\(shown.list.open + shown.list.done)")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(brand)
+            .foregroundColor(palette.brand)
         }
       }
       if shown.lines.isEmpty {
-        Text(emptyText)
+        Text(shown.emptyText)
           .font(.system(size: 13))
-          .foregroundColor(muted)
+          .foregroundColor(palette.muted)
       } else {
         ForEach(Array(shown.lines.prefix(lineLimit).enumerated()), id: \.offset) { _, line in
-          LineRow(line: line)
+          LineRow(line: line, palette: palette)
         }
         if shown.pending > lineLimit {
           Text("\(shown.pending - lineLimit) more")
             .font(.system(size: 11))
-            .foregroundColor(muted)
+            .foregroundColor(palette.muted)
         }
       }
     }
@@ -269,52 +299,56 @@ struct ListSection: View {
   }
 }
 
-struct TroveWidgetView: View {
+struct HomeWidgetView: View {
   @Environment(\.widgetFamily) private var family
+  @Environment(\.colorScheme) private var systemScheme
   let entry: TroveEntry
 
   var body: some View {
     let lists = entry.lists
+    let dark = Palette.isDark(entry.snapshot?.appearance, system: systemScheme)
+    let palette = dark ? Palette.dark : Palette.light
     VStack(alignment: .leading, spacing: 6) {
-      BrandHeader()
+      BrandHeader(palette: palette)
       if lists.isEmpty {
         Spacer(minLength: 0)
         Text("Your lists will show here once you open Trove.")
           .font(.system(size: 12))
-          .foregroundColor(muted)
+          .foregroundColor(palette.muted)
         Spacer(minLength: 0)
       } else {
-        content(lists)
+        content(lists, palette: palette)
         Spacer(minLength: 0)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .environment(\.colorScheme, dark ? .dark : .light)
     .widgetURL(URL(string: lists.first?.list.url ?? "trove://home"))
-    .widgetBackground()
+    .widgetBackground(palette.background)
   }
 
   @ViewBuilder
-  private func content(_ lists: [ShownList]) -> some View {
+  private func content(_ lists: [ShownList], palette: Palette) -> some View {
     switch family {
     case .systemSmall:
-      ListSection(shown: lists[0], lineLimit: 3)
+      ListSection(shown: lists[0], lineLimit: 3, palette: palette)
     case .systemMedium:
       if lists.count > 1 {
         HStack(alignment: .top, spacing: 12) {
-          link(lists[0]) { ListSection(shown: lists[0], lineLimit: 3) }
-          Rectangle().fill(rule).frame(width: 1)
-          link(lists[1]) { ListSection(shown: lists[1], lineLimit: 3) }
+          link(lists[0]) { ListSection(shown: lists[0], lineLimit: 3, palette: palette) }
+          Rectangle().fill(palette.rule).frame(width: 1)
+          link(lists[1]) { ListSection(shown: lists[1], lineLimit: 3, palette: palette) }
         }
       } else {
-        ListSection(shown: lists[0], lineLimit: 4)
+        ListSection(shown: lists[0], lineLimit: 4, palette: palette)
       }
     default:
       if lists.count > 1 {
-        link(lists[0]) { ListSection(shown: lists[0], lineLimit: 5) }
-        Rectangle().fill(rule).frame(height: 1).padding(.vertical, 2)
-        link(lists[1]) { ListSection(shown: lists[1], lineLimit: 5) }
+        link(lists[0]) { ListSection(shown: lists[0], lineLimit: 5, palette: palette) }
+        Rectangle().fill(palette.rule).frame(height: 1).padding(.vertical, 2)
+        link(lists[1]) { ListSection(shown: lists[1], lineLimit: 5, palette: palette) }
       } else {
-        ListSection(shown: lists[0], lineLimit: 11)
+        ListSection(shown: lists[0], lineLimit: 11, palette: palette)
       }
     }
   }
@@ -329,16 +363,170 @@ struct TroveWidgetView: View {
   }
 }
 
+// The Lock Screen: Today in a line, a circle or a few lines. The system
+// draws these in its own tint, so they use no colors of their own.
+@available(iOSApplicationExtension 16.0, *)
+struct LockScreenView: View {
+  @Environment(\.widgetFamily) private var family
+  let entry: TroveEntry
+
+  private var today: ShownList? {
+    let lists = entry.lists
+    return lists.first { $0.list.role == "today" } ?? lists.first
+  }
+
+  var body: some View {
+    let shown = today
+    Group {
+      switch family {
+      case .accessoryCircular:
+        circular(shown)
+      case .accessoryInline:
+        inline(shown)
+      default:
+        rectangular(shown)
+      }
+    }
+    .widgetURL(URL(string: shown?.list.url ?? "trove://home"))
+    .lockScreenBackground(circular: family == .accessoryCircular)
+  }
+
+  @ViewBuilder
+  private func circular(_ shown: ShownList?) -> some View {
+    let left = shown?.pending ?? 0
+    let total = (shown?.list.open ?? 0) + (shown?.list.done ?? 0)
+    if let shown = shown, shown.showCount, total > 0 {
+      Gauge(value: Double(shown.list.done), in: 0...Double(total)) {
+        Image(systemName: "checklist")
+      } currentValueLabel: {
+        Text("\(left)")
+      }
+      .gaugeStyle(.accessoryCircularCapacity)
+      .accessibilityLabel("\(left) left today")
+    } else {
+      ZStack {
+        AccessoryWidgetBackground()
+        VStack(spacing: 0) {
+          Text("\(left)")
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+          Text("today")
+            .font(.system(size: 9, weight: .semibold))
+        }
+      }
+      .accessibilityLabel("\(left) left today")
+    }
+  }
+
+  private func inline(_ shown: ShownList?) -> some View {
+    let left = shown?.pending ?? 0
+    let text: String
+    if shown == nil {
+      text = "Trove"
+    } else if left == 0 {
+      text = shown!.list.role == "today" ? "Nothing due today" : shown!.emptyText
+    } else {
+      text = "\(left) left \(shown!.list.role == "today" ? "today" : "on \(shown!.list.title)")"
+    }
+    return Label(text, systemImage: "checklist")
+  }
+
+  private func rectangular(_ shown: ShownList?) -> some View {
+    VStack(alignment: .leading, spacing: 1) {
+      HStack(spacing: 4) {
+        Image(systemName: "checklist")
+          .font(.system(size: 12, weight: .semibold))
+        Text(shown?.list.title ?? "Trove")
+          .font(.system(size: 14, weight: .bold))
+          .lineLimit(1)
+        Spacer(minLength: 2)
+        if let shown = shown, shown.showCount, shown.list.open + shown.list.done > 0 {
+          Text("\(shown.list.done)/\(shown.list.open + shown.list.done)")
+            .font(.system(size: 12, weight: .semibold))
+        }
+      }
+      .widgetAccentable()
+      if let shown = shown {
+        if shown.lines.isEmpty {
+          Text(shown.emptyText)
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(Array(shown.lines.prefix(2).enumerated()), id: \.offset) { _, line in
+            Text("○ \(line.text)")
+              .font(.system(size: 13))
+              .lineLimit(1)
+          }
+          if shown.pending > 2 {
+            Text("\(shown.pending - 2) more")
+              .font(.system(size: 11))
+              .foregroundStyle(.secondary)
+          }
+        }
+      } else {
+        Text("Open Trove to see today's list")
+          .font(.system(size: 13))
+          .foregroundStyle(.secondary)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+struct TroveWidgetView: View {
+  let entry: TroveEntry
+
+  var body: some View {
+    if #available(iOSApplicationExtension 16.0, *) {
+      FamilyRouter(entry: entry)
+    } else {
+      HomeWidgetView(entry: entry)
+    }
+  }
+}
+
+@available(iOSApplicationExtension 16.0, *)
+struct FamilyRouter: View {
+  @Environment(\.widgetFamily) private var family
+  let entry: TroveEntry
+
+  var body: some View {
+    switch family {
+    case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+      LockScreenView(entry: entry)
+    default:
+      HomeWidgetView(entry: entry)
+    }
+  }
+}
+
 extension View {
   // iOS 17 draws the widget's background itself and adds its own margins.
   @ViewBuilder
-  func widgetBackground() -> some View {
+  func widgetBackground(_ color: Color) -> some View {
     if #available(iOSApplicationExtension 17.0, *) {
-      containerBackground(for: .widget) { widgetBackgroundColor }
+      containerBackground(for: .widget) { color }
     } else {
-      padding(14).background(widgetBackgroundColor)
+      padding(14).background(color)
     }
   }
+
+  @ViewBuilder
+  func lockScreenBackground(circular: Bool) -> some View {
+    if #available(iOSApplicationExtension 17.0, *) {
+      containerBackground(for: .widget) {
+        if circular { AccessoryWidgetBackground() } else { Color.clear }
+      }
+    } else {
+      self
+    }
+  }
+}
+
+private var supportedWidgetFamilies: [WidgetFamily] {
+  if #available(iOSApplicationExtension 16.0, *) {
+    return [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular, .accessoryInline]
+  }
+  return [.systemSmall, .systemMedium, .systemLarge]
 }
 
 @main
@@ -351,6 +539,6 @@ struct TroveWidget: Widget {
     }
     .configurationDisplayName("Today")
     .description("What's due today. The bigger sizes show this week too.")
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .supportedFamilies(supportedWidgetFamilies)
   }
 }
