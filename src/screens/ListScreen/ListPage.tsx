@@ -653,7 +653,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       ? [
           {
             key: "reset",
-            label: "Uncheck all by itself",
+            label: "Uncheck automatically",
             icon: <RotateCcw size={20} color={iconTone} />,
             choices: [
               { value: "off", label: "Never" },
@@ -721,9 +721,6 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
-    ...(entries.length > 0
-      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
-      : []),
   ];
   const menuActions: MenuAction[] = [
     ...(!isTemplate && (sharedWithMe || !isSharedAccess(item))
@@ -736,6 +733,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             onPress: () => navigation.navigate("ShareList", { listId: item.id }),
           },
         ]
+      : []),
+    ...(entries.length > 0
+      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
       : []),
     ...(canEdit && entries.length > 0
       ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
