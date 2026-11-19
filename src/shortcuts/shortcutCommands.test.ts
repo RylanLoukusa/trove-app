@@ -1,5 +1,14 @@
 import type { SavedItem } from "../types/models";
-import { findListByName, isShortcutUrl, parseShortcutUrl, runShortcutCommand, shortcutLines, ShortcutDeps } from "./shortcutCommands";
+import {
+  findListByName,
+  isShortcutUrl,
+  parseShortcutUrl,
+  runShortcutCommand,
+  SHORTCUT_INBOX_ID,
+  shortcutLines,
+  shortcutListIndex,
+  ShortcutDeps,
+} from "./shortcutCommands";
 
 const list = (id: string, title: string, extra: Partial<SavedItem> = {}): SavedItem => ({
   id,
@@ -85,5 +94,44 @@ describe("carrying out a command", () => {
     const d = deps([list("p", "Packing")]);
     expect(runShortcutCommand({ action: "open", list: "packing" }, d)).toMatchObject({ ok: true, listId: "p" });
     expect(runShortcutCommand({ action: "open", list: "Chores" }, d)).toEqual({ ok: false, error: 'There\'s no list called "Chores".' });
+  });
+
+  it("adds to the list Siri picked, even when another has the same name", () => {
+    const d = deps([list("a", "Groceries", { pinned: true }), list("b", "Groceries")]);
+    expect(runShortcutCommand({ action: "add", text: "Milk", list: "Groceries", listId: "b" }, d)).toMatchObject({
+      ok: true,
+      listId: "b",
+      created: false,
+    });
+    expect(d.createList).not.toHaveBeenCalled();
+  });
+
+  it("goes by name when the list Siri picked is gone, and to the Inbox when Siri picked it", () => {
+    const d = deps([list("g", "Groceries"), list("i", "Inbox")]);
+    expect(runShortcutCommand({ action: "add", text: "Milk", list: "Groceries", listId: "gone" }, d)).toMatchObject({ listId: "g" });
+    expect(runShortcutCommand({ action: "add", text: "Milk", list: "Inbox", listId: SHORTCUT_INBOX_ID }, d)).toMatchObject({
+      listId: "i",
+      created: false,
+    });
+    expect(runShortcutCommand({ action: "open", list: "Whatever", listId: "g" }, d)).toMatchObject({ listId: "g" });
+  });
+});
+
+describe("the lists Siri offers", () => {
+  it("lists what can be added to, pinned first, with the Inbox when there's none yet", () => {
+    const items = [
+      list("old", "Old", { updatedAt: "2026-01-01T00:00:00.000Z" }),
+      list("new", "New", { updatedAt: "2026-03-01T00:00:00.000Z" }),
+      list("pin", "Pinned", { pinned: true }),
+      list("ro", "Theirs"),
+      list("tpl", "Template", { isTemplate: true }),
+    ];
+    expect(shortcutListIndex(items, (id) => id !== "ro", "Inbox")).toEqual([
+      { id: "pin", title: "Pinned" },
+      { id: "new", title: "New" },
+      { id: "old", title: "Old" },
+      { id: SHORTCUT_INBOX_ID, title: "Inbox" },
+    ]);
+    expect(shortcutListIndex([list("i", "Inbox")], () => true, "Inbox")).toEqual([{ id: "i", title: "Inbox" }]);
   });
 });

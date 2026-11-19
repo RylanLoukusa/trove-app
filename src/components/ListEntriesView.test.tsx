@@ -269,6 +269,37 @@ describe("ListEntriesView", () => {
       expect(handlers.onUpdateEntry).toHaveBeenCalledWith("new-0", expect.objectContaining({ text: "Call mom tomorrow 6pm !high", dueDate: undefined }));
     });
 
+    it("reads smart text in a line typed into, once it's finished, with Undo", async () => {
+      await renderList([entry("Cake"), entry("Pay rent", { tagOptionIds: ["low"] })]);
+      const line = screen.getAllByTestId("list-line-input")[1];
+
+      await fireEvent(line, "focus");
+      await fireEvent.changeText(line, "Pay rent friday !high");
+      await fireEvent(line, "blur");
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith(
+        "Pay rent",
+        expect.objectContaining({ text: "Pay rent", dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), tagOptionIds: ["high"] }),
+      );
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenLastCalledWith(
+        "Pay rent",
+        expect.objectContaining({ text: "Pay rent friday !high", dueDate: undefined, tagOptionIds: ["low"] }),
+      );
+    });
+
+    it("doesn't read words that were already on a line", async () => {
+      await renderList([entry("Notes from monday")]);
+      const line = screen.getAllByTestId("list-line-input")[0];
+
+      await fireEvent(line, "focus");
+      await fireEvent.changeText(line, "Notes from monday meeting");
+      await fireEvent(line, "blur");
+
+      expect(handlers.onUpdateEntry).not.toHaveBeenCalledWith("Notes from monday", expect.objectContaining({ dueDate: expect.anything() }));
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Notes from monday", { text: "Notes from monday meeting" });
+    });
+
     it("leaves a typed line as it is when smart text is off", async () => {
       await renderList([entry("Cake")], { smartText: false });
 

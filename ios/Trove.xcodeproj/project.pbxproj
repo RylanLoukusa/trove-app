@@ -10,6 +10,7 @@
 		C1D2E3F4A5B6012345678902 /* TroveWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678901 /* TroveWidget.swift */; };
 		C1D2E3F4A5B6012345678906 /* TroveWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678905 /* TroveWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1D2E3F4A5B6012345678912 /* TroveWidgetModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */; };
+		C1D2E3F4A5B6012345678916 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678915 /* Assets.xcassets */; };
 		C1D2E3F4A5B6012345678914 /* TroveWidgetModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */; };
 		D1E2F3A4B5C6012345678912 /* TroveShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6012345678911 /* TroveShortcuts.swift */; };
 		D1E2F3A4B5C6012345678914 /* TroveShortcutsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6012345678913 /* TroveShortcutsModuleBridge.m */; };
@@ -62,6 +63,7 @@
 		C1D2E3F4A5B6012345678901 /* TroveWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroveWidget.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6012345678903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C1D2E3F4A5B6012345678904 /* TroveWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TroveWidget.entitlements; sourceTree = "<group>"; };
+		C1D2E3F4A5B6012345678915 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C1D2E3F4A5B6012345678905 /* TroveWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TroveWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1D2E3F4A5B6012345678911 /* TroveWidgetModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TroveWidgetModule.swift; path = Trove/TroveWidgetModule.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6012345678913 /* TroveWidgetModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TroveWidgetModuleBridge.m; path = Trove/TroveWidgetModuleBridge.m; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				C1D2E3F4A5B6012345678901 /* TroveWidget.swift */,
+				C1D2E3F4A5B6012345678915 /* Assets.xcassets */,
 				C1D2E3F4A5B6012345678903 /* Info.plist */,
 				C1D2E3F4A5B6012345678904 /* TroveWidget.entitlements */,
 			);
@@ -341,6 +344,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1D2E3F4A5B6012345678916 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

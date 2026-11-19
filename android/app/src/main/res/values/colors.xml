@@ -3,7 +3,8 @@
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
   <color name="trove_widget_background">#FFFFFF</color>
-  <color name="trove_widget_accent">#173F2A</color>
+  <color name="trove_widget_accent">#2F4A37</color>
   <color name="trove_widget_ink">#1F1B16</color>
   <color name="trove_widget_muted">#7A7066</color>
+  <color name="trove_widget_rule">#E6DFD4</color>
 </resources>
