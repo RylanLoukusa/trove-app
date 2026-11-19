@@ -33,11 +33,12 @@ export const collectionSections = (entries: ListEntry[]): CollectionSection[] =>
   return sections.filter((section) => section.heading || section.cards.length > 0);
 };
 
-// What a card says under its text: price, quantity and rating.
+// What a line or card says about its price and how many: "12.50 · ×2". A
+// quantity of one goes without saying.
 export const cardFieldsLabel = (entry: Pick<ListEntry, "price" | "quantity">): string =>
   [
     ...(entry.price !== undefined ? [formatPrice(entry.price)] : []),
-    ...(entry.quantity ? [`×${formatQuantity(entry.quantity)}`] : []),
+    ...(entry.quantity && entry.quantity !== 1 ? [`×${formatQuantity(entry.quantity)}`] : []),
   ].join(" · ");
 
 type Props = {

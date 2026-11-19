@@ -1014,7 +1014,7 @@ describe("ListEntriesView", () => {
       await renderList([entry("Lamp", { quantity: 2, price: 12.5, rating: 3 })]);
 
       const details = screen.getByLabelText("Details for Lamp");
-      expect(within(details).getByText("×2 · 12.50")).toBeTruthy();
+      expect(within(details).getByText("12.50 · ×2")).toBeTruthy();
       expect(within(details).getByLabelText("Rated 3 of 5")).toBeTruthy();
     });
 

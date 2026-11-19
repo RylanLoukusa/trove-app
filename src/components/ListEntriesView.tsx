@@ -48,7 +48,7 @@ import {
   Undo2,
 } from "lucide-react-native";
 
-import { CollectionGrid } from "./CollectionGrid";
+import { cardFieldsLabel, CollectionGrid } from "./CollectionGrid";
 import { LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
 import {
@@ -68,7 +68,7 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
-import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
+import { formatRating, linkHost } from "../utils/fields";
 import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -1324,10 +1324,7 @@ const EntryRow = ({
     return { transform: [{ translateY: withTiming(shift, { duration: 140 }) }], zIndex: 0 };
   }, [carried, dragActive, shift]);
 
-  const fieldLabels = [
-    ...(entry.quantity ? [`×${formatQuantity(entry.quantity)}`] : []),
-    ...(entry.price !== undefined ? [formatPrice(entry.price)] : []),
-  ];
+  const fieldLabels = cardFieldsLabel(entry) ? [cardFieldsLabel(entry)] : [];
   const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes || fieldLabels.length > 0 || !!entry.rating;
   // Web links in the line, each offered as a button under it: the line itself
   // is a text field, so tapping it edits rather than opens. A link kept in the
