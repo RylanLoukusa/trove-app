@@ -37,7 +37,7 @@ import { useListViewSettings } from "../../storage/listViewSettings";
 import { useTrove } from "../../storage/storage";
 import { spacing, ThemeColors } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
-import type { FocusRule, ListEntry, SavedItem } from "../../types/models";
+import type { FocusRule, ListEntry, ResetRule, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { listToText } from "../../utils/exportData";
 import { getFolderPathLabel } from "../../utils/folderTree";
@@ -59,6 +59,7 @@ import {
 import {
   CompletedMode,
   completedModeLabels,
+  describeDueDate,
   ListSortMode,
   listSortLabels,
   matchesFocusRule,
@@ -66,6 +67,7 @@ import {
   priorityOptionsFor,
   tagSectionsFor,
 } from "../../utils/listView";
+import { nextDueDate, RESET_RULES, resetLabels } from "../../utils/schedule";
 
 type Props = {
   item: SavedItem;
@@ -100,6 +102,12 @@ const sortCaptions: Record<ListSortMode, string> = {
   priority: "Sorted by priority",
   alpha: "Sorted A to Z",
   newest: "Newest first",
+};
+// Said under the title of a list that unchecks itself.
+const resetCaptions: Record<ResetRule, string> = {
+  daily: "Starts over each day",
+  weekly: "Starts over each Monday",
+  monthly: "Starts over each month",
 };
 // Said under the title of a list that adds lines by itself.
 const ruleCaptions: Record<FocusRule, string> = {
@@ -401,6 +409,11 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       const targetListId = entriesByIdRef.current.get(targetOf(entry.id))?.listId;
       if (!targetListId || !canEditItem(targetListId)) return;
       setCheckedWithGroup([entry.id], !entry.checked);
+      // A repeating line comes straight back, due the next time.
+      if (entry.repeat && !entry.checked) {
+        const next = describeDueDate(nextDueDate(entry.repeat, entry.dueDate));
+        if (next) viewRef.current?.showToast(`Done. Back ${next.label.toLowerCase()}`);
+      }
     },
     [canEditItem, setCheckedWithGroup, targetOf],
   );
@@ -611,6 +624,28 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       selectedValue: settings.completedMode,
       onChoose: (value) => updateSettings({ completedMode: value as CompletedMode }),
     },
+    // Starting over on a schedule is for a list's own lines.
+    ...(canEdit && !isFocus && !isTemplate
+      ? [
+          {
+            key: "reset",
+            label: "Uncheck all by itself",
+            icon: <RotateCcw size={20} color={iconTone} />,
+            choices: [
+              { value: "off", label: "Never" },
+              ...RESET_RULES.map((rule) => ({ value: rule, label: resetLabels[rule] })),
+            ],
+            selectedValue: item.resetRule ?? "off",
+            onChoose: (value: string) =>
+              updateItem(
+                item.id,
+                value === "off"
+                  ? { resetRule: undefined, resetAt: undefined }
+                  : { resetRule: value as ResetRule, resetAt: new Date().toISOString() },
+              ),
+          },
+        ]
+      : []),
     ...(canBorrow
       ? [
           {
@@ -719,6 +754,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     isArchived ? "Archived" : "",
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
     rule ? ruleCaptions[rule] : ruleTag ? `Adds lines tagged ${ruleTag.name}` : "",
+    item.resetRule && !isTemplate ? resetCaptions[item.resetRule] : "",
     sortCaptions[settings.sortMode],
     isSharedAccess(item) ? `Shared · ${accessRoleLabel(item.accessRole)}` : "",
     !canEdit ? "View only" : "",

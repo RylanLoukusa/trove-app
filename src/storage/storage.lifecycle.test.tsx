@@ -326,3 +326,83 @@ describe("TroveProvider Recently deleted, Archive and copies", () => {
     expect(ids(exported.listEntries)).toEqual(["p1", "ref1"]);
   });
 });
+
+describe("TroveProvider repeating lines and lists that start over", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("trove:tagBackfillDone:anonymous", "true");
+    await AsyncStorage.setItem("trove:pinnedDefaultsDone:v2:anonymous", "true");
+  });
+
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const dayKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const today = new Date();
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+  it("brings a repeating line back open, due the next time, when it is checked", async () => {
+    const { result } = await renderTrove({
+      ...data,
+      listEntries: [entry("bins", "groceries", "Bins out", "a0", { dueDate: dayKey(today), dueTime: "07:00", repeat: "daily" })],
+    });
+
+    await act(async () => {
+      expect(result.current.setEntriesChecked(["bins"], true)).toBe(1);
+    });
+
+    const bins = result.current.listEntries.find((line) => line.id === "bins")!;
+    expect(bins.checked).toBe(false);
+    expect(bins.dueDate).toBe(dayKey(tomorrow));
+    expect(bins.dueTime).toBe("07:00");
+    expect(bins.completedAt).toBeDefined();
+  });
+
+  it("does the same when a repeating line is checked by editing it", async () => {
+    const { result } = await renderTrove({
+      ...data,
+      listEntries: [entry("bins", "groceries", "Bins out", "a0", { dueDate: dayKey(today), repeat: "daily" })],
+    });
+
+    await act(async () => {
+      result.current.updateListEntry("bins", { checked: true });
+    });
+
+    expect(result.current.listEntries.find((line) => line.id === "bins")).toMatchObject({
+      checked: false,
+      dueDate: dayKey(tomorrow),
+    });
+  });
+
+  it("drops a time from a line that loses its date", async () => {
+    const { result } = await renderTrove({
+      ...data,
+      listEntries: [entry("bins", "groceries", "Bins out", "a0", { dueDate: dayKey(today), dueTime: "07:00" })],
+    });
+
+    await act(async () => {
+      result.current.updateListEntry("bins", { dueDate: undefined });
+    });
+
+    expect(result.current.listEntries.find((line) => line.id === "bins")!.dueTime).toBeUndefined();
+  });
+
+  it("unchecks a list's own lines once a new day has begun since it last started over", async () => {
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 12).toISOString();
+    const { result } = await renderTrove({
+      ...data,
+      items: [
+        list("chores", "Chores", "", { resetRule: "daily", resetAt: yesterday }),
+        list("groceries", "Groceries"),
+      ],
+      listEntries: [
+        entry("c1", "chores", "Dishes", "a0", { checked: true, completedAt: yesterday }),
+        entry("c2", "chores", "Laundry", "a1"),
+        entry("g1", "groceries", "Milk", "a0", { checked: true }),
+      ],
+    });
+
+    await waitFor(() => expect(result.current.listEntries.find((line) => line.id === "c1")!.checked).toBe(false));
+    expect(result.current.listEntries.find((line) => line.id === "g1")!.checked).toBe(true);
+    const chores = result.current.items.find((item) => item.id === "chores")!;
+    expect(Date.parse(chores.resetAt!)).toBeGreaterThan(Date.parse(yesterday));
+  });
+});
