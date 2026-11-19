@@ -6,20 +6,24 @@ import {
   ArchiveRestore,
   ArrowUpDown,
   CheckCheck,
+  ChevronsUpDown,
   CircleCheck,
   Copy,
   Ellipsis,
   Eraser,
   FilePlus2,
   FolderInput,
+  LayoutGrid,
   LayoutTemplate,
   ListPlus,
+  LogOut,
   Pin,
   PinOff,
   RotateCcw,
   Share2,
   Sparkles,
   Trash2,
+  Users,
 } from "lucide-react-native";
 
 import { CommentThread } from "../../components/CommentThread";
@@ -29,7 +33,9 @@ import { EntryUpdates, ListEntriesView, ListEntriesViewHandle, NewLine } from ".
 import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
+import { useAuth } from "../../auth/AuthContext";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
+import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
 import { HOME_LABEL } from "../../navigation/backLabel";
 import type { RootStackParamList } from "../../navigation/types";
@@ -40,6 +46,7 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import type { FocusRule, ListEntry, ResetRule, SavedItem } from "../../types/models";
 import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { listToText } from "../../utils/exportData";
+import { formatPrice, listTotal } from "../../utils/fields";
 import { getFolderPathLabel } from "../../utils/folderTree";
 import {
   canListBorrowLines,
@@ -109,6 +116,8 @@ const resetCaptions: Record<ResetRule, string> = {
   weekly: "Starts over each Monday",
   monthly: "Starts over each month",
 };
+
+const peopleLabel = (count: number): string => (count === 1 ? "1 person" : `${count} people`);
 // Said under the title of a list that adds lines by itself.
 const ruleCaptions: Record<FocusRule, string> = {
   due_today: "Adds lines due today or overdue",
@@ -143,6 +152,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     positionListEntry,
     removeFromFocusList,
     canEditItem,
+    leaveSharedList,
   } = useTrove();
   const isFocus = isFocusList(item);
   const canEdit = canEditItem(item.id);
@@ -156,7 +166,10 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   const [sheet, setSheet] = useState<"pull" | "folder" | null>(null);
   const [keyboardUp, setKeyboardUp] = useState(false);
   const { isShared: isFolderSharedByOwner } = useFolderShareStatus(item.folderId || undefined);
-  const showComments = isSharedAccess(item) || isFolderSharedByOwner;
+  const showComments = isSharedAccess(item) || isFolderSharedByOwner || !!item.sharedWith;
+  const { session } = useAuth();
+  // On a shared list, lines can be given to the people who have it.
+  const people = useListPeople(item.id, item.folderId || undefined, showComments);
 
   // Photos added while offline go up once a list is opened again.
   useEffect(() => {
@@ -517,6 +530,30 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     goBack();
   }, [goBack, item.id, trashItem]);
 
+  // A list shared with this person on its own: they can leave it, but
+  // moving, archiving and deleting it are the owner's.
+  const sharedWithMe = !!item.sharedWithMe;
+  const leave = useCallback(() => {
+    Alert.alert("Leave this list?", "It goes from your Trove. The owner keeps it, and can share it with you again.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: () => {
+          removedRef.current = true;
+          void leaveSharedList(item.id).then((result) => {
+            if (result.ok) {
+              goBack();
+              return;
+            }
+            removedRef.current = false;
+            Alert.alert("Could not leave list", result.error ?? "Try again in a moment.");
+          });
+        },
+      },
+    ]);
+  }, [goBack, item.id, leaveSharedList]);
+
   const toggleArchived = useCallback(() => {
     const archiving = !item.archivedAt;
     if (archiving) removedRef.current = true;
@@ -607,15 +644,41 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           },
         ]
       : []),
+    ...(canEdit && !isTemplate
+      ? [
+          {
+            key: "view",
+            label: "Show as",
+            icon: <LayoutGrid size={20} color={iconTone} />,
+            separated: true,
+            choices: [
+              { value: "lines", label: "Lines" },
+              { value: "gallery", label: "Collection (cards with photos)" },
+            ],
+            selectedValue: item.viewMode ?? "lines",
+            onChoose: (value: string) => updateItem(item.id, { viewMode: value === "gallery" ? "gallery" : undefined }),
+          },
+        ]
+      : []),
     {
       key: "sort",
       label: "Sort",
       icon: <ArrowUpDown size={20} color={iconTone} />,
-      separated: true,
+      separated: !canEdit || isTemplate,
       choices: sortChoices,
       selectedValue: settings.sortMode,
       onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
     },
+    ...((settings.collapsedIds?.length ?? 0) > 0
+      ? [
+          {
+            key: "unfold",
+            label: "Unfold everything",
+            icon: <ChevronsUpDown size={20} color={iconTone} />,
+            onPress: () => updateSettings({ collapsedIds: undefined }),
+          },
+        ]
+      : []),
     {
       key: "completed",
       label: "Checked lines",
@@ -716,7 +779,29 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     ...(entries.length > 0
       ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
       : []),
-    ...(canEdit
+    ...(!isTemplate && (sharedWithMe || !isSharedAccess(item))
+      ? [
+          {
+            key: "share",
+            label: sharedWithMe ? "People on this list" : "Share list",
+            detail: !sharedWithMe && item.sharedWith ? peopleLabel(item.sharedWith) : undefined,
+            icon: <Users size={20} color={iconTone} />,
+            onPress: () => navigation.navigate("ShareList", { listId: item.id }),
+          },
+        ]
+      : []),
+    ...(sharedWithMe
+      ? [
+          {
+            key: "leave",
+            label: "Leave list",
+            icon: <LogOut size={20} color={colors.danger} />,
+            destructive: true,
+            separated: true,
+            onPress: leave,
+          },
+        ]
+      : canEdit
       ? [
           ...(isTemplate
             ? []
@@ -749,14 +834,23 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   ];
 
   // --- Page ----------------------------------------------------------------
+  // What the priced lines come to.
+  const total = listTotal(entries);
   const caption = [
     isTemplate ? "Template" : "",
     isArchived ? "Archived" : "",
     checkLines.length > 0 ? `${doneLines.length} of ${checkLines.length} done` : "",
+    total ? `Total ${formatPrice(total.total)}` : "",
     rule ? ruleCaptions[rule] : ruleTag ? `Adds lines tagged ${ruleTag.name}` : "",
     item.resetRule && !isTemplate ? resetCaptions[item.resetRule] : "",
     sortCaptions[settings.sortMode],
-    isSharedAccess(item) ? `Shared · ${accessRoleLabel(item.accessRole)}` : "",
+    sharedWithMe
+      ? `Shared by ${item.sharedWithMe?.by ?? "someone"} · ${accessRoleLabel(item.accessRole)}`
+      : isSharedAccess(item)
+        ? `Shared · ${accessRoleLabel(item.accessRole)}`
+        : item.sharedWith
+          ? `Shared with ${peopleLabel(item.sharedWith)}`
+          : "",
     !canEdit ? "View only" : "",
   ]
     .filter(Boolean)
@@ -865,6 +959,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           }
           emptyText={rule || ruleTagId ? "Nothing matches this list's rule right now." : "Nothing on this list yet."}
           focusAddSignal={focusAddSignal}
+          layout={item.viewMode === "gallery" ? "gallery" : "lines"}
+          people={people}
+          myUserId={session?.user?.id}
         />
       </KeyboardAvoidingView>
 

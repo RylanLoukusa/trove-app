@@ -90,6 +90,16 @@ export type ListEntry = {
   // Checking off a repeating line moves its due date to the next time
   // instead of leaving it done.
   repeat?: RepeatRule;
+  // Light fields (see utils/fields): how many, what one costs, a rating out
+  // of five and a web link.
+  quantity?: number;
+  price?: number;
+  rating?: number;
+  link?: string;
+  // Who the line is for, on a shared list: their user id, and their name as
+  // it was when the line was given to them (shown until names load).
+  assigneeId?: string;
+  assigneeName?: string;
   completedAt?: string;
   tagOptionIds: string[];
   // Set on a line that shows a line from another list (a "pulled" line). Its
@@ -160,12 +170,21 @@ export type SavedItem = {
   // `resetAt` is when it last did.
   resetRule?: ResetRule;
   resetAt?: string;
+  // "gallery" shows the list as a Collection: a grid of cards with each
+  // line's photo and fields, instead of lines.
+  viewMode?: "gallery";
   richText?: string;
   connections?: ItemConnection[];
   tagOptionIds: string[];
   ownerId?: string;
   createdBy?: string;
   accessRole?: AccessRole;
+  // Set by sync, never sent up. `sharedWithMe`: this list was shared with
+  // this person on its own (not through a folder), by `by`; it shows on
+  // their Home. `sharedWith`: how many people the owner shared it with,
+  // counting invites still waiting.
+  sharedWithMe?: { by?: string };
+  sharedWith?: number;
   createdAt: string;
   updatedAt: string;
   notes?: string;

@@ -247,6 +247,36 @@ describe("ListEntriesView", () => {
       expect(screen.getByLabelText(ADD_LINE).props.value).toBe("");
     });
 
+    it("reads a date, a time and a priority out of a typed line, with Undo", async () => {
+      await renderList([entry("Cake")]);
+
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Call mom tomorrow 6pm !high\n");
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+        {
+          text: "Call mom",
+          checked: false,
+          indentLevel: 0,
+          kind: "check",
+          dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          dueTime: "18:00",
+          tagOptionIds: ["high"],
+        },
+      ]);
+      expect(screen.getByText(/^Tomorrow .* · High$/)).toBeTruthy();
+
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("new-0", expect.objectContaining({ text: "Call mom tomorrow 6pm !high", dueDate: undefined }));
+    });
+
+    it("leaves a typed line as it is when smart text is off", async () => {
+      await renderList([entry("Cake")], { smartText: false });
+
+      await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Call mom tomorrow\n");
+
+      expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [{ text: "Call mom tomorrow", checked: false, indentLevel: 0, kind: "check" }]);
+    });
+
     it("carries on like the last line: same mark, same indent", async () => {
       await renderList([entry("Cake"), entry("Chocolate", { kind: "bullet", indentLevel: 2 })]);
 
@@ -978,6 +1008,46 @@ describe("ListEntriesView", () => {
       });
     });
 
+    it("sets how many, the price, a rating and a link", async () => {
+      await renderList([entry("Lamp")]);
+
+      await openDetails("Lamp");
+      await fireEvent.changeText(screen.getByLabelText("Quantity"), "2x");
+      await fireEvent.changeText(screen.getByLabelText("Price"), "$12,50");
+      await fireEvent.press(screen.getByLabelText("4 stars"));
+      await fireEvent.changeText(screen.getByLabelText("Link"), "shop.example.com/lamp");
+      await fireEvent.press(screen.getByText("Done"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Lamp", {
+        quantity: 2,
+        price: 12.5,
+        rating: 4,
+        link: "https://shop.example.com/lamp",
+      });
+    });
+
+    it("clears a field left blank and keeps one that can't be read", async () => {
+      await renderList([entry("Lamp", { quantity: 3, price: 9, rating: 2 })]);
+
+      await openDetails("Lamp");
+      await fireEvent.changeText(screen.getByLabelText("Quantity"), "");
+      await fireEvent.changeText(screen.getByLabelText("Price"), "lots");
+      expect(screen.getByText("Use a price like 4.99.")).toBeTruthy();
+      // Tapping the rating it has takes it off.
+      await fireEvent.press(screen.getByLabelText("2 stars"));
+      await fireEvent.press(screen.getByText("Done"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Lamp", { quantity: undefined, rating: undefined });
+    });
+
+    it("shows a line's fields under it", async () => {
+      await renderList([entry("Lamp", { quantity: 2, price: 12.5, rating: 3 })]);
+
+      const details = screen.getByLabelText("Details for Lamp");
+      expect(within(details).getByText("12.50 · ×2")).toBeTruthy();
+      expect(within(details).getByLabelText("Rated 3 of 5")).toBeTruthy();
+    });
+
     it("opens from the details shown under a line", async () => {
       await renderList([entry("Cake", { notes: "Chocolate" })]);
 
@@ -1213,6 +1283,47 @@ describe("ListEntriesView", () => {
 
       await selectLines("Venue");
       expect(screen.getByText("1 selected")).toBeTruthy();
+    });
+
+    it("selects every line shown in one tap", async () => {
+      await renderList([entry("Cake"), entry("Venue"), entry("Band")], { selecting: true });
+
+      await fireEvent.press(screen.getByText("Select all"));
+
+      expect(screen.getByText("3 selected")).toBeTruthy();
+      expect(screen.queryByText("Select all")).toBeNull();
+    });
+
+    it("gives the selected lines a date, or takes it off, with undo", async () => {
+      await renderList([entry("Cake", { dueDate: "2026-01-02", dueTime: "09:00" }), entry("Venue"), entry("Band")], { selecting: true });
+
+      await selectLines("Cake", "Venue");
+      await fireEvent.press(screen.getByLabelText("Date"));
+      expect(screen.getByText("Due date for 2 lines")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Tomorrow"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+      expect(handlers.onUpdateEntry).not.toHaveBeenCalledWith("Band", expect.anything());
+      expect(onChangeSelecting).toHaveBeenLastCalledWith(false);
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenLastCalledWith("Venue", { dueDate: undefined, dueTime: undefined });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { dueDate: "2026-01-02", dueTime: "09:00" });
+    });
+
+    it("tags the selected lines, and takes a tag off when they all have it", async () => {
+      const priority = { id: "priority", name: "Priority", selectionMode: "single" as const, allowInlineCreate: false, isSystem: true, sortOrder: 0, createdAt: "", updatedAt: "" };
+      const tagSections: TagSection[] = [{ group: priority, options: [high, low] }];
+      await renderList([entry("Cake", { tagOptionIds: ["low"] }), entry("Venue")], { selecting: true, tagSections });
+
+      await selectLines("Cake", "Venue");
+      await fireEvent.press(screen.getByLabelText("Tag"));
+      await fireEvent.press(screen.getByLabelText("High"));
+
+      // One priority at a time: High takes Low's place.
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { tagOptionIds: ["high"] });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { tagOptionIds: ["high"] });
+      expect(screen.getByText("Tagged 2 lines High")).toBeTruthy();
     });
 
     it("moves the selected lines together", async () => {
@@ -1456,5 +1567,147 @@ describe("targetIndexFor", () => {
       expect(openURL).toHaveBeenCalledWith("https://www.shop.co.uk");
       openURL.mockRestore();
     });
+  });
+});
+
+describe("as a collection", () => {
+  beforeEach(() => jest.clearAllMocks());
+  const showGrid = async () => {
+    await fireEvent(screen.getByTestId("collection-grid"), "layout", { nativeEvent: { layout: { width: 390, height: 800 } } });
+  };
+  const photo: LineImage = { id: "p1", width: 400, height: 300 };
+
+  it("shows each line as a card with its fields, under its heading", async () => {
+    await renderList(
+      [
+        entry("Living room", { kind: "text" }),
+        entry("Lamp", { kind: "bullet", price: 40, quantity: 2, rating: 4, images: [photo] }),
+        entry("Rug", { kind: "bullet" }),
+      ],
+      { layout: "gallery" },
+    );
+    await showGrid();
+
+    expect(screen.queryAllByTestId("list-line-input")).toHaveLength(0);
+    expect(screen.getByText("Living room")).toBeTruthy();
+    expect(screen.getByLabelText("Lamp, 40.00 · ×2, rated 4 of 5")).toBeTruthy();
+    expect(screen.getByText("★★★★☆")).toBeTruthy();
+    expect(screen.getByLabelText("Rug")).toBeTruthy();
+  });
+
+  it("opens a card's details, checks one off and adds a photo to one without", async () => {
+    mockPick.mockResolvedValueOnce([photo]);
+    await renderList([entry("Lamp"), entry("Rug", { kind: "bullet" })], { layout: "gallery" });
+    await showGrid();
+
+    await fireEvent.press(screen.getByLabelText("Check off"));
+    expect(handlers.onToggleEntry).toHaveBeenCalledWith(expect.objectContaining({ id: "Lamp" }));
+
+    await fireEvent.press(screen.getAllByLabelText("Add a photo")[1]);
+    await waitFor(() => expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Rug", { images: [photo] }));
+
+    await fireEvent.press(screen.getByLabelText("Rug"));
+    expect(screen.getByText("Line details")).toBeTruthy();
+  });
+
+  it("selects cards while selecting", async () => {
+    await renderList([entry("Lamp"), entry("Rug")], { layout: "gallery", selecting: true });
+    await showGrid();
+
+    await fireEvent.press(screen.getByLabelText("Rug"));
+
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect(screen.queryByText("Line details")).toBeNull();
+  });
+});
+
+describe("folding", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+  });
+
+  it("folds a heading's lines away and opens them again", async () => {
+    await renderList([
+      entry("Kitchen", { kind: "text" }),
+      entry("Plates"),
+      entry("Cups"),
+      entry("Garage", { kind: "text" }),
+      entry("Bikes"),
+    ]);
+
+    await fireEvent.press(screen.getByLabelText("Fold Kitchen"));
+    expect(visibleTexts()).toEqual(["Kitchen", "Garage", "Bikes"]);
+    expect(onChangeSettings).toHaveBeenLastCalledWith({ collapsedIds: ["Kitchen"] });
+
+    await fireEvent.press(screen.getByLabelText("Show 2 hidden under Kitchen"));
+    expect(visibleTexts()).toEqual(["Kitchen", "Plates", "Cups", "Garage", "Bikes"]);
+  });
+
+  it("folds the lines indented under a line", async () => {
+    await renderList([entry("Trip"), entry("Tickets", { indentLevel: 1 }), entry("Hotel", { indentLevel: 1 }), entry("Gifts")], {
+      settings: { collapsedIds: ["Trip"] },
+    });
+
+    expect(visibleTexts()).toEqual(["Trip", "Gifts"]);
+    expect(screen.queryByLabelText("Fold Gifts")).toBeNull();
+  });
+
+  it("opens the last section when a line is added below it", async () => {
+    await renderList([entry("Kitchen", { kind: "text" }), entry("Plates")], { settings: { collapsedIds: ["Kitchen"] } });
+
+    await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Cups\n");
+
+    expect(onChangeSettings).toHaveBeenCalledWith({ collapsedIds: [] });
+  });
+
+  it("only folds in your own order", async () => {
+    await renderList([entry("Kitchen", { kind: "text" }), entry("Plates")], { settings: { collapsedIds: ["Kitchen"], sortMode: "alpha" } });
+
+    expect(visibleTexts()).toEqual(["Kitchen", "Plates"]);
+  });
+});
+
+describe("lines given to people on a shared list", () => {
+  const people = [
+    { id: "me", name: "Rae", isMe: true },
+    { id: "sam", name: "Sam Lee", isMe: false },
+  ];
+  beforeEach(() => jest.clearAllMocks());
+
+  it("gives a line to someone in its details, and shows who it's for", async () => {
+    await renderList([entry("Cake"), entry("Venue", { assigneeId: "me", assigneeName: "Rae" })], { people, myUserId: "me" });
+
+    expect(screen.getByLabelText("For Me")).toBeTruthy();
+    await openDetails("Cake");
+    expect(screen.getByLabelText("Assign to Me")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Assign to Sam Lee"));
+    await fireEvent.press(screen.getByText("Done"));
+
+    expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { assigneeId: "sam", assigneeName: "Sam Lee" });
+  });
+
+  it("keeps the name a line was given under when that person has left", async () => {
+    await renderList([entry("Cake", { assigneeId: "gone", assigneeName: "Ann" })], { people, myUserId: "me" });
+
+    expect(screen.getByLabelText("For Ann")).toBeTruthy();
+  });
+
+  it("gives a typed line to someone with @", async () => {
+    await renderList([entry("Cake")], { people, myUserId: "me" });
+
+    await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Balloons @sam\n");
+
+    expect(handlers.onInsertEntries).toHaveBeenCalledWith(null, [
+      expect.objectContaining({ text: "Balloons", assigneeId: "sam", assigneeName: "Sam Lee" }),
+    ]);
+    expect(screen.getByText("For Sam Lee")).toBeTruthy();
+  });
+
+  it("offers no one to give a line to on a list nobody else has", async () => {
+    await renderList([entry("Cake")]);
+
+    await openDetails("Cake");
+    expect(screen.queryByText("Assigned to")).toBeNull();
   });
 });

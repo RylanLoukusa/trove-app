@@ -7,8 +7,24 @@ import { askForReminderPermission } from "../reminders/notifications";
 import type { ListEntry, RepeatRule, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, toDateKey, withPriority } from "../utils/listView";
 import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
+import { ListPerson, personLabel } from "../collaboration/listPeople";
+import { formatPrice, formatQuantity, MAX_RATING, normalizeLink, parsePrice, parseQuantity } from "../utils/fields";
 
-type Details = Pick<ListEntry, "text" | "dueDate" | "dueTime" | "repeat" | "notes" | "tagOptionIds">;
+type Details = Pick<
+  ListEntry,
+  | "text"
+  | "dueDate"
+  | "dueTime"
+  | "repeat"
+  | "quantity"
+  | "price"
+  | "rating"
+  | "link"
+  | "notes"
+  | "tagOptionIds"
+  | "assigneeId"
+  | "assigneeName"
+>;
 
 type Props = {
   entry: ListEntry | null;
@@ -23,6 +39,8 @@ type Props = {
   // Other lists this line also shows on; tapping one takes it off that list.
   alsoOnLists?: Array<{ id: string; title: string }>;
   onRemoveFromList?: (listId: string) => void;
+  // People a line can be given to, on a shared list.
+  people?: ListPerson[];
   onSave: (updates: Partial<Details>) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -39,6 +57,7 @@ export const ListEntrySheet = ({
   fromRule = false,
   alsoOnLists,
   onRemoveFromList,
+  people = [],
   onSave,
   onDelete,
   onClose,
@@ -64,6 +83,11 @@ export const ListEntrySheet = ({
   );
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [quantityDraft, setQuantityDraft] = useState("");
+  const [priceDraft, setPriceDraft] = useState("");
+  const [rating, setRating] = useState<number | undefined>(undefined);
+  const [linkDraft, setLinkDraft] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!entry) return;
@@ -77,6 +101,11 @@ export const ListEntrySheet = ({
     setPriorityId(entryPriority(entry, priorityOptions)?.id ?? null);
     setTagIds(entry.tagOptionIds.filter((id) => otherTagIds.has(id)));
     setNotes(entry.notes ?? "");
+    setQuantityDraft(entry.quantity ? formatQuantity(entry.quantity) : "");
+    setPriceDraft(entry.price !== undefined ? formatPrice(entry.price) : "");
+    setRating(entry.rating);
+    setLinkDraft(entry.link ?? "");
+    setAssigneeId(entry.assigneeId);
     // Only reset when a different entry opens, not on every background sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry?.id]);
@@ -86,6 +115,9 @@ export const ListEntrySheet = ({
   const dueDescription = dueDate ? describeDueDate(dueDate) : null;
   const timeDraftInvalid = timeDraft.trim() !== "" && !parseTimeInput(timeDraft) && timeDraft !== formatTime(dueTime ?? "");
   const isCheck = entry?.kind === "check";
+  const quantityInvalid = quantityDraft.trim() !== "" && parseQuantity(quantityDraft) === null;
+  const priceInvalid = priceDraft.trim() !== "" && parsePrice(priceDraft) === null;
+  const linkInvalid = linkDraft.trim() !== "" && normalizeLink(linkDraft) === null;
 
   const close = () => {
     if (entry && canEdit) {
@@ -98,6 +130,18 @@ export const ListEntrySheet = ({
       if (nextTime !== entry.dueTime) updates.dueTime = nextTime;
       const nextRepeat = isCheck ? repeat : undefined;
       if (nextRepeat !== entry.repeat) updates.repeat = nextRepeat;
+      // A field left blank is cleared; one that can't be read keeps its value.
+      const nextQuantity = quantityDraft.trim() ? parseQuantity(quantityDraft) ?? entry.quantity : undefined;
+      if (nextQuantity !== entry.quantity) updates.quantity = nextQuantity;
+      const nextPrice = priceDraft.trim() ? parsePrice(priceDraft) ?? entry.price : undefined;
+      if (nextPrice !== entry.price) updates.price = nextPrice;
+      if (rating !== entry.rating) updates.rating = rating;
+      const nextLink = linkDraft.trim() ? normalizeLink(linkDraft) ?? entry.link : undefined;
+      if (nextLink !== entry.link) updates.link = nextLink;
+      if (assigneeId !== entry.assigneeId) {
+        updates.assigneeId = assigneeId;
+        updates.assigneeName = people.find((person) => person.id === assigneeId)?.name;
+      }
       const nextNotes = notes.trim() || undefined;
       if (nextNotes !== entry.notes) updates.notes = nextNotes;
       const nextTags = [
@@ -293,6 +337,35 @@ export const ListEntrySheet = ({
           </>
         )}
 
+        {(people.length > 0 || !!entry?.assigneeId) && (
+          <>
+            <Text style={styles.label}>Assigned to</Text>
+            <View style={styles.chipRow}>
+              {people.map((person) => (
+                <Chip
+                  key={person.id}
+                  label={personLabel(person)}
+                  accessibilityLabel={`Assign to ${personLabel(person)}`}
+                  selected={assigneeId === person.id}
+                  disabled={!canEdit}
+                  onPress={() => setAssigneeId(assigneeId === person.id ? undefined : person.id)}
+                  styles={styles}
+                />
+              ))}
+              {/* Someone who no longer has the list keeps the line until it is given to someone else. */}
+              {!!entry?.assigneeId && !people.some((person) => person.id === entry.assigneeId) && assigneeId === entry.assigneeId && (
+                <Chip
+                  label={entry.assigneeName ?? "Someone"}
+                  selected
+                  disabled={!canEdit}
+                  onPress={() => setAssigneeId(undefined)}
+                  styles={styles}
+                />
+              )}
+            </View>
+          </>
+        )}
+
         {otherSections.map((section) => (
           <React.Fragment key={section.group.id}>
             <Text style={styles.label}>{section.group.name}</Text>
@@ -312,6 +385,76 @@ export const ListEntrySheet = ({
             </View>
           </React.Fragment>
         ))}
+
+        <Text style={styles.label}>Details</Text>
+        <View style={styles.fieldRow}>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Quantity</Text>
+            <TextInput
+              accessibilityLabel="Quantity"
+              editable={canEdit}
+              value={quantityDraft}
+              onChangeText={setQuantityDraft}
+              keyboardType="decimal-pad"
+              placeholder="1"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.fieldInput, quantityInvalid && styles.inputInvalid]}
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Price</Text>
+            <TextInput
+              accessibilityLabel="Price"
+              editable={canEdit}
+              value={priceDraft}
+              onChangeText={setPriceDraft}
+              onBlur={() => {
+                const parsed = parsePrice(priceDraft);
+                if (parsed !== null) setPriceDraft(formatPrice(parsed));
+              }}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.fieldInput, priceInvalid && styles.inputInvalid]}
+            />
+          </View>
+        </View>
+        {(quantityInvalid || priceInvalid) && (
+          <Text style={[styles.hint, styles.hintError]}>
+            {quantityInvalid ? "Use a number like 2 or 1.5 for the quantity." : "Use a price like 4.99."}
+          </Text>
+        )}
+        <Text style={styles.fieldLabel}>Rating</Text>
+        <View style={styles.stars}>
+          {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="button"
+              accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
+              accessibilityState={{ selected: (rating ?? 0) >= value, disabled: !canEdit }}
+              disabled={!canEdit}
+              hitSlop={4}
+              // Tapping the rating it already has clears it.
+              onPress={() => setRating(rating === value ? undefined : value)}
+            >
+              <Text style={[styles.star, (rating ?? 0) >= value && styles.starOn]}>{(rating ?? 0) >= value ? "★" : "☆"}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.fieldLabel}>Link</Text>
+        <TextInput
+          accessibilityLabel="Link"
+          editable={canEdit}
+          value={linkDraft}
+          onChangeText={setLinkDraft}
+          placeholder="example.com/item"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          style={[styles.input, linkInvalid && styles.inputInvalid]}
+        />
+        {linkInvalid && <Text style={[styles.hint, styles.hintError]}>Use a web address like example.com.</Text>}
 
         <Text style={styles.label}>Notes</Text>
         <TextInput
@@ -497,6 +640,34 @@ const createStyles = (colors: ThemeColors) =>
     },
     hintError: {
       color: colors.danger,
+    },
+    fieldRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    field: {
+      flex: 1,
+    },
+    fieldLabel: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: "700",
+      marginTop: spacing.sm,
+    },
+    fieldInput: {
+      marginTop: 4,
+    },
+    stars: {
+      flexDirection: "row",
+      gap: spacing.xs,
+      marginTop: 4,
+    },
+    star: {
+      color: colors.muted,
+      fontSize: 28,
+    },
+    starOn: {
+      color: colors.accent,
     },
     notes: {
       minHeight: 96,

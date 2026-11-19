@@ -1,4 +1,5 @@
 import type { LineImage, LineImageSize, ListEntry, SavedItem, SavedListItem } from "../types/models";
+import { isPrice, isQuantity, isRating, normalizeLink } from "./fields";
 import { isRepeatRule, isResetRule, isValidTime } from "./schedule";
 
 // ---------------------------------------------------------------------------
@@ -160,9 +161,19 @@ export const withLineImageSize = (image: LineImage, size: LineImageSize): LineIm
 // `fmt:repeat:<rule>`.
 const TIME_TAG_PREFIX = `${FORMAT_TAG_PREFIX}time:`;
 const REPEAT_TAG_PREFIX = `${FORMAT_TAG_PREFIX}repeat:`;
+// And its light fields: `fmt:qty:2`, `fmt:price:12.5`, `fmt:rating:4` and
+// `fmt:link:<url>`.
+const QUANTITY_TAG_PREFIX = `${FORMAT_TAG_PREFIX}qty:`;
+const PRICE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}price:`;
+const RATING_TAG_PREFIX = `${FORMAT_TAG_PREFIX}rating:`;
+const LINK_TAG_PREFIX = `${FORMAT_TAG_PREFIX}link:`;
+// Who a line is for: `fmt:assignee:<user id>` and `fmt:assigneename:<name>`.
+const ASSIGNEE_TAG_PREFIX = `${FORMAT_TAG_PREFIX}assignee:`;
+const ASSIGNEE_NAME_TAG_PREFIX = `${FORMAT_TAG_PREFIX}assigneename:`;
 
 export const encodeEntryFormat = (
-  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images" | "dueTime" | "repeat">,
+  entry: Pick<ListEntry, "kind" | "bold" | "tagOptionIds" | "images" | "dueTime" | "repeat"> &
+    Partial<Pick<ListEntry, "quantity" | "price" | "rating" | "link" | "assigneeId" | "assigneeName">>,
 ): { kind: "check" | "bullet"; tags: string[] } => ({
   kind: entry.kind === "check" ? "check" : "bullet",
   tags: [
@@ -172,6 +183,12 @@ export const encodeEntryFormat = (
     ...(entry.images ?? []).map(encodeLineImage),
     ...(isValidTime(entry.dueTime) ? [`${TIME_TAG_PREFIX}${entry.dueTime}`] : []),
     ...(isRepeatRule(entry.repeat) ? [`${REPEAT_TAG_PREFIX}${entry.repeat}`] : []),
+    ...(isQuantity(entry.quantity) ? [`${QUANTITY_TAG_PREFIX}${entry.quantity}`] : []),
+    ...(isPrice(entry.price) ? [`${PRICE_TAG_PREFIX}${entry.price}`] : []),
+    ...(isRating(entry.rating) ? [`${RATING_TAG_PREFIX}${entry.rating}`] : []),
+    ...(entry.link && normalizeLink(entry.link) ? [`${LINK_TAG_PREFIX}${entry.link}`] : []),
+    ...(entry.assigneeId ? [`${ASSIGNEE_TAG_PREFIX}${entry.assigneeId}`] : []),
+    ...(entry.assigneeId && entry.assigneeName ? [`${ASSIGNEE_NAME_TAG_PREFIX}${entry.assigneeName}`] : []),
   ],
 });
 
@@ -190,6 +207,8 @@ const ARCHIVED_FOLDER_PREFIX = `${FORMAT_TAG_PREFIX}arcfolder:`;
 const TEMPLATE_LIST_TAG = `${FORMAT_TAG_PREFIX}template`;
 const RESET_RULE_PREFIX = `${FORMAT_TAG_PREFIX}reset:`;
 const RESET_AT_PREFIX = `${FORMAT_TAG_PREFIX}resetat:`;
+// A list shown as a Collection carries `fmt:view:gallery`.
+const GALLERY_VIEW_TAG = `${FORMAT_TAG_PREFIX}view:gallery`;
 
 type ListTagFields = Pick<
   SavedItem,
@@ -202,6 +221,7 @@ type ListTagFields = Pick<
   | "isTemplate"
   | "resetRule"
   | "resetAt"
+  | "viewMode"
 >;
 
 export const encodeListTags = (list: ListTagFields & Pick<SavedItem, "tagOptionIds">): string[] => [
@@ -215,6 +235,7 @@ export const encodeListTags = (list: ListTagFields & Pick<SavedItem, "tagOptionI
   ...(list.isTemplate ? [TEMPLATE_LIST_TAG] : []),
   ...(isResetRule(list.resetRule) ? [`${RESET_RULE_PREFIX}${list.resetRule}`] : []),
   ...(isResetRule(list.resetRule) && list.resetAt ? [`${RESET_AT_PREFIX}${list.resetAt}`] : []),
+  ...(list.viewMode === "gallery" ? [GALLERY_VIEW_TAG] : []),
 ];
 
 export const decodeListTags = (
@@ -239,19 +260,34 @@ export const decodeListTags = (
     ...(tags.includes(TEMPLATE_LIST_TAG) ? { isTemplate: true as const } : {}),
     ...(isResetRule(resetRule) ? { resetRule } : {}),
     ...(resetAt ? { resetAt } : {}),
+    ...(tags.includes(GALLERY_VIEW_TAG) ? { viewMode: "gallery" as const } : {}),
   };
 };
 
 export const decodeEntryFormat = (
   kind: unknown,
   tags: string[],
-): Pick<ListEntry, "kind" | "tagOptionIds" | "images" | "dueTime" | "repeat"> & { bold?: true } => {
+): Pick<ListEntry, "kind" | "tagOptionIds" | "images" | "dueTime" | "repeat" | "quantity" | "price" | "rating" | "link" | "assigneeId" | "assigneeName"> & {
+  bold?: true;
+} => {
   const images = tags
     .filter((tag) => tag.startsWith(IMAGE_TAG_PREFIX))
     .map(decodeLineImage)
     .filter((image): image is LineImage => !!image);
   const dueTime = tags.find((tag) => tag.startsWith(TIME_TAG_PREFIX))?.slice(TIME_TAG_PREFIX.length);
   const repeat = tags.find((tag) => tag.startsWith(REPEAT_TAG_PREFIX))?.slice(REPEAT_TAG_PREFIX.length);
+  const numberAfter = (prefix: string): number | undefined => {
+    const raw = tags.find((tag) => tag.startsWith(prefix))?.slice(prefix.length);
+    return raw === undefined || raw === "" ? undefined : Number(raw);
+  };
+  const quantity = numberAfter(QUANTITY_TAG_PREFIX);
+  const price = numberAfter(PRICE_TAG_PREFIX);
+  const rating = numberAfter(RATING_TAG_PREFIX);
+  const link = tags.find((tag) => tag.startsWith(LINK_TAG_PREFIX))?.slice(LINK_TAG_PREFIX.length);
+  const assigneeId = tags.find((tag) => tag.startsWith(ASSIGNEE_TAG_PREFIX))?.slice(ASSIGNEE_TAG_PREFIX.length) || undefined;
+  const assigneeName = assigneeId
+    ? tags.find((tag) => tag.startsWith(ASSIGNEE_NAME_TAG_PREFIX))?.slice(ASSIGNEE_NAME_TAG_PREFIX.length) || undefined
+    : undefined;
   return {
     kind: kind === "bullet" ? (tags.includes(PLAIN_LINE_TAG) ? "text" : "bullet") : "check",
     tagOptionIds: tags.filter((tag) => !tag.startsWith(FORMAT_TAG_PREFIX)),
@@ -259,6 +295,12 @@ export const decodeEntryFormat = (
     ...(images.length > 0 ? { images } : {}),
     ...(isValidTime(dueTime) ? { dueTime } : {}),
     ...(isRepeatRule(repeat) ? { repeat } : {}),
+    ...(isQuantity(quantity) ? { quantity } : {}),
+    ...(isPrice(price) ? { price } : {}),
+    ...(isRating(rating) ? { rating } : {}),
+    ...(link && normalizeLink(link) ? { link } : {}),
+    ...(assigneeId ? { assigneeId } : {}),
+    ...(assigneeName ? { assigneeName } : {}),
   };
 };
 
@@ -598,6 +640,17 @@ type CheckRow = Pick<ListEntry, "id" | "kind" | "checked" | "indentLevel">;
 export const lineGroupEnd = (rows: Array<Pick<ListEntry, "indentLevel">>, index: number): number => {
   let end = index + 1;
   while (end < rows.length && rows[end].indentLevel > rows[index].indentLevel) end += 1;
+  return end;
+};
+
+// What folding a line hides: a heading (a plain line with no indent) folds
+// everything up to the next heading; any other line folds the lines
+// indented under it. Returns the index after the last hidden line.
+export const collapsibleEnd = (rows: Array<Pick<ListEntry, "indentLevel" | "kind">>, index: number): number => {
+  const isTopHeading = (row: Pick<ListEntry, "indentLevel" | "kind">) => row.kind === "text" && row.indentLevel === 0;
+  if (!isTopHeading(rows[index])) return lineGroupEnd(rows, index);
+  let end = index + 1;
+  while (end < rows.length && !isTopHeading(rows[end])) end += 1;
   return end;
 };
 

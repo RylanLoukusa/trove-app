@@ -14,6 +14,7 @@ import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { useReminders } from "./src/reminders/useReminders";
+import { useWidgetSync } from "./src/widget/useWidgetSync";
 import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
@@ -38,6 +39,7 @@ import { RecentlyDeletedScreen } from "./src/screens/RecentlyDeletedScreen";
 import { ArchivedScreen } from "./src/screens/ArchivedScreen";
 import { TemplatesScreen } from "./src/screens/TemplatesScreen";
 import { ShareFolderScreen } from "./src/screens/ShareFolderScreen";
+import { ShareListScreen } from "./src/screens/ShareListScreen";
 import { SyncConflictScreen } from "./src/screens/SyncConflictScreen";
 import {
   clearSharedImport,
@@ -47,6 +49,8 @@ import {
   SHARED_INBOX_TITLE,
 } from "./src/share/sharedImport";
 import { createId } from "./src/utils/id";
+import { isShortcutUrl } from "./src/shortcuts/shortcutCommands";
+import { useShortcutCommands } from "./src/shortcuts/useShortcutCommands";
 
 initSentry();
 
@@ -54,11 +58,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ["https://trovecollections.app", "trove://"],
+  // Links that add to or open a list by name are carried out by
+  // useShortcutCommands rather than navigated to.
+  filter: (url) => !isShortcutUrl(url),
   config: {
     screens: {
       AcceptFolderInvite: "share-invite/:token",
       PublicFolderPreview: "shared/:token",
       ShareFolder: "folder/:folderId/share",
+      ShareList: "item/:listId/share",
       Folder: "folder/:folderId",
       Home: "home",
       List: "item/:listId",
@@ -79,6 +87,8 @@ function AppNavigator() {
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
   useReminders(!!session && !isPasswordRecovery);
+  useWidgetSync(!!session && !isPasswordRecovery);
+  useShortcutCommands(!!session && !isPasswordRecovery);
 
   // Something shared into Trove from another app becomes a line on the Inbox
   // list of the folder that was picked (or of the top level).
@@ -212,6 +222,7 @@ function AppNavigator() {
             <Stack.Screen name="ManageTags" component={ManageTagsScreen} />
             <Stack.Screen name="AddEditTagGroup" component={AddEditTagGroupScreen} />
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
+            <Stack.Screen name="ShareList" component={ShareListScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
           </>
         ) : (

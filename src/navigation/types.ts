@@ -14,6 +14,7 @@ export type RootStackParamList = {
   List: { listId: string; isNew?: boolean };
   Search: { query?: string } | undefined;
   ShareFolder: { folderId: string };
+  ShareList: { listId: string };
   Profile: undefined;
   SyncConflict: undefined;
   Settings: undefined;

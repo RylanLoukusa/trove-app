@@ -595,6 +595,7 @@ describe("ListScreen", () => {
         "Select lines",
         "Add lines from another list",
         "Pin to Home",
+        "Show as",
         "Sort",
         "Checked lines",
         "Uncheck all by itself",
@@ -604,6 +605,7 @@ describe("ListScreen", () => {
         "Duplicate",
         "Save as template",
         "Send as text",
+        "Share list",
         "Move to folder",
         "Archive",
         "Delete list",
@@ -628,12 +630,14 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual([
         "Pin to Home",
+        "Show as",
         "Sort",
         "Checked lines",
         "Uncheck all by itself",
         "Add lines automatically",
         "Duplicate",
         "Save as template",
+        "Share list",
         "Move to folder",
         "Archive",
         "Delete list",
@@ -719,6 +723,34 @@ describe("ListScreen", () => {
 
       await choose("Unpin from Home");
       expect(savedList("chores")!.pinned).toBeFalsy();
+    });
+
+    it("shows the list as a collection of cards, and as lines again", async () => {
+      await openList("chores");
+
+      await openMenu();
+      await pick("Show as", "Collection (cards with photos)");
+      await closeMenu();
+      expect(savedList("chores")!.viewMode).toBe("gallery");
+      expect(shownLines()).toEqual([]);
+      expect(screen.getByTestId("collection-grid")).toBeTruthy();
+
+      await openMenu();
+      await pick("Show as", "Lines");
+      await closeMenu();
+      expect(savedList("chores")!.viewMode).toBeUndefined();
+      expect(shownLines().length).toBeGreaterThan(0);
+    });
+
+    it("adds up what the priced lines cost under the title", async () => {
+      await openList("chores");
+      const [first, second] = linesOf("chores");
+      await act(async () => {
+        trove().updateListEntry(first.id, { price: 4, quantity: 3 });
+        trove().updateListEntry(second.id, { price: 1.5 });
+      });
+
+      expect(screen.getByText(/Total 13\.50/)).toBeTruthy();
     });
 
     it("unchecks every line at once, and checks them again on Undo", async () => {
@@ -1304,6 +1336,36 @@ describe("ListScreen", () => {
       await leave();
 
       expect(savedList("party")).toBeDefined();
+    });
+
+    it("shared on its own says who shared it, and can be left but not moved or deleted", async () => {
+      await save({
+        items: [list("party", "Party", { folderId: "", accessRole: "editor", ownerId: "someone-else", sharedWithMe: { by: "Ann" } })],
+        listEntries: [line("Balloons", "party")],
+      });
+      await openList("party");
+
+      expect(caption("0 of 1 done · Shared by Ann · Can edit")).toBeTruthy();
+      expect(screen.getByText("Comments on item party")).toBeTruthy();
+      await openMenu();
+      expect(menuActions()).toContain("People on this list");
+      expect(menuActions()).toContain("Leave list");
+      expect(menuActions()).not.toContain("Delete list");
+      expect(menuActions()).not.toContain("Move to folder");
+      expect(menuActions()).not.toContain("Archive");
+    });
+
+    it("can be shared by its owner, and says with how many people", async () => {
+      await save({ items: [list("party", "Party", { folderId: "", sharedWith: 2 })], listEntries: [line("Balloons", "party")] });
+      await openList("party");
+
+      expect(caption("0 of 1 done · Shared with 2 people")).toBeTruthy();
+      expect(screen.getByText("Comments on item party")).toBeTruthy();
+      await openMenu();
+      expect(within(screen.getByLabelText("Share list")).getByText("2 people")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Share list"));
+
+      expect(navigation.navigate).toHaveBeenCalledWith("ShareList", { listId: "party" });
     });
 
     it("has its comments underneath", async () => {

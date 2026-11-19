@@ -31,7 +31,10 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  ChevronDown,
+  ChevronRight,
   Circle,
+  Tag,
   CircleCheck,
   CornerUpRight,
   FolderInput,
@@ -45,11 +48,14 @@ import {
   ListPlus,
   Repeat,
   Trash2,
+  UserRound,
   Undo2,
 } from "lucide-react-native";
 
+import { cardFieldsLabel, CollectionGrid } from "./CollectionGrid";
 import { LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
+import { MenuAction, MenuSheet } from "./MenuSheet";
 import {
   BulletMark,
   CheckMark,
@@ -67,9 +73,13 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { LineImage, LineImageSize, ListEntry, ListItemKind, TagOption } from "../types/models";
 import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
-import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
+import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
+import { parseSmartText, SmartFields } from "../utils/smartText";
+import { assigneeLabel, ListPerson, personLabel } from "../collaboration/listPeople";
+import { collapsibleEnd, lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
+  quickDueDates,
   DueTone,
   entryPriority,
   listSortLabels,
@@ -81,12 +91,27 @@ import {
 export type EntryUpdates = Partial<
   Pick<
     ListEntry,
-    "text" | "kind" | "bold" | "images" | "dueDate" | "dueTime" | "repeat" | "notes" | "tagOptionIds" | "indentLevel"
+    | "text"
+    | "kind"
+    | "bold"
+    | "images"
+    | "dueDate"
+    | "dueTime"
+    | "repeat"
+    | "quantity"
+    | "price"
+    | "rating"
+    | "link"
+    | "assigneeId"
+    | "assigneeName"
+    | "notes"
+    | "tagOptionIds"
+    | "indentLevel"
   >
 >;
 
 // A line to add: its text, plus how it is marked when that is already known.
-export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean; images?: LineImage[] };
+export type NewLine = PastedLine & { kind?: ListItemKind; bold?: boolean; images?: LineImage[] } & SmartFields;
 
 export type ListEntriesViewHandle = {
   showToast: (message: string, undo?: () => void) => void;
@@ -154,6 +179,14 @@ type Props = {
   emptyText?: string;
   // Bump to put the cursor in the bottom line (e.g. after the list's title).
   focusAddSignal?: number;
+  // "gallery" shows the lines as cards (a Collection) instead of rows.
+  layout?: "lines" | "gallery";
+  // Reads dates, times, priority, tags, price and quantity out of a typed
+  // line (on unless turned off).
+  smartText?: boolean;
+  // On a shared list: the people a line can be given to, and who "Me" is.
+  people?: ListPerson[];
+  myUserId?: string;
 };
 
 // Index the dragged row should land on, given how far it has moved and the
@@ -233,6 +266,10 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     footer,
     emptyText = "Nothing on this list yet.",
     focusAddSignal,
+    layout = "lines",
+    smartText = true,
+    people = [],
+    myUserId,
   },
   ref,
 ) {
@@ -247,11 +284,59 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     setDraftState(next);
   }, []);
 
-  const visibleEntries = useMemo(
+  const orderedEntries = useMemo(
     () => orderEntriesForView(entries, settings, priorityOptions),
     [entries, priorityOptions, settings],
   );
-  const hiddenCount = entries.length - visibleEntries.length;
+  const hiddenCount = entries.length - orderedEntries.length;
+
+  // --- Folding -------------------------------------------------------------
+  // In your own order a heading or a line with lines under it can be folded
+  // shut. `foldSizes`: how many lines each foldable line has under it.
+  // `hiddenUnder`: the lines each folded line is hiding, in order.
+  const { visibleEntries, foldSizes, hiddenUnder } = useMemo(() => {
+    const sizes = new Map<string, number>();
+    const hidden = new Map<string, string[]>();
+    if (settings.sortMode !== "manual" || layout === "gallery") {
+      return { visibleEntries: orderedEntries, foldSizes: sizes, hiddenUnder: hidden };
+    }
+    const collapsed = new Set(settings.collapsedIds ?? []);
+    const shown: ListEntry[] = [];
+    orderedEntries.forEach((entry, index) => {
+      const end = collapsibleEnd(orderedEntries, index);
+      if (end > index + 1) sizes.set(entry.id, end - index - 1);
+    });
+    let index = 0;
+    while (index < orderedEntries.length) {
+      const entry = orderedEntries[index];
+      shown.push(entry);
+      const size = sizes.get(entry.id) ?? 0;
+      if (size > 0 && collapsed.has(entry.id)) {
+        hidden.set(entry.id, orderedEntries.slice(index + 1, index + 1 + size).map((line) => line.id));
+        index += size + 1;
+      } else {
+        index += 1;
+      }
+    }
+    return { visibleEntries: shown, foldSizes: sizes, hiddenUnder: hidden };
+  }, [layout, orderedEntries, settings.collapsedIds, settings.sortMode]);
+
+  const toggleFold = useCallback(
+    (entryId: string) => {
+      const current = settings.collapsedIds ?? [];
+      onChangeSettings({
+        collapsedIds: current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId],
+      });
+    },
+    [onChangeSettings, settings.collapsedIds],
+  );
+
+  // A line added at the bottom goes under the last line shown; when that
+  // line is folded, it is opened so the new line can be seen.
+  const unfoldEnd = () => {
+    const last = visibleEntries[visibleEntries.length - 1];
+    if (last && hiddenUnder.has(last.id)) toggleFold(last.id);
+  };
   // Tags other than priority, which shows on its own.
   const otherTags = useMemo(() => {
     const priorityIds = new Set(priorityOptions.map((option) => option.id));
@@ -331,13 +416,13 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     const others = [...visibleEntries.slice(0, block.start), ...visibleEntries.slice(block.end)];
     const after = others[targetIndex - 1] ?? null;
     const before = others[targetIndex] ?? null;
-    onReorderEntries(
-      moving.map((entry) => entry.id),
-      after?.id ?? null,
-      before?.id ?? null,
-    );
+    // Folded lines take the lines they hide along, and a line dropped below a
+    // folded line goes after what that line hides.
+    const withHidden = (id: string) => [id, ...(hiddenUnder.get(id) ?? [])];
+    const afterId = after ? withHidden(after.id).slice(-1)[0] : null;
+    onReorderEntries(moving.flatMap((entry) => withHidden(entry.id)), afterId, before?.id ?? null);
     switchToManualOrder();
-  }, [onReorderEntries, setDragging, switchToManualOrder, visibleEntries]);
+  }, [hiddenUnder, onReorderEntries, setDragging, switchToManualOrder, visibleEntries]);
 
   const blockHeight = dragging ? blockHeights(rowHeights(), dragging)[dragging.start] : 0;
   const isCarried = (index: number) => !!dragging && index >= dragging.start && index < dragging.end;
@@ -535,6 +620,56 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     ...(addFormatRef.current.bold ? { bold: true } : {}),
   });
 
+  // Smart text: a typed line such as "Call mom tomorrow 6pm !high" is added
+  // as "Call mom" with its date, time and priority, and a message says what
+  // was picked up, with an Undo that keeps the words as typed.
+  const allTagOptions = useMemo(() => (tagSections ?? []).flatMap((section) => section.options), [tagSections]);
+  const smartLine = (line: NewLine): { line: NewLine; summary: string | null } => {
+    if (!smartText) return { line, summary: null };
+    const { text, fields } = parseSmartText(line.text, { priorityOptions, tagOptions: allTagOptions, people });
+    if (Object.keys(fields).length === 0) return { line, summary: null };
+    const due = fields.dueDate ? describeDueDate(fields.dueDate)?.label : undefined;
+    const names = (fields.tagOptionIds ?? [])
+      .map((id) => allTagOptions.find((option) => option.id === id)?.name ?? priorityOptions.find((option) => option.id === id)?.name)
+      .filter(Boolean);
+    const assignee = fields.assigneeId ? people.find((person) => person.id === fields.assigneeId) : undefined;
+    const summary = [
+      assignee ? `For ${personLabel(assignee)}` : "",
+      [due, fields.dueTime ? formatTime(fields.dueTime) : ""].filter(Boolean).join(" "),
+      fields.repeat ? repeatLabels[fields.repeat] : "",
+      ...names,
+      fields.price !== undefined ? formatPrice(fields.price) : "",
+      fields.quantity ? `×${formatQuantity(fields.quantity)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return { line: { ...line, ...fields, text }, summary };
+  };
+
+  // Adds one typed line from the bottom row, reading smart text in it.
+  const addTypedLine = (line: NewLine) => {
+    unfoldEnd();
+    const { line: smart, summary } = smartLine(line);
+    const [id] = onInsertEntries(null, [smart]);
+    if (summary && id) {
+      showToast(summary, () =>
+        onUpdateEntry(id, {
+          text: line.text,
+          dueDate: undefined,
+          dueTime: undefined,
+          repeat: undefined,
+          price: undefined,
+          quantity: undefined,
+          assigneeId: undefined,
+          tagOptionIds: [],
+        }),
+      );
+    }
+  };
+
+  const addTypedLineRef = useRef(addTypedLine);
+  addTypedLineRef.current = addTypedLine;
+
   // Return or a paste in the bottom line.
   const changeAddDraft = (next: string) => {
     if (!/[\r\n]/.test(next)) {
@@ -552,6 +687,12 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       else Keyboard.dismiss();
       return;
     }
+    if (!isPaste && lines.length === 1) {
+      addTypedLine(lines[0]);
+      setAddOverride(null);
+      return;
+    }
+    unfoldEnd();
     const ids = onInsertEntries(null, lines);
     // The next line carries on like the one just added, minus the bold.
     setAddOverride(null);
@@ -561,19 +702,17 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const commitAddDraft = useCallback((): boolean => {
     const text = draftRef.current.trim();
     if (!text) return false;
-    onInsertEntries(null, [
-      {
-        text,
-        checked: false,
-        indentLevel: addFormatRef.current.indentLevel,
-        kind: addFormatRef.current.kind,
-        ...(addFormatRef.current.bold ? { bold: true } : {}),
-      },
-    ]);
+    addTypedLineRef.current({
+      text,
+      checked: false,
+      indentLevel: addFormatRef.current.indentLevel,
+      kind: addFormatRef.current.kind,
+      ...(addFormatRef.current.bold ? { bold: true } : {}),
+    });
     setDraft("");
     setAddOverride(null);
     return true;
-  }, [onInsertEntries, setDraft]);
+  }, [setDraft]);
 
   useImperativeHandle(ref, () => ({ showToast, flush: commitAddDraft }), [commitAddDraft, showToast]);
 
@@ -630,6 +769,16 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       showToast("Couldn't open your photos");
       return [];
     }
+  };
+
+  // Adds photos to a card that has none yet.
+  const addPhotosTo = async (id: string) => {
+    if (pickingForRef.current) return;
+    pickingForRef.current = id;
+    const images = await pickPhotos();
+    pickingForRef.current = null;
+    const latest = entriesRef.current.find((entry) => entry.id === id);
+    if (latest && images.length > 0) onUpdateEntry(id, { images: [...(latest.images ?? []), ...images] });
   };
 
   // Adds photos to the line with the cursor, or puts them on a new line with
@@ -751,6 +900,62 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const selectedChecks = entries.filter((entry) => selectedIds.has(entry.id) && entry.kind === "check");
   const selectedAllDone = selectedChecks.length > 0 && selectedChecks.every((entry) => entry.checked);
 
+  // --- Dates and tags for the selected lines -------------------------------
+  const [bulkSheet, setBulkSheet] = useState<"date" | "tag" | null>(null);
+  const selectedEntries = entries.filter((entry) => selectedIds.has(entry.id));
+
+  const setDateOnSelected = (dueDate: string | null) => {
+    const before = selectedEntries.map((entry) => ({ id: entry.id, dueDate: entry.dueDate, dueTime: entry.dueTime }));
+    before.forEach(({ id }) => onUpdateEntry(id, dueDate ? { dueDate } : { dueDate: undefined, dueTime: undefined }));
+    exitSelecting();
+    showToast(dueDate ? `Dated ${countLabel(before.length)}` : `Took the date off ${countLabel(before.length)}`, () =>
+      before.forEach(({ id, dueDate: previous, dueTime }) => onUpdateEntry(id, { dueDate: previous, dueTime })),
+    );
+  };
+
+  const tagSelected = (option: TagOption) => {
+    const section = (tagSections ?? []).find((candidate) => candidate.group.id === option.groupId);
+    const single = section?.group.selectionMode === "single";
+    const groupIds = new Set(section?.options.map((candidate) => candidate.id) ?? []);
+    const allHave = selectedEntries.length > 0 && selectedEntries.every((entry) => entry.tagOptionIds.includes(option.id));
+    const before = selectedEntries.map((entry) => ({ id: entry.id, tagOptionIds: entry.tagOptionIds }));
+    selectedEntries.forEach((entry) => {
+      const kept = entry.tagOptionIds.filter((id) => id !== option.id && !(single && groupIds.has(id)));
+      onUpdateEntry(entry.id, { tagOptionIds: allHave ? kept : [...kept, option.id] });
+    });
+    exitSelecting();
+    showToast(allHave ? `Took ${option.name} off ${countLabel(before.length)}` : `Tagged ${countLabel(before.length)} ${option.name}`, () =>
+      before.forEach(({ id, tagOptionIds }) => onUpdateEntry(id, { tagOptionIds })),
+    );
+  };
+
+  const bulkActions: MenuAction[] =
+    bulkSheet === "date"
+      ? [
+          ...quickDueDates().map((quick) => ({ key: quick.key, label: quick.label, onPress: () => setDateOnSelected(quick.value) })),
+          ...(selectedEntries.some((entry) => entry.dueDate)
+            ? [{ key: "none", label: "No date", separated: true, onPress: () => setDateOnSelected(null) }]
+            : []),
+        ]
+      : bulkSheet === "tag"
+        ? (tagSections ?? []).flatMap((section, sectionIndex) =>
+            section.options.map((option, index) => ({
+              key: option.id,
+              label: option.name,
+              detail: index === 0 ? section.group.name : undefined,
+              separated: index === 0 && sectionIndex > 0,
+              icon: selectedEntries.length > 0 && selectedEntries.every((entry) => entry.tagOptionIds.includes(option.id)) ? (
+                <CircleCheck size={20} color={colors.accentDark} />
+              ) : (
+                <Circle size={20} color={withAlpha(colors.muted, 0.6)} />
+              ),
+              onPress: () => tagSelected(option),
+            })),
+          )
+        : [];
+
+  const selectAll = () => setSelectedIds(new Set(visibleEntries.map((entry) => entry.id)));
+
   const checkSelected = () => {
     const changing = selectedChecks.filter((entry) => entry.checked === selectedAllDone);
     if (onSetChecked) onSetChecked(changing.map((entry) => entry.id), !selectedAllDone);
@@ -846,7 +1051,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     : [];
 
   const addPlaceholder =
-    entries.length === 0 ? "Start typing" : addFormat.kind === "text" ? "New line" : "New item";
+    entries.length === 0 ? "Start typing" : layout === "gallery" ? "Add to the collection" : addFormat.kind === "text" ? "New line" : "New item";
 
   return (
     <View style={styles.root}>
@@ -866,7 +1071,20 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         <View ref={contentRef} collapsable={false} style={styles.contentInner}>
           {header}
 
-          {visibleEntries.map((entry, index) => (
+          {layout === "gallery" && (
+            <CollectionGrid
+              entries={visibleEntries}
+              canEdit={canEdit}
+              selecting={selecting}
+              selectedIds={selectedIds}
+              onOpen={openDetails}
+              onToggle={onToggleEntry}
+              onToggleSelect={toggleSelected}
+              onAddPhoto={(id) => void addPhotosTo(id)}
+            />
+          )}
+
+          {layout === "lines" && visibleEntries.map((entry, index) => (
             <EntryRow
               key={entry.id}
               entry={entry}
@@ -875,6 +1093,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               priority={entryPriority(entry, priorityOptions)}
               tags={entry.tagOptionIds.map((id) => otherTags.get(id)).filter((option): option is TagOption => !!option)}
               caption={captions?.[entry.id]}
+              assignee={assigneeLabel(entry, people, myUserId)}
               borrowed={!!referenceSources?.[entry.id]}
               showIndent={manualOrder}
               spaceAbove={index > 0 && isHeading(entry) && entry.indentLevel === 0}
@@ -917,6 +1136,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onDragStart={() => startDrag(index)}
               onDragUpdate={updateDrag}
               onDragEnd={endDrag}
+              fold={
+                foldSizes.has(entry.id)
+                  ? { folded: hiddenUnder.has(entry.id), count: foldSizes.get(entry.id) ?? 0, onToggle: () => toggleFold(entry.id) }
+                  : undefined
+              }
             />
           ))}
 
@@ -1000,9 +1224,16 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
 
       {selecting && (
         <View style={[styles.selectBar, { paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
-          <Text style={styles.selectCount}>
-            {selectedList.length === 0 ? "Tap lines to select them" : `${selectedList.length} selected`}
-          </Text>
+          <View style={styles.selectCountRow}>
+            <Text style={styles.selectCount}>
+              {selectedList.length === 0 ? "Tap lines to select them" : `${selectedList.length} selected`}
+            </Text>
+            {selectedList.length < visibleEntries.length && (
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={selectAll}>
+                <Text style={styles.selectAll}>Select all</Text>
+              </Pressable>
+            )}
+          </View>
           <View style={styles.selectActions}>
             {canLink && (
               <SelectButton
@@ -1029,6 +1260,22 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onPress={checkSelected}
               styles={styles}
             />
+            <SelectButton
+              label="Date"
+              icon={<CalendarDays size={20} color={colors.accentDark} />}
+              disabled={selectedList.length === 0}
+              onPress={() => setBulkSheet("date")}
+              styles={styles}
+            />
+            {(tagSections ?? []).some((section) => section.options.length > 0) && (
+              <SelectButton
+                label="Tag"
+                icon={<Tag size={20} color={colors.accentDark} />}
+                disabled={selectedList.length === 0}
+                onPress={() => setBulkSheet("tag")}
+                styles={styles}
+              />
+            )}
             <SelectButton
               label="Delete"
               icon={<Trash2 size={20} color={colors.danger} />}
@@ -1081,6 +1328,12 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           onClose={() => setSend(null)}
         />
       )}
+      <MenuSheet
+        visible={!!bulkSheet && selecting}
+        title={bulkSheet === "date" ? `Due date for ${countLabel(selectedList.length)}` : `Tag ${countLabel(selectedList.length)}`}
+        actions={bulkActions}
+        onClose={() => setBulkSheet(null)}
+      />
       <ListEntrySheet
         entry={openEntry}
         priorityOptions={priorityOptions}
@@ -1089,6 +1342,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
         sourceListTitle={openEntry ? referenceSources?.[openEntry.id] : undefined}
         fromRule={!!openEntry && !!ruleEntryIds?.has(openEntry.id)}
         alsoOnLists={openEntryLists}
+        people={people}
         onRemoveFromList={(listId) => {
           if (!openEntry) return;
           const result = onLinkEntries?.([openEntry.id], listId);
@@ -1111,6 +1365,8 @@ const leadingWidth = (kind: ListItemKind, indentLevel: number, showIndent = true
   GUTTER + (showIndent ? clampIndent(indentLevel) * INDENT_WIDTH : 0) + (kind === "text" ? 0 : MARKER_WIDTH);
 
 type EntryRowProps = {
+  // Shown on a line with lines under it, to fold them away.
+  fold?: { folded: boolean; count: number; onToggle: () => void };
   entry: ListEntry;
   styles: ReturnType<typeof createStyles>;
   colors: ThemeColors;
@@ -1118,6 +1374,8 @@ type EntryRowProps = {
   // The line's other tags.
   tags: TagOption[];
   caption?: string;
+  // Who the line is for, on a shared list.
+  assignee?: string | null;
   // The line lives on another list and is only shown here.
   borrowed: boolean;
   showIndent: boolean;
@@ -1166,12 +1424,14 @@ const dueToneColor = (tone: DueTone, colors: ThemeColors): string =>
   tone === "overdue" ? colors.danger : tone === "today" ? colors.accentDark : tone === "soon" ? colors.blue : colors.muted;
 
 const EntryRow = ({
+  fold,
   entry,
   styles,
   colors,
   priority,
   tags,
   caption,
+  assignee,
   borrowed,
   showIndent,
   spaceAbove,
@@ -1296,10 +1556,17 @@ const EntryRow = ({
     return { transform: [{ translateY: withTiming(shift, { duration: 140 }) }], zIndex: 0 };
   }, [carried, dragActive, shift]);
 
-  const hasMeta = !!due || !!priority || tags.length > 0 || !!entry.notes;
+  const fieldLabels = cardFieldsLabel(entry) ? [cardFieldsLabel(entry)] : [];
+  const hasMeta =
+    !!due || !!priority || tags.length > 0 || !!entry.notes || fieldLabels.length > 0 || !!entry.rating || !!assignee;
   // Web links in the line, each offered as a button under it: the line itself
-  // is a text field, so tapping it edits rather than opens.
-  const links = useMemo(() => extractLinks(entry.text), [entry.text]);
+  // is a text field, so tapping it edits rather than opens. A link kept in the
+  // line's details comes first.
+  const links = useMemo(() => {
+    const inText = extractLinks(entry.text);
+    if (!entry.link || inText.some((link) => link.url === entry.link)) return inText;
+    return [{ url: entry.link, label: linkHost(entry.link) }, ...inText];
+  }, [entry.link, entry.text]);
   const textStyle = [styles.text, entry.bold && styles.textBold, entry.checked && styles.textDone];
 
   // Photos start as thumbnails beside the text; a bigger one shows under it.
@@ -1464,6 +1731,14 @@ const EntryRow = ({
                 </Text>
               </View>
             )}
+            {!!assignee && (
+              <View style={styles.metaItem} accessibilityLabel={`For ${assignee}`}>
+                <UserRound size={12} color={colors.accentDark} />
+                <Text numberOfLines={1} style={[styles.metaText, { color: colors.accentDark }]}>
+                  {assignee}
+                </Text>
+              </View>
+            )}
             {!!due && (
               <View style={styles.metaItem}>
                 <CalendarDays size={12} color={dueToneColor(due.tone, colors)} />
@@ -1474,6 +1749,14 @@ const EntryRow = ({
                   <Repeat size={12} color={dueToneColor(due.tone, colors)} accessibilityLabel={repeatLabels[entry.repeat]} />
                 )}
               </View>
+            )}
+            {fieldLabels.length > 0 && (
+              <Text style={styles.metaText}>{fieldLabels.join(" · ")}</Text>
+            )}
+            {!!entry.rating && (
+              <Text accessibilityLabel={`Rated ${entry.rating} of 5`} style={[styles.metaText, { color: colors.accent }]}>
+                {formatRating(entry.rating)}
+              </Text>
             )}
             {[...(priority ? [priority] : []), ...tags].map((tag) => (
               <View key={tag.id} style={styles.metaItem}>
@@ -1499,6 +1782,19 @@ const EntryRow = ({
           style={({ pressed }) => [styles.detailsButton, pressed && styles.markerPressed]}
         >
           <Info size={21} color={colors.accentDark} />
+        </Pressable>
+      )}
+      {!!fold && !selecting && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={fold.folded ? `Show ${fold.count} hidden under ${entry.text || "this line"}` : `Fold ${entry.text || "this line"}`}
+          accessibilityState={{ expanded: !fold.folded }}
+          hitSlop={8}
+          onPress={fold.onToggle}
+          style={styles.foldButton}
+        >
+          {fold.folded && <Text style={styles.foldCount}>{fold.count}</Text>}
+          {fold.folded ? <ChevronRight size={18} color={colors.muted} /> : <ChevronDown size={18} color={withAlpha(colors.muted, 0.6)} />}
         </Pressable>
       )}
       {selecting && (
@@ -1836,6 +2132,20 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "center",
       width: 34,
     },
+    foldButton: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
+      height: LINE_ROW_HEIGHT,
+      justifyContent: "flex-end",
+      paddingLeft: spacing.xs,
+      paddingRight: GUTTER - 4,
+    },
+    foldCount: {
+      color: colors.muted,
+      fontSize: 13,
+      fontVariant: ["tabular-nums"],
+    },
     selectMark: {
       alignItems: "flex-end",
       height: LINE_ROW_HEIGHT,
@@ -1954,13 +2264,25 @@ const createStyles = (colors: ThemeColors) =>
     selectActions: {
       flexDirection: "row",
       justifyContent: "space-around",
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
+    },
+    selectCountRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+      justifyContent: "center",
+    },
+    selectAll: {
+      color: colors.accentDark,
+      fontSize: 13,
+      fontWeight: "600",
     },
     selectButton: {
       alignItems: "center",
+      flex: 1,
       justifyContent: "center",
+      maxWidth: 76,
       minHeight: 50,
-      minWidth: 68,
     },
     selectButtonText: {
       color: colors.ink,

@@ -111,7 +111,10 @@ export const ListRow = ({
   onPress,
   onLongPress,
 }: {
-  list: Pick<SavedItem, "title" | "updatedAt"> & { listItems?: Array<Pick<SavedListItem, "kind" | "text" | "checked">> };
+  list: Pick<SavedItem, "title" | "updatedAt"> &
+    Partial<Pick<SavedItem, "sharedWithMe" | "sharedWith">> & {
+      listItems?: Array<Pick<SavedListItem, "kind" | "text" | "checked">>;
+    };
   activityAt?: string;
   folderLabel?: string;
   onPress: () => void;
@@ -124,6 +127,7 @@ export const ListRow = ({
   const checks = lines.filter((line) => line.kind === "check");
   const done = checks.filter((line) => line.checked).length;
   const date = formatListDate(activityAt ?? list.updatedAt);
+  const shared = !!list.sharedWithMe || (list.sharedWith ?? 0) > 0;
 
   return (
     <Pressable
@@ -140,6 +144,7 @@ export const ListRow = ({
         </Text>
         {/* When it changed and where it's kept, never its lines. */}
         <View style={styles.listMeta}>
+          {shared && <Users accessibilityLabel="Shared" size={13} color={colors.muted} />}
           <Text style={styles.listDate}>{date}</Text>
           {!!folderLabel && (
             <Text numberOfLines={1} style={styles.listFolder}>
@@ -310,6 +315,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     listMeta: {
       flexDirection: "row",
+      alignItems: "center",
       gap: spacing.xs,
       marginTop: 3,
     },

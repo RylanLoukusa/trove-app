@@ -7,6 +7,8 @@ export type CompletedMode = "inline" | "bottom" | "hide";
 export type ListViewSettings = {
   sortMode: ListSortMode;
   completedMode: CompletedMode;
+  // Lines folded shut, hiding the lines under them (in your own order).
+  collapsedIds?: string[];
 };
 
 // Checked lines stay where they are by default, so a list with headings and

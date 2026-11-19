@@ -3,7 +3,9 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import type { AppStateStatus } from "react-native";
 import { Alert, AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
+import { isPrice, isQuantity, isRating } from "../utils/fields";
 import { getSupabase } from "../lib/supabase";
+import { leaveSharedList as leaveSharedListOnServer } from "../collaboration/listSharing";
 import { syncShareExtensionFolders } from "../share/sharedImport";
 import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
 import {
@@ -48,7 +50,8 @@ import {
 import { Folder, ListEntry, SavedItem, TagGroup, TagOption, TroveData } from "../types/models";
 import { canEditFolderContentRecord, canEditItemRecord, canManageFolderRecord } from "../utils/access";
 import { copyEntriesForList, copyTitle, isPastKeeping, SetAsideFolder, sortByLifecycle } from "../utils/listLifecycle";
-import { isResetDue, nextDueDate } from "../utils/schedule";
+import { isRepeatRule, isResetDue, isValidTime, nextDueDate } from "../utils/schedule";
+import { parseDateKey } from "../utils/listView";
 import { friendlyErrorMessage } from "../utils/errorMessages";
 import { createId } from "../utils/id";
 import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
@@ -148,6 +151,12 @@ type TroveContextValue = TroveData & {
         | "dueDate"
         | "dueTime"
         | "repeat"
+        | "quantity"
+        | "price"
+        | "rating"
+        | "link"
+        | "assigneeId"
+        | "assigneeName"
         | "tagOptionIds"
       >
     >,
@@ -163,7 +172,27 @@ type TroveContextValue = TroveData & {
   insertListEntries: (
     listId: string,
     afterEntryId: string | null,
-    inputs: Array<Pick<ListEntry, "text"> & Partial<Pick<ListEntry, "kind" | "checked" | "indentLevel" | "bold" | "images">>>,
+    inputs: Array<
+      Pick<ListEntry, "text"> &
+        Partial<
+          Pick<
+            ListEntry,
+            | "kind"
+            | "checked"
+            | "indentLevel"
+            | "bold"
+            | "images"
+            | "dueDate"
+            | "dueTime"
+            | "repeat"
+            | "price"
+            | "quantity"
+            | "assigneeId"
+            | "assigneeName"
+            | "tagOptionIds"
+          >
+        >
+    >,
   ) => ListEntry[];
   // Moves lines to other lists. A line pulled in from another list moves
   // that original. Without a position a line goes to the end of its new
@@ -204,6 +233,9 @@ type TroveContextValue = TroveData & {
   resolveSyncConflict: (resolution: SyncConflictResolution) => Promise<{ ok: boolean; error?: string }>;
   syncFolderForSharing: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
   syncToRemote: () => Promise<{ ok: boolean; error?: string }>;
+  // Leaves a list someone shared with this person on its own: it goes from
+  // this device and stops syncing here. The owner's list is untouched.
+  leaveSharedList: (listId: string) => Promise<{ ok: boolean; error?: string }>;
   resetToSeed: () => void;
   clearLocalData: () => void;
 };
@@ -910,6 +942,15 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         if (!next.images?.length) delete next.images;
         if (!next.dueTime || !next.dueDate) delete next.dueTime;
         if (!next.repeat) delete next.repeat;
+        if (!isQuantity(next.quantity)) delete next.quantity;
+        if (!isPrice(next.price)) delete next.price;
+        if (!isRating(next.rating)) delete next.rating;
+        if (!next.link) delete next.link;
+        if (!next.assigneeId) {
+          delete next.assigneeId;
+          delete next.assigneeName;
+        }
+        if (!next.assigneeName) delete next.assigneeName;
         if (next.kind !== "check") next.checked = false;
         if (next.checked !== candidate.checked) next.completedAt = next.checked ? timestamp : undefined;
         return next.checked && !candidate.checked ? checkOff(candidate, next, timestamp) : next;
@@ -1001,8 +1042,15 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
         indentLevel: Math.max(0, Math.min(input.indentLevel ?? 0, MAX_ENTRY_INDENT)),
         ...(input.bold ? { bold: true } : {}),
         ...(input.images?.length ? { images: input.images } : {}),
+        // What smart text in quick add picked out of the words.
+        ...(input.dueDate && parseDateKey(input.dueDate) ? { dueDate: input.dueDate } : {}),
+        ...(input.dueDate && isValidTime(input.dueTime) ? { dueTime: input.dueTime } : {}),
+        ...(kind === "check" && isRepeatRule(input.repeat) ? { repeat: input.repeat } : {}),
+        ...(isPrice(input.price) ? { price: input.price } : {}),
+        ...(isQuantity(input.quantity) ? { quantity: input.quantity } : {}),
+        ...(input.assigneeId ? { assigneeId: input.assigneeId, ...(input.assigneeName ? { assigneeName: input.assigneeName } : {}) } : {}),
         position: positions[index],
-        tagOptionIds: [],
+        tagOptionIds: input.tagOptionIds ? [...new Set(input.tagOptionIds)] : [],
         ownerId: list.ownerId ?? activeUserId ?? undefined,
         createdBy: activeUserId ?? undefined,
         createdAt: timestamp,
@@ -1401,6 +1449,32 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
 
     return applyPushResult(result, "Unable to sync this folder before sharing.");
   }, [activeUserId, applyPushResult, setAndPersistSyncSnapshot]);
+
+  const leaveSharedList = useCallback<TroveContextValue["leaveSharedList"]>(async (listId) => {
+    const userId = activeUserId;
+    const supabase = getSupabase();
+    if (!userId || !supabase) {
+      return { ok: false, error: "Sign in to leave a shared list." };
+    }
+
+    const result = await leaveSharedListOnServer(supabase, listId, userId);
+    if (result.error) return { ok: false, error: result.error };
+
+    // Its lines also leave any list here that shows them.
+    setData((current) => {
+      const leaving = new Set(
+        current.listEntries.filter((entry) => entry.listId === listId).map((entry) => entry.id),
+      );
+      return {
+        ...current,
+        items: current.items.filter((item) => item.id !== listId),
+        listEntries: current.listEntries.filter(
+          (entry) => entry.listId !== listId && !(entry.refEntryId && leaving.has(entry.refEntryId)),
+        ),
+      };
+    });
+    return { ok: true };
+  }, [activeUserId, setData]);
 
   const syncFolderForSharing = useCallback<TroveContextValue["syncFolderForSharing"]>(async (folderId) => {
     const userId = activeUserId;
@@ -1955,6 +2029,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
+      leaveSharedList,
       resetToSeed,
       clearLocalData,
     }),
@@ -2004,6 +2079,7 @@ const InnerTroveProvider = ({ children }: { children: ReactNode }) => {
       resolveSyncConflict,
       syncFolderForSharing,
       syncToRemote,
+      leaveSharedList,
       resetToSeed,
       clearLocalData,
     ],
