@@ -263,6 +263,10 @@ export const setCommentReaction = async (
   return error ? { error: friendlyErrorMessage(error.message) } : {};
 };
 
+// A fresh topic per subscription, so remounting a thread never reuses a
+// channel that is still leaving (see subscribeTroveRealtimeForUser).
+let commentChannelCount = 0;
+
 export const subscribeToCommentThread = (
   supabase: SupabaseClient,
   input: {
@@ -272,7 +276,7 @@ export const subscribeToCommentThread = (
   },
 ): RealtimeChannel => {
   const channel = supabase
-    .channel(`trove-comments:${input.targetType}:${input.targetId}`)
+    .channel(`trove-comments:${input.targetType}:${input.targetId}:${++commentChannelCount}`)
     .on(
       "postgres_changes",
       {

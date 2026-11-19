@@ -9,6 +9,7 @@ import type { SyncEntityKind } from "../../sync/syncBaseline";
 import type { SyncConflictResolution, SyncFieldChoice } from "../../sync/syncConflictResolution";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SyncConflict">;
 
@@ -94,7 +95,7 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
       return;
     }
 
-    navigation.goBack();
+    leaveScreen(navigation);
   }, [navigation, resolveSyncConflict]);
 
   const confirmKeepLocal = useCallback(() => {
@@ -138,7 +139,7 @@ export const SyncConflictScreen = ({ navigation }: Props) => {
         {!conflict ? (
           <>
             <Text style={styles.body}>There is no active sync conflict.</Text>
-            <AppButton label="Back to Trove" onPress={() => navigation.goBack()} style={styles.button} />
+            <AppButton label="Back to Trove" onPress={() => leaveScreen(navigation)} style={styles.button} />
           </>
         ) : (
           <>

@@ -8,6 +8,7 @@ import { RootStackParamList } from "../../navigation/types";
 import type { PaywallTrigger } from "../../utils/limits";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Paywall">;
 
@@ -65,7 +66,7 @@ export const PaywallScreen = ({ navigation, route }: Props) => {
   const onUpgrade = useCallback(() => {
     setDevIsPro(true);
     Alert.alert("You're Pro", "This is a placeholder upgrade until real billing is wired up.");
-    navigation.goBack();
+    leaveScreen(navigation);
   }, [navigation, setDevIsPro]);
 
   return (
@@ -85,7 +86,7 @@ export const PaywallScreen = ({ navigation, route }: Props) => {
         </View>
 
         <AppButton label="Upgrade to Pro" onPress={onUpgrade} style={styles.button} />
-        <AppButton label="Not now" variant="secondary" onPress={() => navigation.goBack()} style={styles.button} />
+        <AppButton label="Not now" variant="secondary" onPress={() => leaveScreen(navigation)} style={styles.button} />
 
         <Text style={styles.devNote}>
           Billing isn't wired up yet — "Upgrade" flips a local dev flag so gated flows can be tested.

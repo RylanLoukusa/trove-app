@@ -19,6 +19,7 @@ import { RootStackParamList } from "../../navigation/types";
 import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 type AuthMode = "chooser" | "signIn" | "signUp" | "reset";
@@ -231,7 +232,7 @@ export const LoginScreen = ({ navigation }: Props) => {
         {session?.user ? (
           <>
             <Text style={styles.body}>You are already signed in. {getSignedInLabel(session)}.</Text>
-            <AppButton label="Back" onPress={() => navigation.goBack()} style={styles.button} />
+            <AppButton label="Back" onPress={() => leaveScreen(navigation)} style={styles.button} />
           </>
         ) : authMode === "chooser" ? (
           <View style={styles.bottomAuthArea}>
