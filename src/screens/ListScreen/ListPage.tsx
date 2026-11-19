@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   ArrowUpDown,
   CheckCheck,
+  ChevronsUpDown,
   CircleCheck,
   Copy,
   Ellipsis,
@@ -663,6 +664,16 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       selectedValue: settings.sortMode,
       onChoose: (value) => updateSettings({ sortMode: value as ListSortMode }),
     },
+    ...((settings.collapsedIds?.length ?? 0) > 0
+      ? [
+          {
+            key: "unfold",
+            label: "Unfold everything",
+            icon: <ChevronsUpDown size={20} color={iconTone} />,
+            onPress: () => updateSettings({ collapsedIds: undefined }),
+          },
+        ]
+      : []),
     {
       key: "completed",
       label: "Checked lines",

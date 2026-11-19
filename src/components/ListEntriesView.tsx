@@ -31,7 +31,10 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  ChevronDown,
+  ChevronRight,
   Circle,
+  Tag,
   CircleCheck,
   CornerUpRight,
   FolderInput,
@@ -51,6 +54,7 @@ import {
 import { cardFieldsLabel, CollectionGrid } from "./CollectionGrid";
 import { LineImageView, nextLineImageSize } from "./LineImages";
 import { ListEntrySheet } from "./ListEntrySheet";
+import { MenuAction, MenuSheet } from "./MenuSheet";
 import {
   BulletMark,
   CheckMark,
@@ -70,9 +74,10 @@ import { extractLinks } from "../utils/links";
 import { formatTime, repeatLabels } from "../utils/schedule";
 import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
 import { parseSmartText, SmartFields } from "../utils/smartText";
-import { lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
+import { collapsibleEnd, lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
+  quickDueDates,
   DueTone,
   entryPriority,
   listSortLabels,
@@ -257,11 +262,59 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     setDraftState(next);
   }, []);
 
-  const visibleEntries = useMemo(
+  const orderedEntries = useMemo(
     () => orderEntriesForView(entries, settings, priorityOptions),
     [entries, priorityOptions, settings],
   );
-  const hiddenCount = entries.length - visibleEntries.length;
+  const hiddenCount = entries.length - orderedEntries.length;
+
+  // --- Folding -------------------------------------------------------------
+  // In your own order a heading or a line with lines under it can be folded
+  // shut. `foldSizes`: how many lines each foldable line has under it.
+  // `hiddenUnder`: the lines each folded line is hiding, in order.
+  const { visibleEntries, foldSizes, hiddenUnder } = useMemo(() => {
+    const sizes = new Map<string, number>();
+    const hidden = new Map<string, string[]>();
+    if (settings.sortMode !== "manual" || layout === "gallery") {
+      return { visibleEntries: orderedEntries, foldSizes: sizes, hiddenUnder: hidden };
+    }
+    const collapsed = new Set(settings.collapsedIds ?? []);
+    const shown: ListEntry[] = [];
+    orderedEntries.forEach((entry, index) => {
+      const end = collapsibleEnd(orderedEntries, index);
+      if (end > index + 1) sizes.set(entry.id, end - index - 1);
+    });
+    let index = 0;
+    while (index < orderedEntries.length) {
+      const entry = orderedEntries[index];
+      shown.push(entry);
+      const size = sizes.get(entry.id) ?? 0;
+      if (size > 0 && collapsed.has(entry.id)) {
+        hidden.set(entry.id, orderedEntries.slice(index + 1, index + 1 + size).map((line) => line.id));
+        index += size + 1;
+      } else {
+        index += 1;
+      }
+    }
+    return { visibleEntries: shown, foldSizes: sizes, hiddenUnder: hidden };
+  }, [layout, orderedEntries, settings.collapsedIds, settings.sortMode]);
+
+  const toggleFold = useCallback(
+    (entryId: string) => {
+      const current = settings.collapsedIds ?? [];
+      onChangeSettings({
+        collapsedIds: current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId],
+      });
+    },
+    [onChangeSettings, settings.collapsedIds],
+  );
+
+  // A line added at the bottom goes under the last line shown; when that
+  // line is folded, it is opened so the new line can be seen.
+  const unfoldEnd = () => {
+    const last = visibleEntries[visibleEntries.length - 1];
+    if (last && hiddenUnder.has(last.id)) toggleFold(last.id);
+  };
   // Tags other than priority, which shows on its own.
   const otherTags = useMemo(() => {
     const priorityIds = new Set(priorityOptions.map((option) => option.id));
@@ -341,13 +394,13 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
     const others = [...visibleEntries.slice(0, block.start), ...visibleEntries.slice(block.end)];
     const after = others[targetIndex - 1] ?? null;
     const before = others[targetIndex] ?? null;
-    onReorderEntries(
-      moving.map((entry) => entry.id),
-      after?.id ?? null,
-      before?.id ?? null,
-    );
+    // Folded lines take the lines they hide along, and a line dropped below a
+    // folded line goes after what that line hides.
+    const withHidden = (id: string) => [id, ...(hiddenUnder.get(id) ?? [])];
+    const afterId = after ? withHidden(after.id).slice(-1)[0] : null;
+    onReorderEntries(moving.flatMap((entry) => withHidden(entry.id)), afterId, before?.id ?? null);
     switchToManualOrder();
-  }, [onReorderEntries, setDragging, switchToManualOrder, visibleEntries]);
+  }, [hiddenUnder, onReorderEntries, setDragging, switchToManualOrder, visibleEntries]);
 
   const blockHeight = dragging ? blockHeights(rowHeights(), dragging)[dragging.start] : 0;
   const isCarried = (index: number) => !!dragging && index >= dragging.start && index < dragging.end;
@@ -571,6 +624,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
 
   // Adds one typed line from the bottom row, reading smart text in it.
   const addTypedLine = (line: NewLine) => {
+    unfoldEnd();
     const { line: smart, summary } = smartLine(line);
     const [id] = onInsertEntries(null, [smart]);
     if (summary && id) {
@@ -613,6 +667,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
       setAddOverride(null);
       return;
     }
+    unfoldEnd();
     const ids = onInsertEntries(null, lines);
     // The next line carries on like the one just added, minus the bold.
     setAddOverride(null);
@@ -820,6 +875,62 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const selectedChecks = entries.filter((entry) => selectedIds.has(entry.id) && entry.kind === "check");
   const selectedAllDone = selectedChecks.length > 0 && selectedChecks.every((entry) => entry.checked);
 
+  // --- Dates and tags for the selected lines -------------------------------
+  const [bulkSheet, setBulkSheet] = useState<"date" | "tag" | null>(null);
+  const selectedEntries = entries.filter((entry) => selectedIds.has(entry.id));
+
+  const setDateOnSelected = (dueDate: string | null) => {
+    const before = selectedEntries.map((entry) => ({ id: entry.id, dueDate: entry.dueDate, dueTime: entry.dueTime }));
+    before.forEach(({ id }) => onUpdateEntry(id, dueDate ? { dueDate } : { dueDate: undefined, dueTime: undefined }));
+    exitSelecting();
+    showToast(dueDate ? `Dated ${countLabel(before.length)}` : `Took the date off ${countLabel(before.length)}`, () =>
+      before.forEach(({ id, dueDate: previous, dueTime }) => onUpdateEntry(id, { dueDate: previous, dueTime })),
+    );
+  };
+
+  const tagSelected = (option: TagOption) => {
+    const section = (tagSections ?? []).find((candidate) => candidate.group.id === option.groupId);
+    const single = section?.group.selectionMode === "single";
+    const groupIds = new Set(section?.options.map((candidate) => candidate.id) ?? []);
+    const allHave = selectedEntries.length > 0 && selectedEntries.every((entry) => entry.tagOptionIds.includes(option.id));
+    const before = selectedEntries.map((entry) => ({ id: entry.id, tagOptionIds: entry.tagOptionIds }));
+    selectedEntries.forEach((entry) => {
+      const kept = entry.tagOptionIds.filter((id) => id !== option.id && !(single && groupIds.has(id)));
+      onUpdateEntry(entry.id, { tagOptionIds: allHave ? kept : [...kept, option.id] });
+    });
+    exitSelecting();
+    showToast(allHave ? `Took ${option.name} off ${countLabel(before.length)}` : `Tagged ${countLabel(before.length)} ${option.name}`, () =>
+      before.forEach(({ id, tagOptionIds }) => onUpdateEntry(id, { tagOptionIds })),
+    );
+  };
+
+  const bulkActions: MenuAction[] =
+    bulkSheet === "date"
+      ? [
+          ...quickDueDates().map((quick) => ({ key: quick.key, label: quick.label, onPress: () => setDateOnSelected(quick.value) })),
+          ...(selectedEntries.some((entry) => entry.dueDate)
+            ? [{ key: "none", label: "No date", separated: true, onPress: () => setDateOnSelected(null) }]
+            : []),
+        ]
+      : bulkSheet === "tag"
+        ? (tagSections ?? []).flatMap((section, sectionIndex) =>
+            section.options.map((option, index) => ({
+              key: option.id,
+              label: option.name,
+              detail: index === 0 ? section.group.name : undefined,
+              separated: index === 0 && sectionIndex > 0,
+              icon: selectedEntries.length > 0 && selectedEntries.every((entry) => entry.tagOptionIds.includes(option.id)) ? (
+                <CircleCheck size={20} color={colors.accentDark} />
+              ) : (
+                <Circle size={20} color={withAlpha(colors.muted, 0.6)} />
+              ),
+              onPress: () => tagSelected(option),
+            })),
+          )
+        : [];
+
+  const selectAll = () => setSelectedIds(new Set(visibleEntries.map((entry) => entry.id)));
+
   const checkSelected = () => {
     const changing = selectedChecks.filter((entry) => entry.checked === selectedAllDone);
     if (onSetChecked) onSetChecked(changing.map((entry) => entry.id), !selectedAllDone);
@@ -999,6 +1110,11 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onDragStart={() => startDrag(index)}
               onDragUpdate={updateDrag}
               onDragEnd={endDrag}
+              fold={
+                foldSizes.has(entry.id)
+                  ? { folded: hiddenUnder.has(entry.id), count: foldSizes.get(entry.id) ?? 0, onToggle: () => toggleFold(entry.id) }
+                  : undefined
+              }
             />
           ))}
 
@@ -1082,9 +1198,16 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
 
       {selecting && (
         <View style={[styles.selectBar, { paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
-          <Text style={styles.selectCount}>
-            {selectedList.length === 0 ? "Tap lines to select them" : `${selectedList.length} selected`}
-          </Text>
+          <View style={styles.selectCountRow}>
+            <Text style={styles.selectCount}>
+              {selectedList.length === 0 ? "Tap lines to select them" : `${selectedList.length} selected`}
+            </Text>
+            {selectedList.length < visibleEntries.length && (
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={selectAll}>
+                <Text style={styles.selectAll}>Select all</Text>
+              </Pressable>
+            )}
+          </View>
           <View style={styles.selectActions}>
             {canLink && (
               <SelectButton
@@ -1111,6 +1234,22 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               onPress={checkSelected}
               styles={styles}
             />
+            <SelectButton
+              label="Date"
+              icon={<CalendarDays size={20} color={colors.accentDark} />}
+              disabled={selectedList.length === 0}
+              onPress={() => setBulkSheet("date")}
+              styles={styles}
+            />
+            {(tagSections ?? []).some((section) => section.options.length > 0) && (
+              <SelectButton
+                label="Tag"
+                icon={<Tag size={20} color={colors.accentDark} />}
+                disabled={selectedList.length === 0}
+                onPress={() => setBulkSheet("tag")}
+                styles={styles}
+              />
+            )}
             <SelectButton
               label="Delete"
               icon={<Trash2 size={20} color={colors.danger} />}
@@ -1163,6 +1302,12 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
           onClose={() => setSend(null)}
         />
       )}
+      <MenuSheet
+        visible={!!bulkSheet && selecting}
+        title={bulkSheet === "date" ? `Due date for ${countLabel(selectedList.length)}` : `Tag ${countLabel(selectedList.length)}`}
+        actions={bulkActions}
+        onClose={() => setBulkSheet(null)}
+      />
       <ListEntrySheet
         entry={openEntry}
         priorityOptions={priorityOptions}
@@ -1193,6 +1338,8 @@ const leadingWidth = (kind: ListItemKind, indentLevel: number, showIndent = true
   GUTTER + (showIndent ? clampIndent(indentLevel) * INDENT_WIDTH : 0) + (kind === "text" ? 0 : MARKER_WIDTH);
 
 type EntryRowProps = {
+  // Shown on a line with lines under it, to fold them away.
+  fold?: { folded: boolean; count: number; onToggle: () => void };
   entry: ListEntry;
   styles: ReturnType<typeof createStyles>;
   colors: ThemeColors;
@@ -1248,6 +1395,7 @@ const dueToneColor = (tone: DueTone, colors: ThemeColors): string =>
   tone === "overdue" ? colors.danger : tone === "today" ? colors.accentDark : tone === "soon" ? colors.blue : colors.muted;
 
 const EntryRow = ({
+  fold,
   entry,
   styles,
   colors,
@@ -1597,6 +1745,19 @@ const EntryRow = ({
           <Info size={21} color={colors.accentDark} />
         </Pressable>
       )}
+      {!!fold && !selecting && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={fold.folded ? `Show ${fold.count} hidden under ${entry.text || "this line"}` : `Fold ${entry.text || "this line"}`}
+          accessibilityState={{ expanded: !fold.folded }}
+          hitSlop={8}
+          onPress={fold.onToggle}
+          style={styles.foldButton}
+        >
+          {fold.folded && <Text style={styles.foldCount}>{fold.count}</Text>}
+          {fold.folded ? <ChevronRight size={18} color={colors.muted} /> : <ChevronDown size={18} color={withAlpha(colors.muted, 0.6)} />}
+        </Pressable>
+      )}
       {selecting && (
         <Pressable accessible={false} onPress={onToggleSelect} style={styles.selectMark}>
           {selected ? (
@@ -1932,6 +2093,20 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "center",
       width: 34,
     },
+    foldButton: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
+      height: LINE_ROW_HEIGHT,
+      justifyContent: "flex-end",
+      paddingLeft: spacing.xs,
+      paddingRight: GUTTER - 4,
+    },
+    foldCount: {
+      color: colors.muted,
+      fontSize: 13,
+      fontVariant: ["tabular-nums"],
+    },
     selectMark: {
       alignItems: "flex-end",
       height: LINE_ROW_HEIGHT,
@@ -2050,13 +2225,25 @@ const createStyles = (colors: ThemeColors) =>
     selectActions: {
       flexDirection: "row",
       justifyContent: "space-around",
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
+    },
+    selectCountRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+      justifyContent: "center",
+    },
+    selectAll: {
+      color: colors.accentDark,
+      fontSize: 13,
+      fontWeight: "600",
     },
     selectButton: {
       alignItems: "center",
+      flex: 1,
       justifyContent: "center",
+      maxWidth: 76,
       minHeight: 50,
-      minWidth: 68,
     },
     selectButtonText: {
       color: colors.ink,

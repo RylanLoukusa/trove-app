@@ -1285,6 +1285,47 @@ describe("ListEntriesView", () => {
       expect(screen.getByText("1 selected")).toBeTruthy();
     });
 
+    it("selects every line shown in one tap", async () => {
+      await renderList([entry("Cake"), entry("Venue"), entry("Band")], { selecting: true });
+
+      await fireEvent.press(screen.getByText("Select all"));
+
+      expect(screen.getByText("3 selected")).toBeTruthy();
+      expect(screen.queryByText("Select all")).toBeNull();
+    });
+
+    it("gives the selected lines a date, or takes it off, with undo", async () => {
+      await renderList([entry("Cake", { dueDate: "2026-01-02", dueTime: "09:00" }), entry("Venue"), entry("Band")], { selecting: true });
+
+      await selectLines("Cake", "Venue");
+      await fireEvent.press(screen.getByLabelText("Date"));
+      expect(screen.getByText("Due date for 2 lines")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("Tomorrow"));
+
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+      expect(handlers.onUpdateEntry).not.toHaveBeenCalledWith("Band", expect.anything());
+      expect(onChangeSelecting).toHaveBeenLastCalledWith(false);
+      await fireEvent.press(screen.getByText("Undo"));
+      expect(handlers.onUpdateEntry).toHaveBeenLastCalledWith("Venue", { dueDate: undefined, dueTime: undefined });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { dueDate: "2026-01-02", dueTime: "09:00" });
+    });
+
+    it("tags the selected lines, and takes a tag off when they all have it", async () => {
+      const priority = { id: "priority", name: "Priority", selectionMode: "single" as const, allowInlineCreate: false, isSystem: true, sortOrder: 0, createdAt: "", updatedAt: "" };
+      const tagSections: TagSection[] = [{ group: priority, options: [high, low] }];
+      await renderList([entry("Cake", { tagOptionIds: ["low"] }), entry("Venue")], { selecting: true, tagSections });
+
+      await selectLines("Cake", "Venue");
+      await fireEvent.press(screen.getByLabelText("Tag"));
+      await fireEvent.press(screen.getByLabelText("High"));
+
+      // One priority at a time: High takes Low's place.
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { tagOptionIds: ["high"] });
+      expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Venue", { tagOptionIds: ["high"] });
+      expect(screen.getByText("Tagged 2 lines High")).toBeTruthy();
+    });
+
     it("moves the selected lines together", async () => {
       const onMoveEntries = jest.fn(() => ({ listTitle: "Party", undo: jest.fn() }));
       await renderList([entry("Cake"), entry("Venue"), entry("Band")], { selecting: true, moveTargets: [party], onMoveEntries });
@@ -1577,5 +1618,52 @@ describe("as a collection", () => {
 
     expect(screen.getByText("1 selected")).toBeTruthy();
     expect(screen.queryByText("Line details")).toBeNull();
+  });
+});
+
+describe("folding", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+  });
+
+  it("folds a heading's lines away and opens them again", async () => {
+    await renderList([
+      entry("Kitchen", { kind: "text" }),
+      entry("Plates"),
+      entry("Cups"),
+      entry("Garage", { kind: "text" }),
+      entry("Bikes"),
+    ]);
+
+    await fireEvent.press(screen.getByLabelText("Fold Kitchen"));
+    expect(visibleTexts()).toEqual(["Kitchen", "Garage", "Bikes"]);
+    expect(onChangeSettings).toHaveBeenLastCalledWith({ collapsedIds: ["Kitchen"] });
+
+    await fireEvent.press(screen.getByLabelText("Show 2 hidden under Kitchen"));
+    expect(visibleTexts()).toEqual(["Kitchen", "Plates", "Cups", "Garage", "Bikes"]);
+  });
+
+  it("folds the lines indented under a line", async () => {
+    await renderList([entry("Trip"), entry("Tickets", { indentLevel: 1 }), entry("Hotel", { indentLevel: 1 }), entry("Gifts")], {
+      settings: { collapsedIds: ["Trip"] },
+    });
+
+    expect(visibleTexts()).toEqual(["Trip", "Gifts"]);
+    expect(screen.queryByLabelText("Fold Gifts")).toBeNull();
+  });
+
+  it("opens the last section when a line is added below it", async () => {
+    await renderList([entry("Kitchen", { kind: "text" }), entry("Plates")], { settings: { collapsedIds: ["Kitchen"] } });
+
+    await fireEvent.changeText(screen.getByLabelText(ADD_LINE), "Cups\n");
+
+    expect(onChangeSettings).toHaveBeenCalledWith({ collapsedIds: [] });
+  });
+
+  it("only folds in your own order", async () => {
+    await renderList([entry("Kitchen", { kind: "text" }), entry("Plates")], { settings: { collapsedIds: ["Kitchen"], sortMode: "alpha" } });
+
+    expect(visibleTexts()).toEqual(["Kitchen", "Plates"]);
   });
 });

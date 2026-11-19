@@ -26,6 +26,9 @@ const parseSettings = (stored: string | null): ListViewSettings => {
       completedMode: completedModes.includes(parsed.completedMode as CompletedMode)
         ? (parsed.completedMode as CompletedMode)
         : defaultListViewSettings.completedMode,
+      ...(Array.isArray(parsed.collapsedIds) && parsed.collapsedIds.length > 0
+        ? { collapsedIds: parsed.collapsedIds.filter((id): id is string => typeof id === "string") }
+        : {}),
     };
   } catch {
     return defaultListViewSettings;

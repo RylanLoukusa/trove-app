@@ -632,6 +632,17 @@ export const lineGroupEnd = (rows: Array<Pick<ListEntry, "indentLevel">>, index:
   return end;
 };
 
+// What folding a line hides: a heading (a plain line with no indent) folds
+// everything up to the next heading; any other line folds the lines
+// indented under it. Returns the index after the last hidden line.
+export const collapsibleEnd = (rows: Array<Pick<ListEntry, "indentLevel" | "kind">>, index: number): number => {
+  const isTopHeading = (row: Pick<ListEntry, "indentLevel" | "kind">) => row.kind === "text" && row.indentLevel === 0;
+  if (!isTopHeading(rows[index])) return lineGroupEnd(rows, index);
+  let end = index + 1;
+  while (end < rows.length && !isTopHeading(rows[end])) end += 1;
+  return end;
+};
+
 // An indented line belongs to the nearest line above it with less indent, so
 // lines form groups. Checking or unchecking a line does the same to every
 // checkbox in its group, and a checkbox with checkboxes in its group is
