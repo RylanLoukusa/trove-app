@@ -184,7 +184,7 @@ private func adaptive(light: UInt32, dark: UInt32) -> Color {
 private let brand = adaptive(light: 0x2F4A37, dark: 0x9FC2A3)
 private let ink = adaptive(light: 0x1D1B18, dark: 0xF3EDE3)
 private let muted = adaptive(light: 0x6B655C, dark: 0xB3AB9F)
-private let background = adaptive(light: 0xFBF8F3, dark: 0x1E1A15)
+private let widgetBackgroundColor = adaptive(light: 0xFBF8F3, dark: 0x1E1A15)
 private let rule = adaptive(light: 0xE6DFD4, dark: 0x3A342B)
 
 struct BrandHeader: View {
@@ -334,9 +334,9 @@ extension View {
   @ViewBuilder
   func widgetBackground() -> some View {
     if #available(iOSApplicationExtension 17.0, *) {
-      containerBackground(for: .widget) { background }
+      containerBackground(for: .widget) { widgetBackgroundColor }
     } else {
-      padding(14).background(background)
+      padding(14).background(widgetBackgroundColor)
     }
   }
 }
