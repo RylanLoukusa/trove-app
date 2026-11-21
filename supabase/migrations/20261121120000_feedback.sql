@@ -20,5 +20,5 @@ create policy "Signed-in people can send feedback"
   to authenticated
   with check (user_id = auth.uid());
 
-revoke all on public.trove_feedback from anon;
+revoke all on public.trove_feedback from anon, authenticated;
 grant insert on public.trove_feedback to authenticated;
