@@ -10,7 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
-import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
+import { EntitlementProvider, useEntitlement } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { useReminders } from "./src/reminders/useReminders";
@@ -71,6 +71,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       Home: "home",
       List: "item/:listId",
       Login: "login",
+      // The large and Lock Screen widgets open this on the free plan.
+      Paywall: "pro/:trigger",
       Profile: "profile",
       Search: "search",
       Settings: "settings",
@@ -86,8 +88,10 @@ function AppNavigator() {
   const themeColors = useThemeColors();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
-  useReminders(!!session && !isPasswordRecovery);
-  useWidgetSync(!!session && !isPasswordRecovery);
+  const { isPro, isLoading: isPlanLoading } = useEntitlement();
+  // Reminders at a time are part of Pro; without it, none are scheduled.
+  useReminders(!!session && !isPasswordRecovery && !isPlanLoading, isPro);
+  useWidgetSync(!!session && !isPasswordRecovery, isPro);
   useShortcutCommands(!!session && !isPasswordRecovery);
 
   // Something shared into Trove from another app becomes a line on the Inbox

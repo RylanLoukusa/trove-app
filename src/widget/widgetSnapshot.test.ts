@@ -46,6 +46,7 @@ describe("buildWidgetSnapshot", () => {
       updatedAt: now.toISOString(),
       day: "2026-11-17",
       appearance: "system",
+      pro: true,
       source: "pinned",
       lists: [
         {

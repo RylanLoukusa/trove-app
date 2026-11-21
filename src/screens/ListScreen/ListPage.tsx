@@ -35,6 +35,7 @@ import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
@@ -49,6 +50,7 @@ import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { listToText } from "../../utils/exportData";
 import { formatPrice, listTotal } from "../../utils/fields";
 import { getFolderPathLabel } from "../../utils/folderTree";
+import { requiresProForTemplate } from "../../utils/limits";
 import {
   canListBorrowLines,
   focusReferenceId,
@@ -154,7 +156,19 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     removeFromFocusList,
     canEditItem,
     leaveSharedList,
+    templates,
   } = useTrove();
+  const { isPro, presentPaywall } = useEntitlement();
+  // Pro features stay in the menu for everyone, marked Pro; on the free plan
+  // choosing one opens the paywall instead.
+  const proBadge = isPro ? undefined : "Pro";
+  const askForPro = useCallback(
+    (trigger: "automation" | "templates") => {
+      setSettingsOpen(false);
+      presentPaywall(trigger);
+    },
+    [presentPaywall],
+  );
   const isFocus = isFocusList(item);
   const canEdit = canEditItem(item.id);
   const rule = isFocus ? item.focusRule : undefined;
@@ -572,10 +586,15 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     if (copy) navigation.replace("List", { listId: copy.id });
   }, [copyItem, item.id, navigation]);
 
+  const atTemplateLimit = requiresProForTemplate(isPro, (templates ?? []).length);
   const saveAsTemplate = useCallback(() => {
+    if (atTemplateLimit) {
+      askForPro("templates");
+      return;
+    }
     const template = copyItem(item.id, { title: titleOf(item), fresh: true, template: true });
     if (template) viewRef.current?.showToast("Saved as a template");
-  }, [copyItem, item, titleOf]);
+  }, [askForPro, atTemplateLimit, copyItem, item, titleOf]);
 
   const useTemplate = useCallback(() => {
     const list = copyItem(item.id, { title: titleOf(item), fresh: true });
@@ -654,6 +673,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "reset",
             label: "Uncheck automatically",
+            badge: proBadge,
             icon: <RotateCcw size={20} color={iconTone} />,
             choices: [
               { value: "off", label: "Never" },
@@ -661,7 +681,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             ],
             selectedValue: item.resetRule ?? "off",
             onChoose: (value: string) =>
-              updateItem(
+              !isPro && value !== "off"
+                ? askForPro("automation")
+                : updateItem(
                 item.id,
                 value === "off"
                   ? { resetRule: undefined, resetAt: undefined }
@@ -675,6 +697,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "rule",
             label: "Add lines automatically",
+            badge: proBadge,
             icon: <Sparkles size={20} color={iconTone} />,
             // The date rules, then every tag under its group's name.
             choices: [
@@ -685,6 +708,10 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             ],
             selectedValue: rule ?? (ruleTagId ? `${TAG_RULE_PREFIX}${ruleTagId}` : "none"),
             onChoose: (value: string) => {
+              if (!isPro && value !== "none") {
+                askForPro("automation");
+                return;
+              }
               if (value.startsWith(TAG_RULE_PREFIX)) {
                 updateItem(item.id, { listMode: "focus", focusRule: undefined, ruleTagId: value.slice(TAG_RULE_PREFIX.length) });
                 return;
@@ -705,8 +732,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "pull",
             label: "Add lines from another list",
+            badge: proBadge,
             icon: <ListPlus size={20} color={iconTone} />,
-            onPress: () => setSheet("pull"),
+            onPress: () => (isPro ? setSheet("pull") : presentPaywall("automation")),
           },
         ]
       : []),
@@ -715,6 +743,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "template",
             label: "Save as template",
+            badge: atTemplateLimit ? "Pro" : undefined,
             icon: <LayoutTemplate size={20} color={iconTone} />,
             separated: true,
             onPress: saveAsTemplate,

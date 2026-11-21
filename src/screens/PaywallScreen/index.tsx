@@ -5,7 +5,7 @@ import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { RootStackParamList } from "../../navigation/types";
-import type { PaywallTrigger } from "../../utils/limits";
+import { FREE_TEMPLATE_LIMIT, type PaywallTrigger } from "../../utils/limits";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
 import { leaveScreen } from "../../navigation/leaveScreen";
@@ -14,18 +14,18 @@ type Props = NativeStackScreenProps<RootStackParamList, "Paywall">;
 
 const headlineForTrigger = (trigger: PaywallTrigger): string => {
   switch (trigger) {
-    case "sync":
-      return "Sync your folders everywhere";
     case "sharing":
-      return "Share a folder with others";
-    case "video_upload":
-      return "Save videos to your collections";
-    case "video_playback":
-      return "Watch this video";
+      return "Edit lists together";
     case "editor_invite":
-      return "Contribute to a shared folder";
-    case "general":
-      return "Upgrade to Trove Pro";
+      return "Help edit this shared folder";
+    case "automation":
+      return "Let your lists keep themselves";
+    case "reminders":
+      return "Get reminded on time";
+    case "templates":
+      return "Save as many templates as you like";
+    case "widgets":
+      return "More widgets for your Home and Lock Screen";
     default:
       return "Upgrade to Trove Pro";
   }
@@ -33,28 +33,29 @@ const headlineForTrigger = (trigger: PaywallTrigger): string => {
 
 const bodyForTrigger = (trigger: PaywallTrigger): string => {
   switch (trigger) {
-    case "sync":
-      return "Cloud sync keeps your folders backed up and available on every device you own.";
     case "sharing":
-      return "Sharing a folder you own requires Pro, since it keeps that folder synced for everyone you invite.";
-    case "video_upload":
-      return "Adding video requires Pro. Images, links, and text stay free with no limits.";
-    case "video_playback":
-      return "Playing full-quality video from a shared folder requires Pro.";
+      return "Anyone can view what you share for free. With Pro, the people you invite can add, check off and change lines too.";
     case "editor_invite":
-      return "Viewing a shared folder is always free. Contributing as an editor requires your own Pro subscription.";
-    case "general":
-      return "Sync your folders across devices, share collections with others, and save video — all with Trove Pro.";
+      return "Viewing a shared folder is always free. Editing it with everyone else comes with Trove Pro.";
+    case "automation":
+      return "Pro lists can add lines on their own by due date or tag, pull lines in from other lists, and uncheck themselves on a schedule.";
+    case "reminders":
+      return "Give a line a time and Trove Pro sends you a reminder when it's due.";
+    case "templates":
+      return `The free plan keeps up to ${FREE_TEMPLATE_LIMIT} of your own templates. Pro has no limit, and the starter templates are always free.`;
+    case "widgets":
+      return "Pro adds the large widget with Today and This week side by side, and widgets for your Lock Screen.";
     default:
-      return "Upgrade to unlock this feature.";
+      return "Your lists, folders and sync stay free. Pro adds the features that save you time every day.";
   }
 };
 
 const features = [
-  "Cloud sync across all your devices",
-  "Share folders with anyone",
-  "Save and watch video in your collections",
-  "Contribute as an editor on shared folders",
+  "Edit shared folders and lists together",
+  "Lists that add lines and uncheck themselves",
+  "Reminders at the time a line is due",
+  "Unlimited templates of your own",
+  "The large widget and Lock Screen widgets",
 ];
 
 export const PaywallScreen = ({ navigation, route }: Props) => {

@@ -14,6 +14,12 @@ import { defaultListViewSettings, ListViewSettings, TagSection } from "../utils/
 
 // Stand-in for the swipe gesture: a button that "completes" the swipe to the
 // right, and the left-swipe buttons always showing.
+const mockPlan = { isPro: true };
+const mockPresentPaywall = jest.fn();
+jest.mock("../entitlements/EntitlementContext", () => ({
+  useEntitlement: () => ({ isPro: mockPlan.isPro, isLoading: false, presentPaywall: mockPresentPaywall }),
+}));
+
 jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
   const React = jest.requireActual("react");
   const { Pressable, Text, View } = jest.requireActual("react-native");
@@ -972,6 +978,26 @@ describe("ListEntriesView", () => {
       expect(screen.getAllByDisplayValue("Cake")).toHaveLength(1);
     });
 
+
+    it("points to Pro for reminders on the free plan, and keeps the time", async () => {
+      mockPlan.isPro = false;
+      try {
+        await renderList([entry("Cake", { dueDate: "2026-12-01" })]);
+        await openDetails("Cake");
+        await fireEvent.changeText(screen.getByLabelText("Time"), "7 pm");
+        await fireEvent(screen.getByLabelText("Time"), "endEditing");
+
+        expect(screen.getByText(/Get a reminder at 7:00 PM with Trove Pro/i)).toBeTruthy();
+        jest.useFakeTimers();
+        await fireEvent.press(screen.getByLabelText("Reminders come with Trove Pro"));
+        jest.runAllTimers();
+        jest.useRealTimers();
+        expect(mockPresentPaywall).toHaveBeenCalledWith("reminders");
+        expect(handlers.onUpdateEntry).toHaveBeenCalledWith("Cake", { dueTime: "19:00" });
+      } finally {
+        mockPlan.isPro = true;
+      }
+    });
 
     it("sets a due date, priority and notes", async () => {
       await renderList([entry("Cake")]);

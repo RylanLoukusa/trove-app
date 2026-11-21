@@ -36,6 +36,8 @@ struct WidgetSnapshot: Decodable {
   let day: String?
   // "light", "dark" or "system", from Trove's settings.
   let appearance: String?
+  // False on the free plan; missing (an older app) counts as Pro.
+  let pro: Bool?
   let source: String
   let lists: [WidgetList]
 
@@ -365,6 +367,60 @@ struct HomeWidgetView: View {
 
 // The Lock Screen: Today in a line, a circle or a few lines. The system
 // draws these in its own tint, so they use no colors of their own.
+// The large widget on the free plan: what it would show, and a way to Pro.
+struct ProUpsellView: View {
+  @Environment(\.colorScheme) private var systemScheme
+  let entry: TroveEntry
+
+  var body: some View {
+    let dark = Palette.isDark(entry.snapshot?.appearance, system: systemScheme)
+    let palette = dark ? Palette.dark : Palette.light
+    VStack(alignment: .leading, spacing: 8) {
+      BrandHeader(palette: palette)
+      Spacer(minLength: 0)
+      Text("Today and This week, side by side")
+        .font(.system(size: 17, weight: .semibold))
+        .foregroundColor(palette.ink)
+      Text("The large widget comes with Trove Pro. Tap to see what's included.")
+        .font(.system(size: 13))
+        .foregroundColor(palette.muted)
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .environment(\.colorScheme, dark ? .dark : .light)
+    .widgetURL(URL(string: "trove://pro/widgets"))
+    .widgetBackground(palette.background)
+  }
+}
+
+// Lock Screen widgets on the free plan.
+@available(iOSApplicationExtension 16.0, *)
+struct LockScreenProView: View {
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    Group {
+      switch family {
+      case .accessoryCircular:
+        ZStack {
+          AccessoryWidgetBackground()
+          Image(systemName: "lock.fill")
+        }
+      case .accessoryInline:
+        Text("Trove Pro")
+      default:
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Trove").font(.headline)
+          Text("Lock Screen widgets come with Pro").font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .widgetURL(URL(string: "trove://pro/widgets"))
+    .lockScreenBackground(circular: family == .accessoryCircular)
+  }
+}
+
 @available(iOSApplicationExtension 16.0, *)
 struct LockScreenView: View {
   @Environment(\.widgetFamily) private var family
@@ -490,9 +546,12 @@ struct FamilyRouter: View {
   let entry: TroveEntry
 
   var body: some View {
+    let pro = entry.snapshot?.pro ?? true
     switch family {
     case .accessoryCircular, .accessoryRectangular, .accessoryInline:
-      LockScreenView(entry: entry)
+      if pro { LockScreenView(entry: entry) } else { LockScreenProView() }
+    case .systemLarge:
+      if pro { HomeWidgetView(entry: entry) } else { ProUpsellView(entry: entry) }
     default:
       HomeWidgetView(entry: entry)
     }

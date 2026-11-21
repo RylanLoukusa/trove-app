@@ -22,6 +22,8 @@ export type MenuAction = {
   label: string;
   // Shown on the right, e.g. the current setting.
   detail?: string;
+  // A small tag after the label, e.g. "Pro" on a feature that needs it.
+  badge?: string;
   icon?: ReactNode;
   destructive?: boolean;
   // Starts a new group, with a gap above it.
@@ -110,9 +112,10 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                 <View accessibilityRole="radiogroup" accessibilityLabel={action.label} style={styles.setting}>
                   <View style={styles.settingLabel}>
                     {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-                    <Text numberOfLines={1} style={styles.label}>
+                    <Text numberOfLines={1} style={[styles.label, !!action.badge && styles.labelWithBadge]}>
                       {action.label}
                     </Text>
+                    {!!action.badge && <Badge text={action.badge} styles={styles} />}
                   </View>
                   {choiceRuns(action.choices).map((run, runIndex) => (
                     <View key={runIndex} style={!!action.icon && styles.choicesInset}>
@@ -149,9 +152,13 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 >
                   {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-                  <Text numberOfLines={1} style={[styles.label, action.destructive && styles.labelDestructive]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.label, action.destructive && styles.labelDestructive, !!action.badge && styles.labelWithBadge]}
+                  >
                     {action.label}
                   </Text>
+                  {!!action.badge && <Badge text={action.badge} styles={styles} />}
                   {!!action.detail && (
                     <Text numberOfLines={1} style={styles.detail}>
                       {action.detail}
@@ -167,12 +174,35 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
   );
 };
 
+const Badge = ({ text, styles }: { text: string; styles: ReturnType<typeof createStyles> }) => (
+  <View style={styles.badge}>
+    <Text style={styles.badgeText}>{text}</Text>
+  </View>
+);
+
 const ICON_WIDTH = 26;
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     backdrop: {
       backgroundColor: "rgba(0, 0, 0, 0.32)",
+    },
+    badge: {
+      backgroundColor: withAlpha(colors.accent, 0.16),
+      borderRadius: 6,
+      marginLeft: spacing.xs,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    badgeText: {
+      color: colors.accentDark,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    labelWithBadge: {
+      flexBasis: "auto",
+      flexGrow: 0,
+      flexShrink: 1,
     },
     card: {
       backgroundColor: colors.surface,

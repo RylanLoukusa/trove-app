@@ -45,6 +45,9 @@ export type WidgetSnapshot = {
   day: string;
   // Light or dark, as chosen in Trove's settings, or "system" to follow the phone.
   appearance?: "light" | "dark" | "system";
+  // False on the free plan: the large and Lock Screen widgets then ask for
+  // Pro instead of showing lists. Missing (an older app) counts as true.
+  pro?: boolean;
   // "pinned": lists pinned to Home. "recent": nothing is pinned, so the
   // lists changed most recently.
   source: "pinned" | "recent" | "none";
@@ -118,6 +121,7 @@ export const buildWidgetSnapshot = (
   now: Date = new Date(),
   priorityOptions: TagOption[] = [],
   appearance: "light" | "dark" | "system" = "system",
+  pro = true,
 ): WidgetSnapshot => {
   const usable = lists.filter((list) => list.type === "list" && !list.isTemplate);
   const sorted = sortListsByActivity(usable, listActivityTimes(usable, entries));
@@ -148,6 +152,7 @@ export const buildWidgetSnapshot = (
     updatedAt: now.toISOString(),
     day: toDateKey(now),
     appearance,
+    pro,
     source:
       chosen.length === 0
         ? "none"

@@ -12,7 +12,8 @@ const DEBOUNCE_MS = 1200;
 // Keeps the home screen widget showing Today, This week and the pinned
 // lists (or the latest ones) as they change here or arrive from another
 // device, and catches up on a new day when the app comes back.
-export const useWidgetSync = (enabled: boolean): void => {
+// pro: whether the large and Lock Screen widgets may show lists.
+export const useWidgetSync = (enabled: boolean, pro = true): void => {
   const { items, listEntries, isReady, tagGroups, tagOptions } = useTrove();
   // The widget follows the app's Light, Dark or System setting.
   const { preference: appearance } = useThemePreference();
@@ -30,7 +31,7 @@ export const useWidgetSync = (enabled: boolean): void => {
   useEffect(() => {
     if (!enabled || !isReady || !widgetsSupported()) return;
     const handle = setTimeout(() => {
-      const snapshot = buildWidgetSnapshot(items, listEntries ?? [], new Date(), priorityOptions, appearance);
+      const snapshot = buildWidgetSnapshot(items, listEntries ?? [], new Date(), priorityOptions, appearance, pro);
       const key = widgetSnapshotKey(snapshot);
       if (key === lastKey.current) return;
       void saveWidgetSnapshot(snapshot).then((saved) => {
@@ -38,7 +39,7 @@ export const useWidgetSync = (enabled: boolean): void => {
       });
     }, DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [enabled, isReady, items, listEntries, priorityOptions, day, appearance]);
+  }, [enabled, isReady, items, listEntries, priorityOptions, day, appearance, pro]);
 
   // Signed out: the widget stops showing this person's lists.
   useEffect(() => {
