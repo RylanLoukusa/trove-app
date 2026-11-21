@@ -30,6 +30,7 @@ import { ListScreen } from "./src/screens/ListScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { FeedbackScreen } from "./src/screens/FeedbackScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { PublicFolderPreviewScreen } from "./src/screens/PublicFolderPreview";
 import { PublicItemDetailScreen } from "./src/screens/PublicItemDetail";
@@ -240,6 +241,7 @@ function AppNavigator() {
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
             <Stack.Screen name="ShareList" component={ShareListScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
+            <Stack.Screen name="Feedback" component={FeedbackScreen} />
           </>
         ) : (
           <>

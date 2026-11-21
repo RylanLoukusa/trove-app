@@ -24,4 +24,5 @@ export type RootStackParamList = {
   ManageTags: undefined;
   AddEditTagGroup: { groupId?: string } | undefined;
   Paywall: { trigger: PaywallTrigger };
+  Feedback: undefined;
 };

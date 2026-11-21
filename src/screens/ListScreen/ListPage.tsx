@@ -36,6 +36,7 @@ import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
 import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
+import { noteListFinished } from "../../support/feedback";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
@@ -604,6 +605,14 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   // --- Menu ----------------------------------------------------------------
   const checkLines = entries.filter((entry) => entry.kind === "check");
   const doneLines = checkLines.filter((entry) => entry.checked);
+
+  // Checking off the last line is a good moment to ask for a rating.
+  const allDone = checkLines.length > 0 && doneLines.length === checkLines.length;
+  const wasAllDone = useRef(allDone);
+  useEffect(() => {
+    if (allDone && !wasAllDone.current) void noteListFinished();
+    wasAllDone.current = allDone;
+  }, [allDone]);
 
   const uncheckAll = () => {
     const ids = doneLines.map((entry) => targetOf(entry.id));

@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as StoreReview from "expo-store-review";
 import { Linking } from "react-native";
 
-import { feedbackMailUrl, noteDayForRating, RATING_AFTER_DAYS, sendFeedback, SUPPORT_EMAIL } from "./feedback";
+import { feedbackMailUrl, noteDayForRating, noteListFinished, RATING_AFTER_DAYS, sendFeedback, SUPPORT_EMAIL } from "./feedback";
 
 jest.mock("expo-store-review", () => ({
   hasAction: jest.fn(async () => true),
@@ -28,16 +28,19 @@ describe("feedback", () => {
     expect(open).toHaveBeenCalledWith(feedbackMailUrl());
   });
 
-  it("asks for a rating once, after Trove is opened on enough different days", async () => {
+  it("asks for a rating once, when a list is finished after a few days of use", async () => {
     await noteDayForRating("2026-11-01");
     await noteDayForRating("2026-11-01");
-    for (let day = 2; day < RATING_AFTER_DAYS; day += 1) await noteDayForRating(`2026-11-0${day}`);
+    await noteListFinished();
     expect(StoreReview.requestReview).not.toHaveBeenCalled();
 
-    await noteDayForRating("2026-11-09");
+    for (let day = 2; day <= RATING_AFTER_DAYS; day += 1) await noteDayForRating(`2026-11-0${day}`);
+    expect(StoreReview.requestReview).not.toHaveBeenCalled();
+
+    await noteListFinished();
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
 
-    await noteDayForRating("2026-11-10");
+    await noteListFinished();
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
   });
 });
