@@ -19,6 +19,7 @@ import { RootStackParamList } from "../../navigation/types";
 import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { LoginHero } from "./LoginHero";
 import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
@@ -199,7 +200,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
         <View style={styles.content}>
-          <Text style={styles.title}>Log in to Trove</Text>
+          <LoginHero showPreview={false} />
           <Text style={styles.body}>
             Supabase is not configured yet. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment.
           </Text>
@@ -228,7 +229,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       )}
       <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Log in to Trove</Text>
+        <LoginHero showPreview={!session?.user && authMode === "chooser"} />
         {session?.user ? (
           <>
             <Text style={styles.body}>You are already signed in. {getSignedInLabel(session)}.</Text>
