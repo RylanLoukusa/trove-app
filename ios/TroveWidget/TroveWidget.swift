@@ -110,6 +110,7 @@ struct Provider: TimelineProvider {
     version: 2,
     day: nil,
     appearance: nil,
+    pro: nil,
     source: "pinned",
     lists: [
       WidgetList(
