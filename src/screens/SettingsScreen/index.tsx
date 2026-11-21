@@ -10,6 +10,7 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
+import { rateTrove, sendFeedback } from "../../support/feedback";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { ThemePreference, useThemeColors, useThemePreference } from "../../theme/ThemeContext";
@@ -262,6 +263,26 @@ export const SettingsScreen = ({ navigation }: Props) => {
             style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
           >
             <Text style={styles.legalLinkText}>Restore purchases</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.sectionTitle}>Help and feedback</Text>
+        <View style={styles.legalLinks}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void sendFeedback()}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>Send feedback</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void rateTrove()}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>{Platform.OS === "ios" ? "Rate Trove on the App Store" : "Rate Trove"}</Text>
             <Text style={styles.legalLinkArrow}>›</Text>
           </Pressable>
         </View>

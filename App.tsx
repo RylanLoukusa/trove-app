@@ -14,6 +14,8 @@ import { EntitlementProvider, useEntitlement } from "./src/entitlements/Entitlem
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { useReminders } from "./src/reminders/useReminders";
+import { noteDayForRating } from "./src/support/feedback";
+import { toDateKey } from "./src/utils/listView";
 import { useWidgetSync } from "./src/widget/useWidgetSync";
 import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
@@ -93,6 +95,16 @@ function AppNavigator() {
   useReminders(!!session && !isPasswordRecovery && !isPlanLoading, isPro);
   useWidgetSync(!!session && !isPasswordRecovery, isPro);
   useShortcutCommands(!!session && !isPasswordRecovery);
+
+  // After Trove has been used on a few different days, ask once for a rating.
+  React.useEffect(() => {
+    if (!session || isPasswordRecovery || !isTroveReady) return;
+    void noteDayForRating(toDateKey(new Date()));
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void noteDayForRating(toDateKey(new Date()));
+    });
+    return () => subscription.remove();
+  }, [isPasswordRecovery, isTroveReady, session]);
 
   // Something shared into Trove from another app becomes a line on the Inbox
   // list of the folder that was picked (or of the top level).

@@ -36,6 +36,7 @@
     "expo-image-picker": "~17.0.11",
     "expo-notifications": "~0.32.17",
     "expo-status-bar": "~3.0.9",
+    "expo-store-review": "~9.0.9",
     "expo-video": "~3.0.16",
     "lucide-react-native": "^1.16.0",
     "react": "19.1.0",
