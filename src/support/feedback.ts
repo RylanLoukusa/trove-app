@@ -94,6 +94,11 @@ export const noteDayForRating = async (day: string): Promise<void> => {
 // really shows.
 export const noteListFinished = async (): Promise<void> => {
   try {
+    // Development builds ask every time, so the prompt can be tried out.
+    if (__DEV__) {
+      if (await StoreReview.hasAction()) await StoreReview.requestReview();
+      return;
+    }
     const state = await readRating();
     if (state.asked || state.days.length < RATING_AFTER_DAYS) return;
     await AsyncStorage.setItem(RATING_KEY, JSON.stringify({ ...state, asked: true }));

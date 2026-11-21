@@ -11,8 +11,14 @@ jest.mock("expo-store-review", () => ({
 }));
 
 describe("feedback", () => {
+  const devFlag = (globalThis as { __DEV__?: boolean }).__DEV__;
+  afterEach(() => {
+    (globalThis as { __DEV__?: boolean }).__DEV__ = devFlag;
+  });
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    (globalThis as { __DEV__?: boolean }).__DEV__ = false;
     await AsyncStorage.clear();
   });
 
@@ -42,5 +48,12 @@ describe("feedback", () => {
 
     await noteListFinished();
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks every time a list is finished in a development build", async () => {
+    (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+    await noteListFinished();
+    await noteListFinished();
+    expect(StoreReview.requestReview).toHaveBeenCalledTimes(2);
   });
 });
