@@ -2105,6 +2105,7 @@ const subscribeTroveRealtimeForUser = (
   onChange: () => void,
 ): TroveRealtimeSubscription => {
   let refreshHandle: ReturnType<typeof setTimeout> | null = null;
+  let missedChanges = false;
   const scheduleRefresh = () => {
     if (refreshHandle) {
       clearTimeout(refreshHandle);
@@ -2167,7 +2168,18 @@ const subscribeTroveRealtimeForUser = (
     )
     .subscribe((status, error) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn("Trove realtime subscription issue", status, error?.message ?? "");
+        missedChanges = true;
+        // The socket drops on reloads, sleep and network changes, and the
+        // client rejoins by itself, so only an unexpected failure is worth a
+        // warning.
+        const message = error?.message ?? "";
+        if (!message.startsWith("socket closed")) {
+          console.warn("Trove realtime subscription issue", status, message);
+        }
+      } else if (status === "SUBSCRIBED" && missedChanges) {
+        // Back after a drop: catch up on anything that changed meanwhile.
+        missedChanges = false;
+        scheduleRefresh();
       }
     });
 
