@@ -33,11 +33,18 @@ export const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       padding: spacing.md,
     },
-    // One line: a fixed height keeps the text and placeholder centered.
-    nameInput: {
-      fontSize: 16,
+    // iOS sets a one-line field's text low inside a padded box, so the box
+    // holds the height and centers a bare field in it.
+    nameBox: {
       height: 52,
+      justifyContent: "center",
       paddingVertical: 0,
+    },
+    nameInput: {
+      color: colors.ink,
+      fontSize: 16,
+      margin: 0,
+      padding: 0,
     },
     purposeInput: {
       lineHeight: 20,

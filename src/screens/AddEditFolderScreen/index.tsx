@@ -220,14 +220,16 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
 
         <View>
         <Text style={styles.label}>Name</Text>
-        <TextInput
-          accessibilityLabel="Name"
-          style={[styles.input, styles.nameInput]}
-          value={name}
-          onChangeText={setName}
-          placeholder="Weekend Ideas"
-          placeholderTextColor={colors.muted}
-        />
+        <View style={[styles.input, styles.nameBox]}>
+          <TextInput
+            accessibilityLabel="Name"
+            style={styles.nameInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Weekend Ideas"
+            placeholderTextColor={colors.muted}
+          />
+        </View>
         </View>
 
         <View>
