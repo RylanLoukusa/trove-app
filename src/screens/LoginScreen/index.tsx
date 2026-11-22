@@ -241,15 +241,19 @@ export const LoginScreen = ({ navigation }: Props) => {
               <View style={[styles.authButtonsStack, busy && styles.authOptionDisabled]}>
                 <GoogleSignInButton onPress={() => void onSignInWithGoogle()} disabled={busy} styles={styles} />
                 {isAppleAuthAvailable ? (
-                  <AppleAuthenticationButton
-                    buttonType={AppleAuthenticationButtonType.SIGN_IN}
-                    buttonStyle={AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-                    cornerRadius={8}
-                    onPress={() => {
-                      if (!busy) void onSignInWithApple();
-                    }}
-                    style={styles.appleButton}
-                  />
+                  // Apple's own outline is a hairline; drawing the border
+                  // here matches the Google and Email buttons.
+                  <View style={styles.appleButtonFrame}>
+                    <AppleAuthenticationButton
+                      buttonType={AppleAuthenticationButtonType.SIGN_IN}
+                      buttonStyle={AppleAuthenticationButtonStyle.WHITE}
+                      cornerRadius={7}
+                      onPress={() => {
+                        if (!busy) void onSignInWithApple();
+                      }}
+                      style={styles.appleButton}
+                    />
+                  </View>
                 ) : null}
                 <AppButton
                   label="Continue with Email"
