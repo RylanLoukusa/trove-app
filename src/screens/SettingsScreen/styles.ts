@@ -41,7 +41,7 @@ export const createStyles = (colors: ThemeColors) =>
     color: colors.ink,
     fontSize: 18,
     fontWeight: "900",
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
   },
   label: {
     color: colors.muted,
@@ -92,6 +92,42 @@ export const createStyles = (colors: ThemeColors) =>
     justifyContent: "space-between",
     minHeight: 52,
     padding: spacing.md,
+  },
+  rowDivider: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  rowEnd: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  rowDetail: {
+    color: colors.accentDark,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  cardBody: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.xs,
+  },
+  sectionNote: {
+    color: colors.muted,
+    fontSize: 14,
+    marginTop: spacing.xs,
+  },
+  dangerButton: {
+    marginTop: spacing.xl,
   },
   legalLinkPressed: {
     opacity: 0.7,

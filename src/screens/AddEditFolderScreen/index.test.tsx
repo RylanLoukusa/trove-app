@@ -129,7 +129,7 @@ describe("AddEditFolderScreen", () => {
 
     await fireEvent.press(screen.getByLabelText("Choose folder icon"));
     expect(screen.queryByLabelText("Use 👍 as folder icon")).toBeNull();
-    await fireEvent.press(screen.getByText("Use an emoji instead"));
+    await fireEvent.press(screen.getByText("Use an Emoji"));
     await fireEvent.press(screen.getByLabelText("Use 👍 as folder icon"));
     await fireEvent.press(screen.getByText("Save folder"));
 

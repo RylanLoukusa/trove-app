@@ -112,10 +112,7 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                 <View accessibilityRole="radiogroup" accessibilityLabel={action.label} style={styles.setting}>
                   <View style={styles.settingLabel}>
                     {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-                    <Text numberOfLines={1} style={[styles.label, !!action.badge && styles.labelWithBadge]}>
-                      {action.label}
-                    </Text>
-                    {!!action.badge && <Badge text={action.badge} styles={styles} />}
+                    <LabelWithBadge label={action.label} badge={action.badge} styles={styles} />
                   </View>
                   {choiceRuns(action.choices).map((run, runIndex) => (
                     <View key={runIndex} style={!!action.icon && styles.choicesInset}>
@@ -152,13 +149,7 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 >
                   {!!action.icon && <View style={styles.icon}>{action.icon}</View>}
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.label, action.destructive && styles.labelDestructive, !!action.badge && styles.labelWithBadge]}
-                  >
-                    {action.label}
-                  </Text>
-                  {!!action.badge && <Badge text={action.badge} styles={styles} />}
+                  <LabelWithBadge label={action.label} badge={action.badge} destructive={action.destructive} styles={styles} />
                   {!!action.detail && (
                     <Text numberOfLines={1} style={styles.detail}>
                       {action.detail}
@@ -174,11 +165,32 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
   );
 };
 
-const Badge = ({ text, styles }: { text: string; styles: ReturnType<typeof createStyles> }) => (
-  <View style={styles.badge}>
-    <Text style={styles.badgeText}>{text}</Text>
-  </View>
-);
+// The label fills the row; a badge such as "Pro" sits right after the words.
+const LabelWithBadge = ({
+  label,
+  badge,
+  destructive,
+  styles,
+}: {
+  label: string;
+  badge?: string;
+  destructive?: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) =>
+  badge ? (
+    <View style={styles.labelRow}>
+      <Text numberOfLines={1} style={[styles.labelText, styles.labelShrink, destructive && styles.labelDestructive]}>
+        {label}
+      </Text>
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{badge}</Text>
+      </View>
+    </View>
+  ) : (
+    <Text numberOfLines={1} style={[styles.label, destructive && styles.labelDestructive]}>
+      {label}
+    </Text>
+  );
 
 const ICON_WIDTH = 26;
 
@@ -199,9 +211,16 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 12,
       fontWeight: "700",
     },
-    labelWithBadge: {
-      flexBasis: "auto",
-      flexGrow: 0,
+    labelRow: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+    },
+    labelText: {
+      color: colors.ink,
+      fontSize: 17,
+    },
+    labelShrink: {
       flexShrink: 1,
     },
     card: {

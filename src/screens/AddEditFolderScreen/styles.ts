@@ -33,6 +33,12 @@ export const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       padding: spacing.md,
     },
+    // One line: a fixed height keeps the text and placeholder centered.
+    nameInput: {
+      fontSize: 16,
+      height: 52,
+      paddingVertical: 0,
+    },
     purposeInput: {
       lineHeight: 20,
       minHeight: 92,
@@ -98,8 +104,17 @@ export const createStyles = (colors: ThemeColors) =>
       borderColor: colors.accent,
     },
     emojiToggle: {
+      alignItems: "center",
       alignSelf: "flex-start",
-      paddingVertical: spacing.sm,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 9,
+      backgroundColor: colors.surface,
     },
     emojiToggleText: {
       color: colors.accentDark,
