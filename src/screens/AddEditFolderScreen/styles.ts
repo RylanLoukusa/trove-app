@@ -33,6 +33,19 @@ export const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       padding: spacing.md,
     },
+    // iOS sets a one-line field's text low inside a padded box, so the box
+    // holds the height and centers a bare field in it.
+    nameBox: {
+      height: 52,
+      justifyContent: "center",
+      paddingVertical: 0,
+    },
+    nameInput: {
+      color: colors.ink,
+      fontSize: 16,
+      margin: 0,
+      padding: 0,
+    },
     purposeInput: {
       lineHeight: 20,
       minHeight: 92,
@@ -98,8 +111,17 @@ export const createStyles = (colors: ThemeColors) =>
       borderColor: colors.accent,
     },
     emojiToggle: {
+      alignItems: "center",
       alignSelf: "flex-start",
-      paddingVertical: spacing.sm,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 9,
+      backgroundColor: colors.surface,
     },
     emojiToggleText: {
       color: colors.accentDark,

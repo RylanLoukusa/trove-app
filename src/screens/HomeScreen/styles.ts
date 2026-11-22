@@ -103,6 +103,19 @@ export const createStyles = (colors: ThemeColors) =>
       alignSelf: "flex-start",
       marginTop: spacing.sm,
     },
+    tipActions: {
+      flexDirection: "row",
+      gap: spacing.lg,
+      marginTop: spacing.sm,
+    },
+    tipNotNow: {
+      color: colors.muted,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    tipBubble: {
+      marginBottom: spacing.xs,
+    },
     welcomeButtonText: {
       color: colors.accentDark,
       fontSize: 15,

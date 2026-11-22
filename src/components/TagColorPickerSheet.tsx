@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
+import { SheetModal } from "./SheetModal";
 
 // Mirrors AddEditFolderScreen's FOLDER_COLORS palette so folder and tag colors read consistently.
 const TAG_COLORS = [
@@ -36,7 +37,7 @@ export const TagColorPickerSheet = ({ visible, selectedColor, onSelect, onClose 
   };
 
   return (
-    <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SheetModal visible={visible} onClose={onClose}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Color</Text>
@@ -81,7 +82,7 @@ export const TagColorPickerSheet = ({ visible, selectedColor, onSelect, onClose 
           })}
         </View>
       </ScrollView>
-    </Modal>
+    </SheetModal>
   );
 };
 

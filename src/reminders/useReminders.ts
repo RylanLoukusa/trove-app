@@ -10,7 +10,9 @@ const APPLY_DELAY_MS = 1500;
 
 // Keeps this device's reminders in step with the lines that have a time,
 // and opens the list when a reminder is tapped. Used once, near the root.
-export const useReminders = (enabled: boolean): void => {
+// Without Pro (allowed false) the plan is empty, so any reminders scheduled
+// earlier are cancelled.
+export const useReminders = (enabled: boolean, allowed = true): void => {
   const { isReady, items, listEntries } = useTrove();
   const lastPlan = useRef("");
   // Coming back to the app tries again, e.g. after reminders were allowed in
@@ -33,7 +35,7 @@ export const useReminders = (enabled: boolean): void => {
   useEffect(() => {
     if (!enabled || !isReady) return;
     const timer = setTimeout(() => {
-      const plan = planReminders(items, listEntries);
+      const plan = allowed ? planReminders(items, listEntries) : [];
       const signature = plan.map((reminder) => reminder.key).join(",");
       if (signature === lastPlan.current) return;
       void applyReminders(plan).then((applied) => {
@@ -41,5 +43,5 @@ export const useReminders = (enabled: boolean): void => {
       });
     }, APPLY_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [enabled, isReady, items, listEntries, wake]);
+  }, [allowed, enabled, isReady, items, listEntries, wake]);
 };

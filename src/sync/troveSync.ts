@@ -2092,12 +2092,20 @@ const ensureRemoteRowForUser = async (
   return { created: result.ok };
 };
 
+// Each subscription gets its own topic. supabase.channel() hands back an
+// existing channel with the same topic, and removeChannel() only drops it
+// once the server confirms the leave, so resubscribing right after an
+// unsubscribe could add a second set of listeners to the old channel; the
+// server then rejects the join with CHANNEL_ERROR.
+let realtimeSubscriptionCount = 0;
+
 const subscribeTroveRealtimeForUser = (
   supabase: SupabaseClient,
   userId: string,
   onChange: () => void,
 ): TroveRealtimeSubscription => {
   let refreshHandle: ReturnType<typeof setTimeout> | null = null;
+  let missedChanges = false;
   const scheduleRefresh = () => {
     if (refreshHandle) {
       clearTimeout(refreshHandle);
@@ -2107,7 +2115,7 @@ const subscribeTroveRealtimeForUser = (
   };
 
   const channel = supabase
-    .channel(`trove-sync:${userId}`)
+    .channel(`trove-sync:${userId}:${++realtimeSubscriptionCount}`)
     .on(
       "postgres_changes",
       {
@@ -2158,9 +2166,20 @@ const subscribeTroveRealtimeForUser = (
       { event: "*", schema: "public", table: "trove_tag_options" },
       scheduleRefresh,
     )
-    .subscribe((status) => {
+    .subscribe((status, error) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn("Trove realtime subscription issue", status);
+        missedChanges = true;
+        // The socket drops on reloads, sleep and network changes, and the
+        // client rejoins by itself, so only an unexpected failure is worth a
+        // warning.
+        const message = error?.message ?? "";
+        if (!message.startsWith("socket closed")) {
+          console.warn("Trove realtime subscription issue", status, message);
+        }
+      } else if (status === "SUBSCRIBED" && missedChanges) {
+        // Back after a drop: catch up on anything that changed meanwhile.
+        missedChanges = false;
+        scheduleRefresh();
       }
     });
 

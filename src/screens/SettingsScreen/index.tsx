@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
@@ -10,6 +10,8 @@ import { ScreenSkeleton, SkeletonBlock, SkeletonText } from "../../components";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
+import { rateTrove } from "../../support/feedback";
+import { useTips } from "../../tips/TipsContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { ThemePreference, useThemeColors, useThemePreference } from "../../theme/ThemeContext";
@@ -45,10 +47,11 @@ const SettingsSkeleton = () => {
 export const SettingsScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const tips = useTips();
   const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
   const { folders, isReady, items, resetToSeed, clearLocalData, getExportData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
-  const { restorePurchases } = useEntitlement();
+  const { isPro, presentPaywall, restorePurchases } = useEntitlement();
   const supabaseConfigured = useIsSupabaseConfigured();
 
   const [busy, setBusy] = useState(false);
@@ -154,6 +157,21 @@ export const SettingsScreen = ({ navigation }: Props) => {
     }
   }, []);
 
+  const row = (label: string, onPress: () => void, options: { first?: boolean; detail?: string } = {}) => (
+    <Pressable
+      key={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.legalLink, !options.first && styles.rowDivider, pressed && styles.legalLinkPressed]}
+    >
+      <Text style={styles.legalLinkText}>{label}</Text>
+      <View style={styles.rowEnd}>
+        {options.detail ? <Text style={styles.rowDetail}>{options.detail}</Text> : null}
+        <Text style={styles.legalLinkArrow}>›</Text>
+      </View>
+    </Pressable>
+  );
+
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
@@ -163,12 +181,36 @@ export const SettingsScreen = ({ navigation }: Props) => {
         ) : (
           <>
         <Text style={styles.title}>Settings</Text>
-        <Text style={styles.body}>
-          Trove works offline and keeps your lists and folders on this device. Sign in to sync them to
-          Supabase when configured.
-        </Text>
-        <Text style={styles.stat}>{folders.length} folders</Text>
-        <Text style={styles.stat}>{items.length} {items.length === 1 ? "list" : "lists"}</Text>
+
+        <Text style={styles.sectionTitle}>Account</Text>
+        {!supabaseConfigured ? (
+          <Text style={styles.body}>
+            Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see README) to enable cloud sync.
+          </Text>
+        ) : !isAuthReady ? (
+          <ActivityIndicator style={styles.button} />
+        ) : session?.user ? (
+          <View style={styles.card}>
+            <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
+            <Text style={styles.cardBody}>Sync is on, so your lists are backed up and on all your devices.</Text>
+            <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardBody}>
+              Your lists are only on this device. Sign in to back them up and use them on all your devices.
+            </Text>
+            <AppButton label="Go to login screen" variant="secondary" onPress={onPressLogin} style={styles.button} />
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Trove Pro</Text>
+        <View style={styles.legalLinks}>
+          {isPro
+            ? row("Trove Pro", () => presentPaywall("general"), { first: true, detail: "Active" })
+            : row("See what Pro adds", () => presentPaywall("general"), { first: true })}
+          {row("Restore purchases", () => void onRestorePurchases())}
+        </View>
 
         <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.themeRow}>
@@ -188,97 +230,57 @@ export const SettingsScreen = ({ navigation }: Props) => {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>Organization</Text>
+        <Text style={styles.sectionTitle}>Lists</Text>
         <View style={styles.legalLinks}>
-          <Pressable onPress={onPressManageTags} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
-            <Text style={styles.legalLinkText}>Manage Tags</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.sectionTitle}>Your data</Text>
-        <View style={styles.legalLinks}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void exportData("text")}
-            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
-          >
-            <Text style={styles.legalLinkText}>Export everything as text</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void exportData("backup")}
-            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
-          >
-            <Text style={styles.legalLinkText}>Export a backup file</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
+          {row("Manage tags", onPressManageTags, { first: true })}
+          {row("Siri and Shortcuts", showShortcutsHelp)}
         </View>
 
         <Text style={styles.sectionTitle}>Help</Text>
         <View style={styles.legalLinks}>
-          <Pressable onPress={onPressOnboarding} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
-            <Text style={styles.legalLinkText}>How Trove works</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={showShortcutsHelp}
-            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
-          >
-            <Text style={styles.legalLinkText}>Siri and Shortcuts</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
+          {row("How Trove works", onPressOnboarding, { first: true })}
+          <View style={[styles.legalLink, styles.rowDivider]}>
+            <Text style={styles.legalLinkText}>Show tips</Text>
+            <Switch
+              accessibilityLabel="Show tips"
+              value={tips.enabled}
+              onValueChange={tips.setEnabled}
+              trackColor={{ true: colors.accentDark }}
+            />
+          </View>
+          {row("See all tips again", () => {
+            tips.showAgain();
+            Alert.alert("Tips are back", "You'll see each tip again as you use Trove.");
+          })}
         </View>
 
-        <Text style={styles.sectionTitle}>Account</Text>
-        {!supabaseConfigured ? (
-          <Text style={styles.body}>
-            Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see README) to enable cloud sync.
-          </Text>
-        ) : !isAuthReady ? (
-          <ActivityIndicator style={styles.button} />
-        ) : session?.user ? (
-          <>
-            <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
-            <Text style={styles.body}>Cloud sync is on, so your lists and folders are backed up and on all your devices.</Text>
-            <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
-            <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.button} />
-          </>
-        ) : (
-          <>
-            <Text style={styles.body}>
-              Sign in to sync Trove with Supabase. You can also create a new account from the login screen.
-            </Text>
-            <AppButton label="Go to login screen" variant="secondary" onPress={onPressLogin} style={styles.button} />
-          </>
-        )}
-
-        <Text style={styles.sectionTitle}>Purchases</Text>
+        <Text style={styles.sectionTitle}>Feedback</Text>
         <View style={styles.legalLinks}>
-          <Pressable
-            onPress={() => void onRestorePurchases()}
-            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
-          >
-            <Text style={styles.legalLinkText}>Restore purchases</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
+          {row("Send feedback", () => navigation.navigate("Feedback"), { first: true })}
+          {row(Platform.OS === "ios" ? "Rate Trove on the App Store" : "Rate Trove", () => void rateTrove())}
+        </View>
+
+        <Text style={styles.sectionTitle}>Your data</Text>
+        <Text style={styles.sectionNote}>
+          {folders.length} {folders.length === 1 ? "folder" : "folders"} and {items.length} {items.length === 1 ? "list" : "lists"}
+        </Text>
+        <View style={styles.legalLinks}>
+          {row("Export everything as text", () => void exportData("text"), { first: true })}
+          {row("Export a backup file", () => void exportData("backup"))}
         </View>
 
         <Text style={styles.sectionTitle}>Legal</Text>
         <View style={styles.legalLinks}>
-          <Pressable onPress={() => void openLegalLink(PRIVACY_POLICY_URL)} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
-            <Text style={styles.legalLinkText}>Privacy Policy</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
-          <Pressable onPress={() => void openLegalLink(TERMS_OF_USE_URL)} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
-            <Text style={styles.legalLinkText}>Terms of Use</Text>
-            <Text style={styles.legalLinkArrow}>›</Text>
-          </Pressable>
+          {row("Privacy Policy", () => void openLegalLink(PRIVACY_POLICY_URL), { first: true })}
+          {row("Terms of Use", () => void openLegalLink(TERMS_OF_USE_URL))}
         </View>
 
-        <AppButton label="Reset to sample data" variant="danger" onPress={confirmReset} style={styles.button} />
+        {supabaseConfigured && isAuthReady && session?.user ? (
+          <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.dangerButton} />
+        ) : null}
+        {__DEV__ ? (
+          <AppButton label="Reset to sample data" variant="danger" onPress={confirmReset} style={styles.button} />
+        ) : null}
         {busy ? <ActivityIndicator style={styles.button} /> : null}
           </>
         )}

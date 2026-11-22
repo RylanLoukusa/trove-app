@@ -1,9 +1,10 @@
 import React, { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { isAppTourDone, markAppTourDone } from "../storage/appTour";
+import { navigationRef } from "../navigation/navigationRef";
+import { isAppTourDone, isIntroSeen, markAppTourDone, markIntroSeen } from "../storage/appTour";
 import { useTrove } from "../storage/storage";
 
-// The tour is a single welcome note on Home. The lists teach the rest: a new
+// The tour is a few intro slides, once, then a single welcome note on Home. The lists teach the rest: a new
 // account starts with a "Welcome to Trove" list that walks through the gestures.
 export const WELCOME_NOTE = {
   title: "Welcome to Trove",
@@ -31,6 +32,11 @@ export const OnboardingTourProvider = ({ children }: { children: ReactNode }) =>
     if (!isReady || showWelcome || startAttemptedForKeyRef.current === userKey) return;
     startAttemptedForKeyRef.current = userKey;
     void (async () => {
+      // First the short intro slides, once; the welcome note waits under them.
+      if (!(await isIntroSeen(userKey)) && navigationRef.isReady()) {
+        await markIntroSeen(userKey);
+        navigationRef.navigate("Onboarding");
+      }
       const done = await isAppTourDone(userKey);
       if (!done) setShowWelcome(true);
     })();

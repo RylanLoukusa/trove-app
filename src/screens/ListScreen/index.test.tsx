@@ -19,8 +19,11 @@ jest.mock("../../auth/AuthContext", () => ({
   useAuth: () => ({ session: null, isAuthReady: true }),
 }));
 
+// Pro unless a test says otherwise; presentPaywall records what asked for it.
+const mockPlan = { isPro: true };
+const mockPresentPaywall = jest.fn();
 jest.mock("../../entitlements/EntitlementContext", () => ({
-  useEntitlement: () => ({ isPro: false, isLoading: false }),
+  useEntitlement: () => ({ isPro: mockPlan.isPro, isLoading: false, presentPaywall: mockPresentPaywall }),
 }));
 
 jest.mock("../../lib/supabase", () => ({
@@ -604,6 +607,7 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual([
         "Share list",
+        "Send as text",
         "Select lines",
         "Pin to Home",
         "Sort",
@@ -621,11 +625,10 @@ describe("ListScreen", () => {
       expect(menuActions()).toEqual([
         "Show as",
         "Checked lines",
-        "Uncheck all by itself",
+        "Uncheck automatically",
         "Add lines automatically",
         "Add lines from another list",
         "Save as template",
-        "Send as text",
       ]);
       expect(dismissKeyboard).toHaveBeenCalled();
     });
@@ -647,7 +650,7 @@ describe("ListScreen", () => {
 
       expect(menuActions()).toEqual(["Share list", "Pin to Home", "Sort", "Duplicate", "List settings", "Move to folder", "Archive", "Delete list"]);
       await fireEvent.press(screen.getByLabelText("List settings"));
-      expect(menuActions()).toEqual(["Show as", "Checked lines", "Uncheck all by itself", "Add lines automatically", "Save as template"]);
+      expect(menuActions()).toEqual(["Show as", "Checked lines", "Uncheck automatically", "Add lines automatically", "Save as template"]);
     });
 
     it("closes when the page behind it is tapped", async () => {
@@ -1288,6 +1291,54 @@ describe("ListScreen", () => {
     });
   });
 
+  describe("on the free plan", () => {
+    beforeEach(() => {
+      mockPlan.isPro = false;
+    });
+    afterEach(() => {
+      mockPlan.isPro = true;
+    });
+
+    it("still shows the Pro settings, marked Pro", async () => {
+      await openList("chores");
+      await openMenu();
+      await reach("Add lines automatically");
+
+      expect(screen.getAllByText("Pro").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByLabelText("Uncheck automatically")).toBeTruthy();
+      expect(screen.getByLabelText("Add lines automatically")).toBeTruthy();
+    });
+
+    it("opens the paywall instead of turning on a rule", async () => {
+      await openList("chores");
+      await openMenu();
+
+      await pick("Add lines automatically", "Next 7 days");
+      expect(mockPresentPaywall).toHaveBeenCalledWith("automation");
+      expect(savedList("chores")!.focusRule).toBeUndefined();
+    });
+
+    it("opens the paywall instead of unchecking on a schedule", async () => {
+      await openList("chores");
+      await openMenu();
+
+      await pick("Uncheck automatically", "Every day");
+      expect(mockPresentPaywall).toHaveBeenCalledWith("automation");
+      expect(savedList("chores")!.resetRule).toBeUndefined();
+    });
+
+    it("keeps three templates of your own, then asks for Pro", async () => {
+      await openList("chores");
+      for (let count = 0; count < 3; count += 1) await choose("Save as template");
+      expect(trove().templates).toHaveLength(3);
+      expect(mockPresentPaywall).not.toHaveBeenCalled();
+
+      await choose("Save as template");
+      expect(trove().templates).toHaveLength(3);
+      expect(mockPresentPaywall).toHaveBeenCalledWith("templates");
+    });
+  });
+
   describe("a list someone else shared", () => {
     const sharedTo = (accessRole: "editor" | "viewer"): Partial<TroveData> => ({
       folders: [folder("family", "Family", { accessRole, ownerId: "someone-else" })],
@@ -1307,9 +1358,9 @@ describe("ListScreen", () => {
       expect(screen.queryByLabelText(ADD_LINE)).toBeNull();
 
       await openMenu();
-      expect(menuActions()).toEqual(["Sort", "Duplicate", "List settings"]);
+      expect(menuActions()).toEqual(["Send as text", "Sort", "Duplicate", "List settings"]);
       await fireEvent.press(screen.getByLabelText("List settings"));
-      expect(menuActions()).toEqual(["Checked lines", "Save as template", "Send as text"]);
+      expect(menuActions()).toEqual(["Checked lines", "Save as template"]);
     });
 
     it("isn't thrown away for being empty when a viewer leaves it", async () => {

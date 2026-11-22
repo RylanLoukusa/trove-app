@@ -10,12 +10,15 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { clearPendingFolderInviteToken, readPendingFolderInviteToken } from "./src/collaboration/folderSharing";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
-import { EntitlementProvider } from "./src/entitlements/EntitlementContext";
+import { EntitlementProvider, useEntitlement } from "./src/entitlements/EntitlementContext";
 import { initSentry } from "./src/lib/sentry";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { useReminders } from "./src/reminders/useReminders";
+import { noteDayForRating } from "./src/support/feedback";
+import { toDateKey } from "./src/utils/listView";
 import { useWidgetSync } from "./src/widget/useWidgetSync";
 import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
+import { TipsProvider } from "./src/tips/TipsContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
@@ -28,6 +31,7 @@ import { ListScreen } from "./src/screens/ListScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { ManageTagsScreen } from "./src/screens/ManageTagsScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { FeedbackScreen } from "./src/screens/FeedbackScreen";
 import { PaywallScreen } from "./src/screens/PaywallScreen";
 import { PublicFolderPreviewScreen } from "./src/screens/PublicFolderPreview";
 import { PublicItemDetailScreen } from "./src/screens/PublicItemDetail";
@@ -71,6 +75,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       Home: "home",
       List: "item/:listId",
       Login: "login",
+      // The large and Lock Screen widgets open this on the free plan.
+      Paywall: "pro/:trigger",
       Profile: "profile",
       Search: "search",
       Settings: "settings",
@@ -86,9 +92,21 @@ function AppNavigator() {
   const themeColors = useThemeColors();
   const lastHandledSharedImportId = React.useRef<string | null>(null);
   const lastHandledInviteToken = React.useRef<string | null>(null);
-  useReminders(!!session && !isPasswordRecovery);
-  useWidgetSync(!!session && !isPasswordRecovery);
+  const { isPro, isLoading: isPlanLoading } = useEntitlement();
+  // Reminders at a time are part of Pro; without it, none are scheduled.
+  useReminders(!!session && !isPasswordRecovery && !isPlanLoading, isPro);
+  useWidgetSync(!!session && !isPasswordRecovery, isPro);
   useShortcutCommands(!!session && !isPasswordRecovery);
+
+  // After Trove has been used on a few different days, ask once for a rating.
+  React.useEffect(() => {
+    if (!session || isPasswordRecovery || !isTroveReady) return;
+    void noteDayForRating(toDateKey(new Date()));
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void noteDayForRating(toDateKey(new Date()));
+    });
+    return () => subscription.remove();
+  }, [isPasswordRecovery, isTroveReady, session]);
 
   // Something shared into Trove from another app becomes a line on the Inbox
   // list of the folder that was picked (or of the top level).
@@ -224,6 +242,7 @@ function AppNavigator() {
             <Stack.Screen name="ShareFolder" component={ShareFolderScreen} />
             <Stack.Screen name="ShareList" component={ShareListScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} options={{ presentation: "modal" }} />
+            <Stack.Screen name="Feedback" component={FeedbackScreen} />
           </>
         ) : (
           <>
@@ -248,7 +267,9 @@ function App() {
               <EntitlementProvider>
                 <TroveProvider>
                   <OnboardingTourProvider>
-                    <AppNavigator />
+                    <TipsProvider>
+                      <AppNavigator />
+                    </TipsProvider>
                   </OnboardingTourProvider>
                 </TroveProvider>
               </EntitlementProvider>

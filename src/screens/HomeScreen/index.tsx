@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { Archive, Ellipsis, LayoutTemplate, LogIn, LogOut, Search, Settings, Sparkles, Trash2, UserRound } from "lucide-react-native";
@@ -21,6 +21,8 @@ import { isSharedAccess } from "../../utils/access";
 import { folderLabel, getDescendantFolderIds, getVisibleRootFolders } from "../../utils/folderTree";
 import { listActivityTimes, sortListsByActivity, UNTITLED_LIST_TITLE } from "../../utils/listEntries";
 import { createStyles } from "./styles";
+import { TipBubble } from "../../tips/TipBubble";
+import { TIP_TEXT, useTip, useTips, WIDGET_TIP_AFTER_DAYS } from "../../tips/TipsContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -81,6 +83,20 @@ export const HomeScreen = ({ navigation }: Props) => {
     onBrowse: useCallback(() => navigation.navigate("Templates"), [navigation]),
   });
 
+  // Tips: holding a list opens its actions; and, after a few days, the widget.
+  const { daysUsed } = useTips();
+  const holdTip = useTip("holdList", isReady && !showWelcome && pinnedLists.length + lists.length >= 3);
+  const widgetTip = useTip("widget", isReady && !showWelcome && daysUsed >= WIDGET_TIP_AFTER_DAYS);
+  const showWidgetHowTo = useCallback(() => {
+    widgetTip.dismiss();
+    Alert.alert(
+      "Add the Trove widget",
+      Platform.OS === "ios"
+        ? "Press and hold an empty spot on your Home Screen, tap Edit, then Add Widget. Search for Trove and pick a size. Lock Screen widgets are added the same way from the Lock Screen."
+        : "Press and hold an empty spot on your Home Screen, tap Widgets, then find Trove and drag it where you like.",
+    );
+  }, [widgetTip]);
+
   const renderListRow = (list: (typeof lists)[number]) => (
     <ListRow
       key={list.id}
@@ -88,7 +104,10 @@ export const HomeScreen = ({ navigation }: Props) => {
       activityAt={activity.get(list.id)}
       folderLabel={folderLabel(folders, list.folderId)}
       onPress={() => navigation.navigate("List", { listId: list.id })}
-      onLongPress={() => openListActions(list.id)}
+      onLongPress={() => {
+        holdTip.dismiss();
+        openListActions(list.id);
+      }}
     />
   );
 
@@ -262,6 +281,22 @@ export const HomeScreen = ({ navigation }: Props) => {
             )}
 
             <SectionHeader title="Lists" />
+            {widgetTip.shown ? (
+              <View style={styles.welcome}>
+                <Text style={styles.welcomeTitle}>Trove on your Home Screen</Text>
+                <Text style={styles.welcomeBody}>{TIP_TEXT.widget}</Text>
+                <View style={styles.tipActions}>
+                  <Pressable accessibilityRole="button" hitSlop={8} onPress={showWidgetHowTo}>
+                    <Text style={styles.welcomeButtonText}>Show me how</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" hitSlop={8} onPress={widgetTip.dismiss}>
+                    <Text style={styles.tipNotNow}>Not now</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : holdTip.shown ? (
+              <TipBubble text={TIP_TEXT.holdList} pointer="down" onClose={holdTip.dismiss} style={styles.tipBubble} />
+            ) : null}
             {lists.length > 0 ? (
               <RowGroup>{lists.map(renderListRow)}</RowGroup>
             ) : (

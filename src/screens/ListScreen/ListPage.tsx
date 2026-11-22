@@ -35,6 +35,10 @@ import { MenuAction, MenuSheet } from "../../components/MenuSheet";
 import { NavBar, NavIconButton, NavTextButton } from "../../components/NavBar";
 import type { ListTarget } from "../../components/SendToListSheet";
 import { useAuth } from "../../auth/AuthContext";
+import { useEntitlement } from "../../entitlements/EntitlementContext";
+import { noteListFinished } from "../../support/feedback";
+import { TipBubble } from "../../tips/TipBubble";
+import { TIP_TEXT, useTip } from "../../tips/TipsContext";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
@@ -49,6 +53,7 @@ import { accessRoleLabel, isSharedAccess } from "../../utils/access";
 import { listToText } from "../../utils/exportData";
 import { formatPrice, listTotal } from "../../utils/fields";
 import { getFolderPathLabel } from "../../utils/folderTree";
+import { requiresProForTemplate } from "../../utils/limits";
 import {
   canListBorrowLines,
   focusReferenceId,
@@ -154,7 +159,19 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     removeFromFocusList,
     canEditItem,
     leaveSharedList,
+    templates,
   } = useTrove();
+  const { isPro, presentPaywall } = useEntitlement();
+  // Pro features stay in the menu for everyone, marked Pro; on the free plan
+  // choosing one opens the paywall instead.
+  const proBadge = isPro ? undefined : "Pro";
+  const askForPro = useCallback(
+    (trigger: "automation" | "templates") => {
+      setSettingsOpen(false);
+      presentPaywall(trigger);
+    },
+    [presentPaywall],
+  );
   const isFocus = isFocusList(item);
   const canEdit = canEditItem(item.id);
   const rule = isFocus ? item.focusRule : undefined;
@@ -572,10 +589,15 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     if (copy) navigation.replace("List", { listId: copy.id });
   }, [copyItem, item.id, navigation]);
 
+  const atTemplateLimit = requiresProForTemplate(isPro, (templates ?? []).length);
   const saveAsTemplate = useCallback(() => {
+    if (atTemplateLimit) {
+      askForPro("templates");
+      return;
+    }
     const template = copyItem(item.id, { title: titleOf(item), fresh: true, template: true });
     if (template) viewRef.current?.showToast("Saved as a template");
-  }, [copyItem, item, titleOf]);
+  }, [askForPro, atTemplateLimit, copyItem, item, titleOf]);
 
   const useTemplate = useCallback(() => {
     const list = copyItem(item.id, { title: titleOf(item), fresh: true });
@@ -585,6 +607,18 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
   // --- Menu ----------------------------------------------------------------
   const checkLines = entries.filter((entry) => entry.kind === "check");
   const doneLines = checkLines.filter((entry) => entry.checked);
+
+  // Checking off the last line is a good moment to ask for a rating.
+  const allDone = checkLines.length > 0 && doneLines.length === checkLines.length;
+  const wasAllDone = useRef(allDone);
+  useEffect(() => {
+    if (allDone && !wasAllDone.current) void noteListFinished();
+    wasAllDone.current = allDone;
+  }, [allDone]);
+
+  // Tips: what happens to checked lines is a setting, and Today fills itself.
+  const checkedTip = useTip("checkedLines", canEdit && !isFocus && doneLines.length >= 2 && !selecting);
+  const todayTip = useTip("todayList", isFocus && item.focusRule === "due_today");
 
   const uncheckAll = () => {
     const ids = doneLines.map((entry) => targetOf(entry.id));
@@ -653,7 +687,8 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       ? [
           {
             key: "reset",
-            label: "Uncheck all by itself",
+            label: "Uncheck automatically",
+            badge: proBadge,
             icon: <RotateCcw size={20} color={iconTone} />,
             choices: [
               { value: "off", label: "Never" },
@@ -661,7 +696,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             ],
             selectedValue: item.resetRule ?? "off",
             onChoose: (value: string) =>
-              updateItem(
+              !isPro && value !== "off"
+                ? askForPro("automation")
+                : updateItem(
                 item.id,
                 value === "off"
                   ? { resetRule: undefined, resetAt: undefined }
@@ -675,6 +712,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "rule",
             label: "Add lines automatically",
+            badge: proBadge,
             icon: <Sparkles size={20} color={iconTone} />,
             // The date rules, then every tag under its group's name.
             choices: [
@@ -685,6 +723,10 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             ],
             selectedValue: rule ?? (ruleTagId ? `${TAG_RULE_PREFIX}${ruleTagId}` : "none"),
             onChoose: (value: string) => {
+              if (!isPro && value !== "none") {
+                askForPro("automation");
+                return;
+              }
               if (value.startsWith(TAG_RULE_PREFIX)) {
                 updateItem(item.id, { listMode: "focus", focusRule: undefined, ruleTagId: value.slice(TAG_RULE_PREFIX.length) });
                 return;
@@ -705,8 +747,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "pull",
             label: "Add lines from another list",
+            badge: proBadge,
             icon: <ListPlus size={20} color={iconTone} />,
-            onPress: () => setSheet("pull"),
+            onPress: () => (isPro ? setSheet("pull") : presentPaywall("automation")),
           },
         ]
       : []),
@@ -715,14 +758,12 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           {
             key: "template",
             label: "Save as template",
+            badge: atTemplateLimit ? "Pro" : undefined,
             icon: <LayoutTemplate size={20} color={iconTone} />,
             separated: true,
             onPress: saveAsTemplate,
           },
         ]
-      : []),
-    ...(entries.length > 0
-      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
       : []),
   ];
   const menuActions: MenuAction[] = [
@@ -736,6 +777,9 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
             onPress: () => navigation.navigate("ShareList", { listId: item.id }),
           },
         ]
+      : []),
+    ...(entries.length > 0
+      ? [{ key: "send", label: "Send as text", icon: <Share2 size={20} color={iconTone} />, onPress: sendAsText }]
       : []),
     ...(canEdit && entries.length > 0
       ? [{ key: "select", label: "Select lines", icon: <CircleCheck size={20} color={iconTone} />, onPress: () => setSelecting(true) }]
@@ -918,6 +962,11 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       <Text numberOfLines={1} style={styles.caption}>
         {caption}
       </Text>
+      {checkedTip.shown ? (
+        <TipBubble text={TIP_TEXT.checkedLines} onClose={checkedTip.dismiss} style={styles.tip} />
+      ) : todayTip.shown ? (
+        <TipBubble text={TIP_TEXT.todayList} onClose={todayTip.dismiss} style={styles.tip} />
+      ) : null}
     </View>
   );
 
@@ -935,6 +984,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
                 label="List options"
                 onPress={() => {
                   Keyboard.dismiss();
+                  checkedTip.dismiss();
                   setMenuOpen(true);
                 }}
               >
@@ -945,7 +995,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           )
         }
       />
-      <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.body} behavior="padding">
         <ListEntriesView
           ref={viewRef}
           entries={entries}
@@ -1043,6 +1093,9 @@ const createStyles = (colors: ThemeColors) =>
     titleInput: {
       margin: 0,
       padding: 0,
+    },
+    tip: {
+      marginTop: spacing.sm,
     },
     caption: {
       color: colors.muted,

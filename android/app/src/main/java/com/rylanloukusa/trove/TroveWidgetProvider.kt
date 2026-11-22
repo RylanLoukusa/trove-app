@@ -102,6 +102,13 @@ class TroveWidgetProvider : AppWidgetProvider() {
         "system"
       }
       applyAppearance(views, appearance)
+      // On the free plan a tall widget shows one list, like a smaller one:
+      // Today and This week together come with Pro. Missing means Pro.
+      val pro = try {
+        json?.let { JSONObject(it).optBoolean("pro", true) } ?: true
+      } catch (error: Exception) {
+        true
+      }
       val first = lists?.optJSONObject(0)
       val second = lists?.optJSONObject(1)
       val tall = manager.getAppWidgetOptions(widgetId)
@@ -121,7 +128,7 @@ class TroveWidgetProvider : AppWidgetProvider() {
         return views
       }
 
-      val showSecond = tall && second != null
+      val showSecond = pro && tall && second != null
       // With one list, it gets the lines the second would have had.
       fill(context, views, FIRST, first, if (showSecond) 4 else FIRST.lines.size)
       views.setOnClickPendingIntent(R.id.trove_widget_root, openIntent(context, first.optString("url", "trove://home")))

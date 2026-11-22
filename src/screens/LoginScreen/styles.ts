@@ -88,8 +88,16 @@ export const createStyles = (colors: ThemeColors) =>
       fontSize: 15,
       fontWeight: "800",
     },
-    appleButton: {
+    appleButtonFrame: {
+      borderColor: "#000000",
+      borderRadius: 8,
+      borderWidth: 1,
       height: 48,
+      overflow: "hidden",
+      width: "100%",
+    },
+    appleButton: {
+      height: "100%",
       width: "100%",
     },
     emailButton: {

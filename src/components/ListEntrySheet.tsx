@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
-import { askForReminderPermission } from "../reminders/notifications";
+import { useEntitlement } from "../entitlements/EntitlementContext";
+import { askForReminderPermission, reminderPermission } from "../reminders/notifications";
+import { TIP_TEXT, useTips } from "../tips/TipsContext";
 import type { ListEntry, RepeatRule, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, toDateKey, withPriority } from "../utils/listView";
 import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
 import { ListPerson, personLabel } from "../collaboration/listPeople";
 import { formatPrice, formatQuantity, MAX_RATING, normalizeLink, parsePrice, parseQuantity } from "../utils/fields";
+import { SheetModal } from "./SheetModal";
 
 type Details = Pick<
   ListEntry,
@@ -65,6 +68,8 @@ export const ListEntrySheet = ({
 }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { isPro, presentPaywall } = useEntitlement();
+  const tips = useTips();
   const [text, setText] = useState("");
   const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [dueDraft, setDueDraft] = useState("");
@@ -152,6 +157,12 @@ export const ListEntrySheet = ({
   const priceInvalid = priceDraft.trim() !== "" && parsePrice(priceDraft) === null;
   const linkInvalid = linkDraft.trim() !== "" && normalizeLink(linkDraft) === null;
 
+  // The paywall opens once this sheet has slid away.
+  const seePro = () => {
+    close();
+    setTimeout(() => presentPaywall("reminders"), 400);
+  };
+
   const close = () => {
     if (entry && canEdit) {
       const updates: Partial<Details> = {};
@@ -207,11 +218,26 @@ export const ListEntrySheet = ({
   const setTime = (value: string | undefined) => {
     setDueTime(value);
     setTimeDraft(value ? formatTime(value) : "");
-    if (!value) return;
-    void askForReminderPermission().then((permission) => {
-      setPermissionNote(
-        permission === "denied" ? "Reminders are off for Trove. Turn on notifications in your phone's Settings." : "",
-      );
+    // Reminders are part of Pro: on the free plan a time is kept and shown,
+    // but nothing is scheduled, so there's nothing to ask permission for.
+    if (!value || !isPro) return;
+    const ask = () =>
+      void askForReminderPermission().then((permission) => {
+        setPermissionNote(
+          permission === "denied" ? "Reminders are off for Trove. Turn on notifications in your phone's Settings." : "",
+        );
+      });
+    // Before the phone's own question, a sentence on why Trove asks.
+    void reminderPermission().then((permission) => {
+      if (permission !== "undetermined" || tips.hasSeen("reminders")) {
+        ask();
+        return;
+      }
+      tips.dismiss("reminders");
+      Alert.alert("Get reminded on time", `${TIP_TEXT.reminders} Allow notifications on the next screen to get them.`, [
+        { text: "Not now", style: "cancel" },
+        { text: "Continue", onPress: ask },
+      ]);
     });
   };
 
@@ -222,7 +248,7 @@ export const ListEntrySheet = ({
   };
 
   return (
-    <Modal animationType="slide" visible={!!entry} presentationStyle="pageSheet" onRequestClose={close}>
+    <SheetModal visible={!!entry} onClose={close}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>{canEdit ? "Line details" : "Line"}</Text>
@@ -326,11 +352,20 @@ export const ListEntrySheet = ({
               autoCorrect={false}
               style={[styles.input, timeDraftInvalid && styles.inputInvalid]}
             />
-            <Text style={[styles.hint, (timeDraftInvalid || !!permissionNote) && styles.hintError]}>
-              {timeDraftInvalid
-                ? "Use a time like 9:30 or 7 pm."
-                : permissionNote || (dueTime ? `Reminds you at ${formatTime(dueTime)}` : "Add a time to get a reminder")}
-            </Text>
+            {isPro || timeDraftInvalid ? (
+              <Text style={[styles.hint, (timeDraftInvalid || !!permissionNote) && styles.hintError]}>
+                {timeDraftInvalid
+                  ? "Use a time like 9:30 or 7 pm."
+                  : permissionNote || (dueTime ? `Reminds you at ${formatTime(dueTime)}` : "Add a time to get a reminder")}
+              </Text>
+            ) : (
+              <Pressable accessibilityRole="button" accessibilityLabel="Reminders come with Trove Pro" onPress={seePro} hitSlop={6}>
+                <Text style={styles.hint}>
+                  {dueTime ? `Get a reminder at ${formatTime(dueTime)} with Trove Pro. ` : "Reminders at a time come with Trove Pro. "}
+                  <Text style={styles.proLink}>See Pro</Text>
+                </Text>
+              </Pressable>
+            )}
           </>
         )}
 
@@ -563,7 +598,7 @@ export const ListEntrySheet = ({
           </Pressable>
         )}
       </ScrollView>
-    </Modal>
+    </SheetModal>
   );
 };
 
@@ -718,6 +753,10 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.muted,
       fontSize: 12,
       marginTop: 4,
+    },
+    proLink: {
+      color: colors.accentDark,
+      fontWeight: "600",
     },
     hintError: {
       color: colors.danger,

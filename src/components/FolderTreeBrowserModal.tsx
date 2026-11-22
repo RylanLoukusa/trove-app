@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import type { Folder } from "../types/models";
 import { getFolderHierarchyRows, getFolderPathLabel } from "../utils/folderTree";
 import { FolderChoiceRow } from "./FolderChoiceRow";
 import { OptionChoiceRow } from "./OptionChoiceRow";
+import { SheetModal } from "./SheetModal";
 
 type Props = {
   visible: boolean;
@@ -56,7 +57,7 @@ export const FolderTreeBrowserModal = ({
   }, [onClose]);
 
   return (
-    <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={close}>
+    <SheetModal visible={visible} onClose={close}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
@@ -93,7 +94,7 @@ export const FolderTreeBrowserModal = ({
           ))
         )}
       </ScrollView>
-    </Modal>
+    </SheetModal>
   );
 };
 

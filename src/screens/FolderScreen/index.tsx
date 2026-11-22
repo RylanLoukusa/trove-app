@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Archive, Ellipsis, FolderPlus, Pencil, Share2, Trash2, Users } from "lucide-react-native";
 
@@ -208,7 +208,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           </NavIconButton>
         }
       />
-      <KeyboardAvoidingView style={styles.scroll} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.scroll} behavior="padding">
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.titleRow}>
             <FolderIcon icon={folder.icon} color={folder.color} size={38} />

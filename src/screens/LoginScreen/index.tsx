@@ -19,6 +19,8 @@ import { RootStackParamList } from "../../navigation/types";
 import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { createStyles } from "./styles";
+import { LoginHero } from "./LoginHero";
+import { leaveScreen } from "../../navigation/leaveScreen";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 type AuthMode = "chooser" | "signIn" | "signUp" | "reset";
@@ -198,7 +200,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       <View style={styles.screen}>
         <ScreenTopBar navigation={navigation} />
         <View style={styles.content}>
-          <Text style={styles.title}>Log in to Trove</Text>
+          <LoginHero showPreview={false} />
           <Text style={styles.body}>
             Supabase is not configured yet. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment.
           </Text>
@@ -225,13 +227,13 @@ export const LoginScreen = ({ navigation }: Props) => {
       ) : (
         <ScreenTopBar navigation={navigation} />
       )}
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior="padding">
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Log in to Trove</Text>
+        <LoginHero showPreview={!session?.user && authMode === "chooser"} />
         {session?.user ? (
           <>
             <Text style={styles.body}>You are already signed in. {getSignedInLabel(session)}.</Text>
-            <AppButton label="Back" onPress={() => navigation.goBack()} style={styles.button} />
+            <AppButton label="Back" onPress={() => leaveScreen(navigation)} style={styles.button} />
           </>
         ) : authMode === "chooser" ? (
           <View style={styles.bottomAuthArea}>
@@ -239,15 +241,19 @@ export const LoginScreen = ({ navigation }: Props) => {
               <View style={[styles.authButtonsStack, busy && styles.authOptionDisabled]}>
                 <GoogleSignInButton onPress={() => void onSignInWithGoogle()} disabled={busy} styles={styles} />
                 {isAppleAuthAvailable ? (
-                  <AppleAuthenticationButton
-                    buttonType={AppleAuthenticationButtonType.SIGN_IN}
-                    buttonStyle={AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-                    cornerRadius={8}
-                    onPress={() => {
-                      if (!busy) void onSignInWithApple();
-                    }}
-                    style={styles.appleButton}
-                  />
+                  // Apple's own outline is a hairline; drawing the border
+                  // here matches the Google and Email buttons.
+                  <View style={styles.appleButtonFrame}>
+                    <AppleAuthenticationButton
+                      buttonType={AppleAuthenticationButtonType.SIGN_IN}
+                      buttonStyle={AppleAuthenticationButtonStyle.WHITE}
+                      cornerRadius={7}
+                      onPress={() => {
+                        if (!busy) void onSignInWithApple();
+                      }}
+                      style={styles.appleButton}
+                    />
+                  </View>
                 ) : null}
                 <AppButton
                   label="Continue with Email"

@@ -28,6 +28,8 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import { listDisplayTitle } from "../../utils/listEntries";
 import { requiresProForSharing } from "../../utils/limits";
 import { createSetAsideStyles } from "../setAsideStyles";
+import { TipBubble } from "../../tips/TipBubble";
+import { TIP_TEXT, useTip } from "../../tips/TipsContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ShareList">;
 
@@ -54,6 +56,8 @@ export const ShareListScreen = ({ navigation, route }: Props) => {
   const title = list ? listDisplayTitle(list, list.listItems) : "List";
   const userId = session?.user?.id;
   const isOwner = !!list && (!list.ownerId || list.ownerId === userId);
+  // First visit on the free plan: viewing is free, editing together is Pro.
+  const shareTip = useTip("sharing", !isPro && isOwner);
 
   const [access, setAccess] = useState<ListAccess[]>([]);
   const [collaborators, setCollaborators] = useState<SavedCollaborator[]>([]);
@@ -254,6 +258,9 @@ export const ShareListScreen = ({ navigation, route }: Props) => {
         <Text accessibilityRole="header" style={base.title}>
           Share list
         </Text>
+        {shareTip.shown && (
+          <TipBubble text={TIP_TEXT.sharing} onClose={shareTip.dismiss} style={{ marginBottom: 12 }} />
+        )}
         <Text style={base.note}>
           {isOwner
             ? "People you add see this list on their Home, and everyone sees changes as they happen."

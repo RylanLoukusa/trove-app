@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Maximize2, Minimize2 } from "lucide-react-native";
+import { Maximize2, Minimize2, Smile } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
 import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { DEFAULT_FOLDER_ICON, FOLDER_ICONS, FolderIcon, folderIconKey, FOLDER_ICON_PREFIX, resolveFolderIcon } from "../../components/FolderIcon";
@@ -14,6 +14,8 @@ import { spacing } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
 import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
 import { createStyles } from "./styles";
+import { leaveScreen } from "../../navigation/leaveScreen";
+import { SheetModal } from "../../components/SheetModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditFolder">;
 
@@ -195,7 +197,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         return;
       }
       updateFolder(editing.id, { name, purpose, icon: normalizedIcon, color, parentFolderId });
-      navigation.goBack();
+      leaveScreen(navigation);
       return;
     }
     if (parentFolderId && !canManageFolder(parentFolderId)) {
@@ -219,14 +221,16 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
 
         <View>
         <Text style={styles.label}>Name</Text>
-        <TextInput
-          accessibilityLabel="Name"
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Weekend Ideas"
-          placeholderTextColor={colors.muted}
-        />
+        <View style={[styles.input, styles.nameBox]}>
+          <TextInput
+            accessibilityLabel="Name"
+            style={styles.nameInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Weekend Ideas"
+            placeholderTextColor={colors.muted}
+          />
+        </View>
         </View>
 
         <View>
@@ -293,7 +297,8 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             onPress={() => setEmojiOpen((current) => !current)}
             style={({ pressed }) => [styles.emojiToggle, pressed && styles.iconPickerPressed]}
           >
-            <Text style={styles.emojiToggleText}>{emojiOpen ? "Hide emoji" : "Use an emoji instead"}</Text>
+            <Smile size={18} color={colors.accentDark} />
+            <Text style={styles.emojiToggleText}>{emojiOpen ? "Hide Emoji" : "Use an Emoji"}</Text>
           </Pressable>
         )}
 
@@ -430,7 +435,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         </View>
       </ScrollView>
 
-      <Modal animationType="slide" visible={parentPickerOpen} presentationStyle="pageSheet" onRequestClose={closeParentPicker}>
+      <SheetModal visible={parentPickerOpen} onClose={closeParentPicker}>
         <ScrollView style={styles.modalScreen} contentContainerStyle={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Parent folder</Text>
@@ -482,7 +487,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             ))
           )}
         </ScrollView>
-      </Modal>
+      </SheetModal>
     </View>
   );
 };
