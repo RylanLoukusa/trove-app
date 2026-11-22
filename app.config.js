@@ -24,7 +24,7 @@ module.exports = {
       package: "com.rylanloukusa.trove",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
-        backgroundColor: "#173F2A",
+        backgroundColor: "#F2EAE0",
       },
     },
     plugins: [
