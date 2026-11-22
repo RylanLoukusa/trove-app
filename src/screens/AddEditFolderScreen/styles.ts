@@ -33,12 +33,11 @@ export const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       padding: spacing.md,
     },
-    // One line, centered both ways: a fixed height for top to bottom.
+    // One line: a fixed height keeps the text and placeholder centered.
     nameInput: {
       fontSize: 16,
       height: 52,
       paddingVertical: 0,
-      textAlign: "center",
     },
     purposeInput: {
       lineHeight: 20,
