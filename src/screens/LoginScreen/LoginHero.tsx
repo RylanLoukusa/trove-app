@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Image, PanResponder, StyleSheet, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
+import { Bell, Check, RotateCcw } from "lucide-react-native";
 
 import { spacing, ThemeColors, withAlpha } from "../../theme/theme";
 import { useThemeColors } from "../../theme/ThemeContext";
@@ -10,38 +10,62 @@ const BRAND_GREEN = "#2F4A38";
 const BRAND_GOLD = "#C9A54E";
 const BRAND_SAGE = "#AFBEA0";
 const BRAND_CREAM = "#F2EAE0";
+const AVATAR_COLORS = ["#5B7A66", "#C08A5B"];
 
-type PreviewLine = { text: string; done?: boolean; due?: string };
-type PreviewCard = { title: string; color: string; lines: PreviewLine[] };
+type PreviewLine = {
+  text: string;
+  done?: boolean;
+  due?: string;
+  // Which list it came from (Today gathers lines from every list).
+  from?: string;
+  reminder?: boolean;
+  // Initials of the person who added it, on a shared list.
+  by?: string;
+};
+type PreviewCard = {
+  title: string;
+  color: string;
+  // The feature this card shows off, under the stack.
+  caption: string;
+  // What sits at the right of the title.
+  corner: { kind: "count" } | { kind: "people"; initials: string[] } | { kind: "repeat"; label: string };
+  lines: PreviewLine[];
+};
 
-// Three lists, stacked like the icon. The front one shows; the others peek
-// out above it in their own color.
+// Three lists, stacked like the icon, each showing off one thing Trove does.
+// The front one shows; the others peek out above it in their own color.
 const previewCards: PreviewCard[] = [
   {
     title: "Today",
     color: BRAND_GREEN,
+    caption: "Everything due today, from all your lists, in one place.",
+    corner: { kind: "count" },
     lines: [
-      { text: "Pick up the dry cleaning", done: true },
-      { text: "Call the vet", due: "10:30 am" },
-      { text: "Groceries for Sunday", due: "Today" },
+      { text: "Dry cleaning", done: true, from: "Errands" },
+      { text: "Call the vet", due: "10:30 am", reminder: true },
+      { text: "Pay rent", due: "Today", from: "Home" },
     ],
   },
   {
     title: "Groceries",
     color: BRAND_GOLD,
+    caption: "Share a list and check it off together.",
+    corner: { kind: "people", initials: ["R", "S"] },
     lines: [
-      { text: "Oat milk", done: true },
-      { text: "Lemons" },
-      { text: "Coffee beans", due: "Sat" },
+      { text: "Oat milk", done: true, by: "S" },
+      { text: "Lemons", by: "R" },
+      { text: "Coffee beans", by: "S" },
     ],
   },
   {
-    title: "Weekend trip",
+    title: "Morning routine",
     color: BRAND_SAGE,
+    caption: "Routines that uncheck themselves, ready for tomorrow.",
+    corner: { kind: "repeat", label: "Every day" },
     lines: [
-      { text: "Book the cabin", done: true },
-      { text: "Pack hiking boots" },
-      { text: "Charge the camera", due: "Fri" },
+      { text: "Make the bed", done: true },
+      { text: "Stretch for 10 minutes", done: true },
+      { text: "Take vitamins" },
     ],
   },
 ];
@@ -125,9 +149,12 @@ const CardStack = ({ styles }: { styles: ReturnType<typeof createStyles> }) => {
     };
   }, []);
 
+  const captionOpacity = useRef(new Animated.Value(1)).current;
+
   const advance = useCallback(() => {
     if (moving.current) return;
     moving.current = true;
+    Animated.timing(captionOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     const [front, middle, back] = orderRef.current;
     const next = [middle, back, front];
     // The front card drops down while the others each move up a place...
@@ -140,11 +167,12 @@ const CardStack = ({ styles }: { styles: ReturnType<typeof createStyles> }) => {
       // ...then slips behind them and rises into the back.
       orderRef.current = next;
       setOrder(next);
+      Animated.timing(captionOpacity, { toValue: 1, duration: 260, useNativeDriver: true }).start();
       toSlot(motions[front], 2, 320).start(() => {
         moving.current = false;
       });
     });
-  }, [motions]);
+  }, [captionOpacity, motions]);
 
   useEffect(() => {
     if (reduceMotion) return undefined;
@@ -188,7 +216,22 @@ const CardStack = ({ styles }: { styles: ReturnType<typeof createStyles> }) => {
             >
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{card.title}</Text>
-                <Text style={styles.cardCount}>{left} left</Text>
+                {card.corner.kind === "count" ? (
+                  <Text style={styles.cardCount}>{left} left</Text>
+                ) : card.corner.kind === "people" ? (
+                  <View style={styles.people}>
+                    {card.corner.initials.map((initial, i) => (
+                      <View key={initial} style={[styles.avatar, i > 0 && styles.avatarOverlap, { backgroundColor: AVATAR_COLORS[i % 2] }]}>
+                        <Text style={styles.avatarText}>{initial}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.repeat}>
+                    <RotateCcw size={12} color={BRAND_GREEN} strokeWidth={2.5} />
+                    <Text style={styles.repeatText}>{card.corner.label}</Text>
+                  </View>
+                )}
               </View>
               {card.lines.map((line) => (
                 <View key={line.text} style={styles.line}>
@@ -198,7 +241,14 @@ const CardStack = ({ styles }: { styles: ReturnType<typeof createStyles> }) => {
                   <Text numberOfLines={1} style={[styles.lineText, line.done && styles.lineTextDone]}>
                     {line.text}
                   </Text>
+                  {!!line.from && <Text style={styles.from}>{line.from}</Text>}
+                  {line.reminder && <Bell size={12} color={BRAND_GOLD} strokeWidth={2.5} />}
                   {!!line.due && <Text style={styles.due}>{line.due}</Text>}
+                  {!!line.by && (
+                    <View style={[styles.avatarSmall, { backgroundColor: AVATAR_COLORS[line.by === "R" ? 0 : 1] }]}>
+                      <Text style={styles.avatarSmallText}>{line.by}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
               <Animated.View
@@ -217,7 +267,9 @@ const CardStack = ({ styles }: { styles: ReturnType<typeof createStyles> }) => {
           />
         ))}
       </View>
-      <Text style={styles.tagline}>Lists that keep up with you.</Text>
+      <Animated.Text style={[styles.tagline, { opacity: captionOpacity }]}>
+        {previewCards[order[0]].caption}
+      </Animated.Text>
     </View>
   );
 };
@@ -294,7 +346,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 6,
     },
     cardHeader: {
-      alignItems: "baseline",
+      alignItems: "center",
       flexDirection: "row",
       justifyContent: "space-between",
       marginBottom: spacing.xs,
@@ -344,7 +396,66 @@ const createStyles = (colors: ThemeColors) =>
     tagline: {
       color: colors.muted,
       fontSize: 15,
+      lineHeight: 21,
       marginTop: spacing.md,
+      minHeight: 42,
+      paddingHorizontal: spacing.lg,
       textAlign: "center",
+    },
+    from: {
+      backgroundColor: withAlpha(colors.muted, 0.12),
+      borderRadius: 6,
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "600",
+      overflow: "hidden",
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    people: {
+      flexDirection: "row",
+    },
+    avatar: {
+      alignItems: "center",
+      borderColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 2,
+      height: 24,
+      justifyContent: "center",
+      width: 24,
+    },
+    avatarOverlap: {
+      marginLeft: -6,
+    },
+    avatarText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    avatarSmall: {
+      alignItems: "center",
+      borderRadius: 9,
+      height: 18,
+      justifyContent: "center",
+      width: 18,
+    },
+    avatarSmallText: {
+      color: "#FFFFFF",
+      fontSize: 9,
+      fontWeight: "800",
+    },
+    repeat: {
+      alignItems: "center",
+      backgroundColor: withAlpha(BRAND_SAGE, 0.35),
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    repeatText: {
+      color: BRAND_GREEN,
+      fontSize: 11,
+      fontWeight: "700",
     },
   });
