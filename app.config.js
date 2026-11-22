@@ -22,10 +22,27 @@ module.exports = {
     },
     android: {
       package: "com.rylanloukusa.trove",
+      // Where "Rate Trove" goes when the in-app review sheet is not offered.
+      playStoreUrl: "https://play.google.com/store/apps/details?id=com.rylanloukusa.trove",
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
         backgroundColor: "#F2EAE0",
       },
+      // Opens trovecollections.app links (sign-in returns, shared lists and
+      // folders, invites, add/open shortcuts) in the app. Verified against
+      // https://trovecollections.app/.well-known/assetlinks.json.
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: ["/auth", "/shared", "/share-invite", "/add", "/open"].map((pathPrefix) => ({
+            scheme: "https",
+            host: "trovecollections.app",
+            pathPrefix,
+          })),
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
     },
     plugins: [
       [

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
@@ -11,6 +11,7 @@ import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection
 import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
 import { ListPerson, personLabel } from "../collaboration/listPeople";
 import { formatPrice, formatQuantity, MAX_RATING, normalizeLink, parsePrice, parseQuantity } from "../utils/fields";
+import { SheetModal } from "./SheetModal";
 
 type Details = Pick<
   ListEntry,
@@ -247,7 +248,7 @@ export const ListEntrySheet = ({
   };
 
   return (
-    <Modal animationType="slide" visible={!!entry} presentationStyle="pageSheet" onRequestClose={close}>
+    <SheetModal visible={!!entry} onClose={close}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>{canEdit ? "Line details" : "Line"}</Text>
@@ -597,7 +598,7 @@ export const ListEntrySheet = ({
           </Pressable>
         )}
       </ScrollView>
-    </Modal>
+    </SheetModal>
   );
 };
 

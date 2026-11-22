@@ -28,6 +28,16 @@
         <data android:scheme="trove"/>
         <data android:scheme="exp+trove-app"/>
       </intent-filter>
+      <intent-filter android:autoVerify="true" data-generated="true">
+        <action android:name="android.intent.action.VIEW"/>
+        <data android:scheme="https" android:host="trovecollections.app" android:pathPrefix="/auth"/>
+        <data android:scheme="https" android:host="trovecollections.app" android:pathPrefix="/shared"/>
+        <data android:scheme="https" android:host="trovecollections.app" android:pathPrefix="/share-invite"/>
+        <data android:scheme="https" android:host="trovecollections.app" android:pathPrefix="/add"/>
+        <data android:scheme="https" android:host="trovecollections.app" android:pathPrefix="/open"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
     </activity>
     <receiver android:name=".TroveWidgetProvider" android:label="Pinned list" android:exported="false">
       <intent-filter>

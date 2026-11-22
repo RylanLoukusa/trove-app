@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
@@ -309,7 +309,7 @@ export const AddEditTagGroupScreen = ({ navigation, route }: Props) => {
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior="padding">
         <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content}>
           <Text style={styles.title}>{isCreating ? "Create Group" : "Edit group"}</Text>
 

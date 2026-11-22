@@ -338,6 +338,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "center",
       position: "absolute",
       right: spacing.md + 4,
+      elevation: 8,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.2,

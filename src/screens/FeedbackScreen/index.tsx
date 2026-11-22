@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppButton } from "../../components/AppButton";
@@ -48,7 +48,7 @@ export const FeedbackScreen = ({ navigation }: Props) => {
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.screen} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text accessibilityRole="header" style={styles.title}>
             Send feedback

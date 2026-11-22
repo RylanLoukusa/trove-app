@@ -1,11 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Check } from "lucide-react-native";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import { RowGroup } from "./Rows";
+import { SheetModal } from "./SheetModal";
 
 export type ListTarget = { id: string; title: string; folderLabel: string };
 
@@ -146,7 +147,7 @@ export const SendToListSheet = ({
   };
 
   return (
-    <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SheetModal visible={visible} onClose={onClose}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>
@@ -203,7 +204,7 @@ export const SendToListSheet = ({
           )}
         </ScrollView>
       </View>
-    </Modal>
+    </SheetModal>
   );
 };
 

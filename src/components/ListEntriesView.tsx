@@ -2109,6 +2109,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     rowCarried: {
       backgroundColor: colors.surface,
+      elevation: 6,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.14,
@@ -2395,6 +2396,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       position: "absolute",
       right: spacing.md,
+      elevation: 6,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.18,

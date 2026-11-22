@@ -227,7 +227,7 @@ export const LoginScreen = ({ navigation }: Props) => {
       ) : (
         <ScreenTopBar navigation={navigation} />
       )}
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior="padding">
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <LoginHero showPreview={!session?.user && authMode === "chooser"} />
         {session?.user ? (

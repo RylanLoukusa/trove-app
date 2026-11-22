@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CalendarDays, Plus } from "lucide-react-native";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
@@ -7,6 +7,7 @@ import { useThemeColors } from "../theme/ThemeContext";
 import type { ListEntry } from "../types/models";
 import { describeDueDate } from "../utils/listView";
 import { CheckMark } from "./ListMarks";
+import { SheetModal } from "./SheetModal";
 
 export type FocusPickerList = { id: string; title: string; entries: ListEntry[] };
 
@@ -48,7 +49,7 @@ export const FocusListPicker = ({ visible, focusListTitle, lists, selectedEntryI
   }, [lists, query, selectedEntryIds]);
 
   return (
-    <Modal animationType="slide" visible={visible} presentationStyle="pageSheet" onRequestClose={onClose}>
+    <SheetModal visible={visible} onClose={onClose}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>
@@ -111,7 +112,7 @@ export const FocusListPicker = ({ visible, focusListTitle, lists, selectedEntryI
           )}
         </ScrollView>
       </View>
-    </Modal>
+    </SheetModal>
   );
 };
 

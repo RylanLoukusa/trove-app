@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Maximize2, Minimize2, Smile } from "lucide-react-native";
 import { AppButton } from "../../components/AppButton";
@@ -15,6 +15,7 @@ import { useThemeColors } from "../../theme/ThemeContext";
 import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
 import { createStyles } from "./styles";
 import { leaveScreen } from "../../navigation/leaveScreen";
+import { SheetModal } from "../../components/SheetModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditFolder">;
 
@@ -434,7 +435,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         </View>
       </ScrollView>
 
-      <Modal animationType="slide" visible={parentPickerOpen} presentationStyle="pageSheet" onRequestClose={closeParentPicker}>
+      <SheetModal visible={parentPickerOpen} onClose={closeParentPicker}>
         <ScrollView style={styles.modalScreen} contentContainerStyle={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Parent folder</Text>
@@ -486,7 +487,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             ))
           )}
         </ScrollView>
-      </Modal>
+      </SheetModal>
     </View>
   );
 };

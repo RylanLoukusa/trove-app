@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useMemo, useRef } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, ThemeColors, withAlpha } from "../theme/theme";
@@ -58,6 +58,16 @@ export const MenuSheet = ({ visible, title, actions, onClose }: Props) => {
     progress.setValue(0);
     Animated.timing(progress, { toValue: 1, duration: 190, useNativeDriver: true }).start();
   }, [progress, visible]);
+
+  // Android's back button closes the menu instead of leaving the screen.
+  useEffect(() => {
+    if (!visible) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onClose, visible]);
 
   if (!visible) return null;
   const hasSettings = actions.some((action) => !!action.choices);
@@ -234,6 +244,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: spacing.xs,
       position: "absolute",
       right: 0,
+      elevation: 16,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: -6 },
       shadowOpacity: 0.12,

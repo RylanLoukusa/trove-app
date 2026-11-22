@@ -69,6 +69,7 @@ const createStyles = (colors: ThemeColors) =>
       gap: spacing.xs,
       paddingHorizontal: spacing.sm,
       paddingVertical: 9,
+      elevation: 6,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.18,

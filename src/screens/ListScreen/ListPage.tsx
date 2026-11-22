@@ -995,7 +995,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
           )
         }
       />
-      <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.body} behavior="padding">
         <ListEntriesView
           ref={viewRef}
           entries={entries}
