@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { spacing, ThemeColors } from "../theme/theme";
 import { useThemeColors } from "../theme/ThemeContext";
 import { useEntitlement } from "../entitlements/EntitlementContext";
-import { askForReminderPermission } from "../reminders/notifications";
+import { askForReminderPermission, reminderPermission } from "../reminders/notifications";
+import { TIP_TEXT, useTips } from "../tips/TipsContext";
 import type { ListEntry, RepeatRule, TagOption } from "../types/models";
 import { describeDueDate, entryPriority, parseDateKey, quickDueDates, TagSection, toDateKey, withPriority } from "../utils/listView";
 import { formatTime, parseTimeInput, quickTimes, REPEAT_RULES, repeatLabels } from "../utils/schedule";
@@ -67,6 +68,7 @@ export const ListEntrySheet = ({
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { isPro, presentPaywall } = useEntitlement();
+  const tips = useTips();
   const [text, setText] = useState("");
   const [dueDate, setDueDate] = useState<string | undefined>(undefined);
   const [dueDraft, setDueDraft] = useState("");
@@ -218,10 +220,23 @@ export const ListEntrySheet = ({
     // Reminders are part of Pro: on the free plan a time is kept and shown,
     // but nothing is scheduled, so there's nothing to ask permission for.
     if (!value || !isPro) return;
-    void askForReminderPermission().then((permission) => {
-      setPermissionNote(
-        permission === "denied" ? "Reminders are off for Trove. Turn on notifications in your phone's Settings." : "",
-      );
+    const ask = () =>
+      void askForReminderPermission().then((permission) => {
+        setPermissionNote(
+          permission === "denied" ? "Reminders are off for Trove. Turn on notifications in your phone's Settings." : "",
+        );
+      });
+    // Before the phone's own question, a sentence on why Trove asks.
+    void reminderPermission().then((permission) => {
+      if (permission !== "undetermined" || tips.hasSeen("reminders")) {
+        ask();
+        return;
+      }
+      tips.dismiss("reminders");
+      Alert.alert("Get reminded on time", `${TIP_TEXT.reminders} Allow notifications on the next screen to get them.`, [
+        { text: "Not now", style: "cancel" },
+        { text: "Continue", onPress: ask },
+      ]);
     });
   };
 

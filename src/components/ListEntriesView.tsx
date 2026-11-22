@@ -76,6 +76,8 @@ import { formatTime, repeatLabels } from "../utils/schedule";
 import { formatPrice, formatQuantity, formatRating, linkHost } from "../utils/fields";
 import { parseSmartText, SmartFields } from "../utils/smartText";
 import { assigneeLabel, ListPerson, personLabel } from "../collaboration/listPeople";
+import { TIP_TEXT, useTip } from "../tips/TipsContext";
+import { TipBubble } from "../tips/TipBubble";
 import { collapsibleEnd, lineGroupEnd, MAX_ENTRY_INDENT, PastedLine, splitEnteredText, withLineImageSize } from "../utils/listEntries";
 import {
   describeDueDate,
@@ -893,6 +895,7 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
   const exitSelecting = () => onChangeSelecting(false);
 
   const startSend = (ids: string[], mode: SendMode) => {
+    dismissSwipeTip();
     const usable = mode === "add" ? ids.filter(linkable) : ids;
     if (usable.length === 0 || (mode === "add" ? !canLink : !canMove)) return;
     Keyboard.dismiss();
@@ -1018,10 +1021,22 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
 
   // Puts the keyboard away and opens a line's due date, priority and notes.
   const openDetails = (id: string) => {
+    dismissDetailsTip();
     Keyboard.dismiss();
     setFocusedId(null);
     setOpenEntryId(id);
   };
+
+  // One-time tips for what isn't obvious: the keyboard bar, line details
+  // and swiping. Only one shows at a time, above the bar or the home bar.
+  const writtenLines = entries.filter((entry) => !!entry.text.trim()).length;
+  const barTip = useTip("keyboardBar", canEdit && !!focusedId && !selecting);
+  const detailsTip = useTip("lineDetails", canEdit && !!focusedEntry && !!focusedEntry.text.trim() && !selecting);
+  const swipeTip = useTip("swipeLine", canEdit && (canLink || canMove) && writtenLines >= 3 && !focusedId && !selecting);
+  const dismissDetailsTip = detailsTip.dismiss;
+  const dismissSwipeTip = swipeTip.dismiss;
+  const shownTip = barTip.shown ? barTip : detailsTip.shown ? detailsTip : swipeTip.shown ? swipeTip : null;
+  const shownTipText = barTip.shown ? TIP_TEXT.keyboardBar : detailsTip.shown ? TIP_TEXT.lineDetails : TIP_TEXT.swipeLine;
 
   const iconTone = colors.accentDark;
   const keyboardBar = focusedId ? (
@@ -1324,6 +1339,18 @@ export const ListEntriesView = forwardRef<ListEntriesViewHandle, Props>(function
               styles={styles}
             />
           </View>
+        </View>
+      )}
+
+      {!!shownTip && !toast && (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.tipWrap,
+            { bottom: (focusedId ? KEYBOARD_BAR_HEIGHT : insets.bottom) + spacing.xs },
+          ]}
+        >
+          <TipBubble text={shownTipText} pointer={barTip.shown ? "down" : "none"} onClose={shownTip.dismiss} />
         </View>
       )}
 
@@ -2350,6 +2377,11 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.ink,
       fontSize: 12,
       marginTop: 3,
+    },
+    tipWrap: {
+      left: spacing.md,
+      position: "absolute",
+      right: spacing.md,
     },
     toast: {
       alignItems: "center",

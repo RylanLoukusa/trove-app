@@ -37,6 +37,8 @@ import type { ListTarget } from "../../components/SendToListSheet";
 import { useAuth } from "../../auth/AuthContext";
 import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { noteListFinished } from "../../support/feedback";
+import { TipBubble } from "../../tips/TipBubble";
+import { TIP_TEXT, useTip } from "../../tips/TipsContext";
 import { useFolderShareStatus } from "../../collaboration/useFolderShareStatus";
 import { useListPeople } from "../../collaboration/useListPeople";
 import { uploadPendingLineImages } from "../../media/lineImages";
@@ -614,6 +616,10 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
     wasAllDone.current = allDone;
   }, [allDone]);
 
+  // Tips: what happens to checked lines is a setting, and Today fills itself.
+  const checkedTip = useTip("checkedLines", canEdit && !isFocus && doneLines.length >= 2 && !selecting);
+  const todayTip = useTip("todayList", isFocus && item.focusRule === "due_today");
+
   const uncheckAll = () => {
     const ids = doneLines.map((entry) => targetOf(entry.id));
     const changed = setEntriesChecked(ids, false);
@@ -956,6 +962,11 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
       <Text numberOfLines={1} style={styles.caption}>
         {caption}
       </Text>
+      {checkedTip.shown ? (
+        <TipBubble text={TIP_TEXT.checkedLines} onClose={checkedTip.dismiss} style={styles.tip} />
+      ) : todayTip.shown ? (
+        <TipBubble text={TIP_TEXT.todayList} onClose={todayTip.dismiss} style={styles.tip} />
+      ) : null}
     </View>
   );
 
@@ -973,6 +984,7 @@ export const ListPage = ({ item, navigation, backLabel, isNew = false }: Props) 
                 label="List options"
                 onPress={() => {
                   Keyboard.dismiss();
+                  checkedTip.dismiss();
                   setMenuOpen(true);
                 }}
               >
@@ -1081,6 +1093,9 @@ const createStyles = (colors: ThemeColors) =>
     titleInput: {
       margin: 0,
       padding: 0,
+    },
+    tip: {
+      marginTop: spacing.sm,
     },
     caption: {
       color: colors.muted,

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
@@ -11,6 +11,7 @@ import { useEntitlement } from "../../entitlements/EntitlementContext";
 import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { rateTrove } from "../../support/feedback";
+import { useTips } from "../../tips/TipsContext";
 import { RootStackParamList } from "../../navigation/types";
 import { useTrove } from "../../storage/storage";
 import { ThemePreference, useThemeColors, useThemePreference } from "../../theme/ThemeContext";
@@ -46,6 +47,7 @@ const SettingsSkeleton = () => {
 export const SettingsScreen = ({ navigation }: Props) => {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const tips = useTips();
   const { preference: themePreference, setPreference: setThemePreference } = useThemePreference();
   const { folders, isReady, items, resetToSeed, clearLocalData, getExportData } = useTrove();
   const { session, isAuthReady, signOut, deleteAccount } = useAuth();
@@ -269,6 +271,26 @@ export const SettingsScreen = ({ navigation }: Props) => {
 
         <Text style={styles.sectionTitle}>Help and feedback</Text>
         <View style={styles.legalLinks}>
+          <View style={styles.legalLink}>
+            <Text style={styles.legalLinkText}>Show tips</Text>
+            <Switch
+              accessibilityLabel="Show tips"
+              value={tips.enabled}
+              onValueChange={tips.setEnabled}
+              trackColor={{ true: colors.accentDark }}
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              tips.showAgain();
+              Alert.alert("Tips are back", "You'll see each tip again as you use Trove.");
+            }}
+            style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}
+          >
+            <Text style={styles.legalLinkText}>See all tips again</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => navigation.navigate("Feedback")}

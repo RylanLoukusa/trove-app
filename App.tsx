@@ -18,6 +18,7 @@ import { noteDayForRating } from "./src/support/feedback";
 import { toDateKey } from "./src/utils/listView";
 import { useWidgetSync } from "./src/widget/useWidgetSync";
 import { OnboardingTourProvider } from "./src/onboarding/OnboardingTourContext";
+import { TipsProvider } from "./src/tips/TipsContext";
 import { ThemeProvider, useThemeColors, useThemeScheme } from "./src/theme/ThemeContext";
 import { useTrove, TroveProvider } from "./src/storage/storage";
 import { RootStackParamList } from "./src/navigation/types";
@@ -266,7 +267,9 @@ function App() {
               <EntitlementProvider>
                 <TroveProvider>
                   <OnboardingTourProvider>
-                    <AppNavigator />
+                    <TipsProvider>
+                      <AppNavigator />
+                    </TipsProvider>
                   </OnboardingTourProvider>
                 </TroveProvider>
               </EntitlementProvider>
